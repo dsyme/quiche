@@ -6,11 +6,11 @@
 
 | # | Target | Location | Phase | Status | Notes |
 |---|--------|----------|-------|--------|-------|
-| 1 | QUIC varint codec | `octets/src/lib.rs` | 1 — Research | ✅ Done | Highest priority; pure functions, round-trip property |
-| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 1 — Research | ✅ Done | Sorted/non-overlapping invariant |
-| 3 | RTT estimation | `quiche/src/recovery/rtt.rs` | 1 — Research | ✅ Done | RFC 9002 §5 EWMA update |
-| 4 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ✅ Done | Arithmetic invariants |
-| 5 | Minmax filter | `quiche/src/minmax.rs` | 1 — Research | ✅ Done | Windowed min/max |
+| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done | **0 sorry** — all 10 theorems proved (round_trip, first_byte_tag, etc.) |
+| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 3 — Lean Spec | 🔄 In progress | `FVSquad/RangeSet.lean` written; 5 sorry (deferred proofs) |
+| 3 | RTT estimation | `quiche/src/recovery/rtt.rs` | 1 — Research | ⬜ Not started | RFC 9002 §5 EWMA update |
+| 4 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ⬜ Not started | Arithmetic invariants |
+| 5 | Minmax filter | `quiche/src/minmax.rs` | 1 — Research | ⬜ Not started | Windowed min/max |
 
 ## Phase Definitions
 
@@ -25,10 +25,19 @@
 
 ## Next Actions
 
-1. **Write informal spec** for Target 1 (varint codec) — `specs/varint_informal.md`
-2. **Write Lean spec** for Target 1 — requires Lean 4 / lake setup
-3. **Write informal spec** for Target 2 (RangeSet)
+1. **Prove** deferred RangeSet theorems (Target 2) — Task 5
+   - `insert_preserves_invariant`: structural induction on the list
+   - `insert_covers_union`: the key I3 union property
+   - `remove_until_*`: three theorems about the prefix-removal operation
+2. **Write Lean spec** for Target 3 (RTT estimation) — Task 3
+3. **Write informal spec** for Target 3 (RTT estimation) — Task 2
 
 ## Archived Targets
 
-*(None yet — targets stay here until phase 5 is complete.)*
+*(None yet — targets move here when phase 5 is complete and PR is merged.)*
+
+## Completed Targets (awaiting PR merge)
+
+| # | Target | Phase | PR | Notes |
+|---|--------|-------|----|-------|
+| 1 | QUIC varint codec | 5 — All Proofs | PR #5 (open) | round_trip + first_byte_tag proved; 0 sorry |
