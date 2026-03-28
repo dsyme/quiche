@@ -6,11 +6,11 @@
 
 | # | Target | Location | Phase | Status | Notes |
 |---|--------|----------|-------|--------|-------|
-| 1 | QUIC varint codec | `octets/src/lib.rs` | 1 — Research | ✅ Done | Highest priority; pure functions, round-trip property |
-| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 1 — Research | ✅ Done | Sorted/non-overlapping invariant |
-| 3 | RTT estimation | `quiche/src/recovery/rtt.rs` | 1 — Research | ✅ Done | RFC 9002 §5 EWMA update |
-| 4 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ✅ Done | Arithmetic invariants |
-| 5 | Minmax filter | `quiche/src/minmax.rs` | 1 — Research | ✅ Done | Windowed min/max |
+| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done (PR #5) | 10 theorems, 0 sorry |
+| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 3 — Lean Spec | 🔄 In progress (PR #6) | Spec done; 5 sorry pending Task 5 |
+| 3 | RTT estimation | `quiche/src/recovery/rtt.rs` | 5 — Proofs | ✅ Done (run 6) | 21 theorems, 0 sorry — RFC 9002 §5 |
+| 4 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ⬜ Not started | Arithmetic invariants |
+| 5 | Minmax filter | `quiche/src/minmax.rs` | 1 — Research | ⬜ Not started | Windowed min/max |
 
 ## Phase Definitions
 
@@ -25,9 +25,10 @@
 
 ## Next Actions
 
-1. **Write informal spec** for Target 1 (varint codec) — `specs/varint_informal.md`
-2. **Write Lean spec** for Target 1 — requires Lean 4 / lake setup
-3. **Write informal spec** for Target 2 (RangeSet)
+1. **Task 5**: Prove the 5 remaining RangeSet theorems (PR #6 branch)
+2. **Task 2/3**: Write informal spec + Lean spec for Target 4 (flow control)
+3. **Task 6**: Write CORRESPONDENCE.md linking all Lean models to Rust source
+4. **Task 7**: Write CRITIQUE.md assessing proof utility
 
 ## Archived Targets
 
