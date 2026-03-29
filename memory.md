@@ -1,109 +1,111 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Run History
-- **Run 1**: Task 1 (Research) — identified targets, created RESEARCH.md + TARGETS.md; PR #2 merged
+- **Run 1**: Task 1 (Research) — identified targets, created RESEARCH.md + TARGETS.md
 - **Run 2**: Task 2 (Informal Spec) — wrote `formal-verification/specs/rangeset_informal.md`
-- **Run 3**: Task 3+5 (Lean Spec + Proofs) — Varint.lean 10 theorems proved; PR #5 merged
-- **Run 4**: Task 3 (RangeSet Lean spec) — 5 sorry remaining; PR #6 (open issue)
-- **Run 6**: Task 2+3 (RTT) — RttStats.lean 21 theorems 0 sorry; branch lean-squad-run6-rtt-spec
-- **Run 10**: Tasks 3+9 — Minmax.lean spec + lean-ci.yml; PR (open issue)
-- **Run 11**: Tasks 5+9 — 3 RangeSet remove_until theorems; PR created (superseded)
-- **Run 12**: Tasks 5+9 — Proved 3 remove_until theorems; created lean-ci.yml; PR created
-  Branch: lean-squad-run12-proofs-ci-1774756106
-- **Run 13 (this)**: Tasks 5+6+9 — Proved 3 remove_until theorems; CORRESPONDENCE.md; lean-ci.yml
-  Branch: lean-squad-run13-proofs-correspondence-ci
+- **Run 3**: Task 3+5 (Lean Spec + Proofs) — Varint.lean 10 theorems proved; PR #5 merged to master
+- **Run 4**: Task 3 (RangeSet Lean spec) — RangeSet.lean created; branch diverged from master
+- **Run 6**: Task 2+3 (RTT) — RttStats.lean 21 theorems 0 sorry; branch diverged from master
+- **Run 10-13**: Tasks 3+5+6+9 — various proofs + CORRESPONDENCE.md; all branches diverged from master
+- **Run 14 (this)**: Tasks 3+4/5+9 — FlowControl.lean (24 theorems, 0 sorry) + RttStats.lean recovered + lean-ci.yml
+  Branch: lean-squad-run14-flowcontrol-spec-1774803000 (PR created)
+
+## IMPORTANT: Branch History Note
+All lean-squad branches BEFORE run 14 are based on a DIFFERENT git history
+(grafted, not reachable from current master e485077b). They cannot be merged
+with --allow-unrelated-histories without conflicts. Run 14 successfully:
+1. Copied RttStats.lean from run6 branch via `git show`
+2. Fixed merge conflict in FVSquad.lean (RttStats import)
+3. Added FlowControl.lean fresh on master-based branch
 
 ## FV Targets
 
 ### Target 1: QUIC varint codec
 - **File**: `octets/src/lib.rs`
 - **Lean file**: `formal-verification/lean/FVSquad/Varint.lean`
-- **Phase**: 5 — Proofs
-- **Status**: ✅ COMPLETE — 10 theorems proved, 0 sorry
-- **PR**: #5 (merged to master)
+- **Phase**: 5 — Complete
+- **Status**: ✅ In master — 10 theorems proved, 0 sorry (PR #5 merged)
+- **Theorems**: varint_round_trip, encode_decode, decode_1byte, decode_2byte, decode_4byte, decode_8byte, encode_len_*, etc.
 
 ### Target 2: RangeSet invariants
 - **File**: `quiche/src/ranges.rs`
 - **Informal spec**: `formal-verification/specs/rangeset_informal.md`
 - **Lean file**: `formal-verification/lean/FVSquad/RangeSet.lean`
 - **Phase**: 5 — Proofs
-- **Status**: 🔄 In progress — 19 proved, 2 sorry remaining
-- **PR**: lean-squad-run13-proofs-correspondence-ci (current run, open PR)
-- **Proved (runs 12+13)**: sd_hd_end_le_next_start, sd_tail_starts_ge_end,
-  covers_false_of_all_starts_gt (helpers), remove_until_removes_small (I4a),
-  remove_until_preserves_large (I4b), remove_until_preserves_invariant
-- **Sorry remaining**: insert_preserves_invariant, insert_covers_union
-  (require generalised induction on range_insert_go with accumulator invariant)
+- **Status**: 🔄 In progress — 290-line file with 5 sorry remaining
+- **Note**: RangeSet.lean IS in master branch (was in PR #5 merged or base)
+- **Sorry remaining**: insert_preserves_invariant, insert_covers_union,
+  remove_until_removes_small, remove_until_preserves_large,
+  remove_until_preserves_invariant
+  (run13 memory was WRONG — these are NOT proved in master)
+- **Strategy for insert_***: Needs generalised lemma for range_insert_go with
+  accumulator invariant: complex induction
 
 ### Target 3: RTT estimation
 - **File**: `quiche/src/recovery/rtt.rs`
-- **Informal spec**: `formal-verification/specs/rtt_informal.md`
+- **Informal spec**: `formal-verification/specs/rtt_informal.md` (in run6 branch, NOT master)
 - **Lean file**: `formal-verification/lean/FVSquad/RttStats.lean`
-- **Phase**: 5 — Proofs
-- **Status**: ✅ COMPLETE — 21 theorems proved, 0 sorry
-- **Note**: RttStats.lean is NOT in master yet (only in unmerged PR branches)
+- **Phase**: 5 — Complete
+- **Status**: ✅ In run14 PR — 21 theorems proved, 0 sorry (from run6, recovered in run14)
+- **Theorems**: init_smoothed_rtt, init_rttvar, first_sample_smoothed, first_sample_rttvar,
+  update_sets_has_first, adjust_plausible, adjust_implausible, adjust_le_latest,
+  ewma_smoothed, ewma_rttvar, min_rtt_nonincreasing, loss_delay_ge_granularity,
+  abs_diff_nat_*, ewma_convergence, etc.
 
 ### Target 4: Flow control
 - **File**: `quiche/src/flowcontrol.rs`
-- **Phase**: 1 — Research
-- **Status**: ⬜ Not started
+- **Informal spec**: `formal-verification/specs/flowcontrol_informal.md`
+- **Lean file**: `formal-verification/lean/FVSquad/FlowControl.lean`
+- **Phase**: 5 — Complete
+- **Status**: ✅ In run14 PR — 24 theorems proved, 0 sorry
+- **Theorems**: new_*, should_update_*, max_data_next_eq, update_*, set_window_*,
+  ensure_lower_bound_*, invariant preservation
+- **Approximations**: Nat not u64, no autotune_window, no time
 
 ### Target 5: Minmax filter
 - **File**: `quiche/src/minmax.rs`
 - **Phase**: 1 — Research
-- **Status**: ⬜ Not started
-
-## CORRESPONDENCE.md
-- **Created run 13**: `formal-verification/CORRESPONDENCE.md`
-- Documents Varint.lean and RangeSet.lean correspondence to Rust source
-- Correspondence level per function: exact/abstraction
-- Known divergences: capacity eviction, u64 vs Nat, bitwise vs arithmetic
+- **Status**: ⬜ Not started (run10 branch has Minmax.lean but in diverged history)
 
 ## Lean Toolchain
-- **Version**: Lean 4.29.0 (installed at `~/.elan/bin/lean`)
+- **Version**: Lean 4.29.0
+- **Installed at**: `~/.elan/bin/lean` (installed each run)
 - **Project**: `formal-verification/lean/` (lakefile.toml, no Mathlib)
 - **lean-toolchain**: `leanprover/lean4:v4.29.0`
-- **lake build**: PASSED (2 sorry: insert_preserves_invariant + insert_covers_union)
+- **lake build (run14)**: PASSED, 0 errors
 
 ## Key Lean 4.29.0 API Notes (no Mathlib)
-- `lemma` keyword NOT valid — use `theorem` or `private theorem`
-- `List.mem_cons_self` takes NO explicit args; use `List.mem_cons.mpr (Or.inl rfl)`
-- For Bool case split: `cases h : myBool with | true => ... | false => ...`
-- `Bool.eq_false_or_eq_true` gives `b = false ∨ b = true`
-  CAUTION: first case is `false`, second is `true`. Prefer `cases h : b with | true | false`
-- `Bool.or_eq_true : ((a || b) = true) = (a = true ∨ b = true)` — EXISTS ✓
-- `Bool.false_or : false || b = b` — available in core ✓
-- `simp [in_range]; omega` works for goals involving `in_range r n = false/true` ✓
-- `simp [in_range] at h; omega` extracts `r.1 ≤ n` and `n < r.2` from `h : in_range r n = true` ✓
-- `split_ifs` NOT available; use `by_cases h : cond; rw [if_pos h / if_neg h]`
-- `simp only [range_remove_until]` may not simplify `if` chains; use `rw [if_pos/if_neg]`
-- For pattern matching on `List (Nat × Nat)` in induction:
-  use `| cons r tail ih => obtain ⟨s, e⟩ := r` NOT `| cons ⟨s, e⟩ tail ih =>`
-- Well-founded recursion on List: use pattern match style `fun ... | [], ... => ... | ⟨a, b⟩ :: rest, ... => ...`
+- `lemma` NOT valid — use `theorem`
+- `Nat.le_min_of_le_left` does NOT exist — use `simp [Nat.min_def]; split; omega/exact`
+- For `if_pos h` / `if_neg h` to unfold if-then-else in simp
+- `simp [window_bounded, ...]` may leave a goal — use `exact h` afterwards
+- `split` tactic splits on if-then-else and cases
+- `decide` works for concrete Nat computations
+- `omega` handles linear arithmetic on Nat
 
 ## CI Status
-- `lean-ci.yml`: CREATED in run 13 PR
-  Triggers on: PR + push to main/master modifying formal-verification/lean/**
+- `lean-ci.yml`: CREATED in run14 PR
+  Triggers: PR + push to main/master for formal-verification/lean/**
   Caches: .lake keyed on lake-manifest.json hash
 
 ## Status Issue
-- Issue #4 (open): `[Lean Squad] Formal Verification Status`
+- **Issue #4** (open): `[Lean Squad] Formal Verification Status`
+  Updated in run14 with current state
 
-## PR Status
-- PR #5: merged (Varint.lean + RangeSet informal spec)
-- lean-squad-run13-proofs-correspondence-ci: current run PR (RangeSet proofs + CORRESPONDENCE + lean-ci.yml)
-  NOT yet merged (RttStats.lean from run 6 also not merged)
+## Current Run14 PR
+- Branch: lean-squad-run14-flowcontrol-spec-1774803000
+- Contains: FlowControl.lean, RttStats.lean, lean-ci.yml, flowcontrol_informal.md, FVSquad.lean fix
 
 ## Open Tasks for Next Run
-1. **Prove insert sorry theorems** (Task 5 — high priority):
-   Strategy: define generalised lemma for range_insert_go:
-   `range_insert_go_preserves_inv : sorted_disjoint (acc_rev.reverse) →
-    sorted_disjoint rest → (∀ r ∈ acc_rev, r.2 < s) →
-    sorted_disjoint (range_insert_go acc_rev rest s e)`
-   This is complex; requires tracking the invariant of the accumulator.
-2. **Add RttStats.lean to a PR** (Task 4/5) — the RTT proofs exist locally but are not merged
-3. **Write FlowControl informal+Lean spec** (Tasks 2+3) — Phase 1, not started
-4. **Verify lean-ci.yml works** (Task 9) — check CI runs once PR is merged
+1. **Prove remove_until theorems** (Task 5 — high priority, RangeSet.lean)
+   sorry: remove_until_removes_small, remove_until_preserves_large, remove_until_preserves_invariant
+   Strategy: induction on rs, case-split on the three branches of range_remove_until
+2. **Prove insert_preserves_invariant** (Task 5 — hard, needs generalised induction)
+   Strategy: generalise range_insert_go with accumulator invariant lemma
+3. **Write Minmax.lean spec** (Task 3) — Target 5, Phase 1, not started
+   Source: quiche/src/minmax.rs (windowed min-max filter, Kathleen Nichols algorithm)
+4. **Merge run14 PR** into master to stabilise
 
 ## Aeneas Status
-- **Task 8 (Aeneas)**: NOT attempted (opam not available in sandbox; GitHub Actions runners may have it)
+- Task 8 (Aeneas): NOT attempted — opam not available in sandbox
+  Documented as blocked in memory for future runs
