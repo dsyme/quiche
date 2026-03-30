@@ -227,14 +227,76 @@ theorem sorted_disjoint_head_valid (r : Nat × Nat) (rs : RangeSetModel)
       exact h.1
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- §8  Key propositions (sorry — proof engineering in future runs)
+-- §8  Unfolding helper for sorted_disjoint
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- A simp lemma that reliably unfolds `sorted_disjoint (r :: s :: rest)` without
+-- risk of looping (the recursive call is a strict subterm).
+@[simp]
+private theorem sorted_disjoint_cons2_iff
+    (r s : Nat × Nat) (rest : RangeSetModel) :
+    sorted_disjoint (r :: s :: rest) ↔
+    valid_range r ∧ r.2 ≤ s.1 ∧ sorted_disjoint (s :: rest) :=
+  Iff.rfl
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- §9  Auxiliary lemmas
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/-- If every element of `rs` starts at or after `bound`, and `n < bound`,
+    then `n` is not covered by `rs`.
+    Used to show that all tail elements of a sorted_disjoint list
+    miss a value below the head's end. -/
+private theorem covers_above_bound_false
+    (rs : RangeSetModel) (bound n : Nat)
+    (h_lt : n < bound)
+    (h_ge : ∀ r ∈ rs, bound ≤ r.1) :
+    covers rs n = false := by
+  induction rs with
+  | nil => rfl
+  | cons r rest ih =>
+      have h_eq : covers (r :: rest) n = (in_range r n || covers rest n) := rfl
+      rw [h_eq]
+      have hr : bound ≤ r.1 := h_ge r List.mem_cons_self
+      have h_not_in : in_range r n = false := by simp [in_range]; omega
+      rw [h_not_in, Bool.false_or]
+      exact ih (fun s hs => h_ge s (List.mem_cons.mpr (Or.inr hs)))
+
+/-- In a `sorted_disjoint` list, every element of the tail starts at or
+    after the head's end.  This is the key monotonicity property used in
+    both `remove_until` proofs to discharge the tail coverage goal. -/
+private theorem sorted_disjoint_all_ge_head_end
+    (head : Nat × Nat) (rs : RangeSetModel)
+    (h_inv : sorted_disjoint (head :: rs)) :
+    ∀ s ∈ rs, head.2 ≤ s.1 := by
+  induction rs generalizing head with
+  | nil => intro s hs; simp at hs
+  | cons hd rest ih =>
+      intro s hs
+      rw [sorted_disjoint_cons2_iff] at h_inv
+      obtain ⟨_, h_le, h_rest⟩ := h_inv
+      cases List.mem_cons.mp hs with
+      | inl h =>
+          -- s is the immediate next element: head.2 ≤ hd.1 = s.1
+          rw [h]; exact h_le
+      | inr h =>
+          -- s is deeper in the tail; chain through hd
+          have h_vhd : valid_range hd :=
+            sorted_disjoint_head_valid hd rest h_rest
+          have h_hd_ge : ∀ x ∈ rest, hd.2 ≤ x.1 := ih hd h_rest
+          have hs_ge : hd.2 ≤ s.1 := h_hd_ge s h
+          simp [valid_range] at h_vhd
+          -- head.2 ≤ hd.1 < hd.2 ≤ s.1
+          omega
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- §10  Key propositions
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- Proof strategy for insert_preserves_invariant:
--- Induction on rs. Base case: singleton after insert_empty.
--- Inductive step: case-split on the three branches of range_insert_go.
--- The merge branch requires showing that the new merged range is valid
--- and correctly positioned relative to the remaining tail.
+-- Requires a generalised induction over range_insert_go that tracks the
+-- accumulator invariant: acc_rev.reverse is sorted_disjoint and all its
+-- elements end before the current merge window.  Complex; deferred.
 
 /-- I1+I2: insert preserves the sorted_disjoint invariant.
     This is the fundamental correctness property: every insert leaves the
@@ -244,11 +306,8 @@ theorem insert_preserves_invariant (rs : RangeSetModel) (s e : Nat)
     sorted_disjoint (range_insert rs s e) := by
   sorry
 
--- Proof strategy for insert_covers_union:
--- By induction on rs.
--- For the "skip" branch: the head range is disjoint from [s,e) and untouched.
--- For the "insert before" branch: trivial by definition.
--- For the "merge" branch: the merged range covers (acc ∪ [s,e)), and by induction.
+-- Proof strategy for insert_covers_union: same accumulator difficulty.
+-- Deferred to a future run alongside insert_preserves_invariant.
 
 /-- I3: insert is semantically correct — it is a set union.
     `covers (range_insert S [s,e)) n = covers S n ∨ s ≤ n < e`
@@ -260,19 +319,48 @@ theorem insert_covers_union (rs : RangeSetModel) (s e n : Nat)
     covers (range_insert rs s e) n = (covers rs n || (s ≤ n && n < e)) := by
   sorry
 
--- Proof strategy for remove_until_removes_small:
--- By induction on rs. For each range [r_s, r_e):
---   Case e ≤ v+1: range dropped; induction on tail.
---   Case s ≤ v < e: trimmed to [v+1, e); show v+1 > n (since n ≤ v).
---   Case s > v: range unchanged; but n ≤ v < s, so n < r_s, not covered.
-
 /-- I4a: remove_until removes exactly the values ≤ `largest`.
     No value ≤ `largest` is covered after `remove_until`. -/
 theorem remove_until_removes_small (rs : RangeSetModel) (largest n : Nat)
     (h_inv : sorted_disjoint rs)
     (h_small : n ≤ largest) :
     covers (range_remove_until rs largest) n = false := by
-  sorry
+  induction rs with
+  | nil => rfl
+  | cons hd tl ih =>
+      obtain ⟨hs, he⟩ := hd
+      simp only [range_remove_until]
+      by_cases h1 : he ≤ largest + 1
+      · -- Entire range [hs,he) ⊆ [0,largest]: drop it and recurse.
+        rw [if_pos h1]
+        exact ih (sorted_disjoint_tail _ _ h_inv)
+      · rw [if_neg h1]
+        by_cases h2 : hs ≤ largest
+        · -- Partial overlap: trim start to largest+1.
+          rw [if_pos h2]
+          have h_eq : covers ((largest + 1, he) :: tl) n =
+              (in_range (largest + 1, he) n || covers tl n) := rfl
+          rw [h_eq]
+          have h_not_in : in_range (largest + 1, he) n = false := by
+            simp [in_range]; omega
+          rw [h_not_in, Bool.false_or]
+          -- All tail elements start ≥ he > largest+1 > n.
+          apply covers_above_bound_false tl he n (by omega)
+          exact sorted_disjoint_all_ge_head_end (hs, he) tl h_inv
+        · -- Range starts after largest: return unchanged.
+          rw [if_neg h2]
+          have h_eq : covers ((hs, he) :: tl) n =
+              (in_range (hs, he) n || covers tl n) := rfl
+          rw [h_eq]
+          have h_not_in : in_range (hs, he) n = false := by
+            simp [in_range]; omega
+          rw [h_not_in, Bool.false_or]
+          -- All tail elements start ≥ he > hs > largest ≥ n.
+          have h_vhd : valid_range (hs, he) :=
+            sorted_disjoint_head_valid _ _ h_inv
+          simp [valid_range] at h_vhd
+          apply covers_above_bound_false tl he n (by omega)
+          exact sorted_disjoint_all_ge_head_end (hs, he) tl h_inv
 
 /-- I4b: remove_until preserves values strictly above `largest`.
     Any value > `largest` that was covered remains covered. -/
@@ -281,10 +369,73 @@ theorem remove_until_preserves_large (rs : RangeSetModel) (largest n : Nat)
     (h_large : n > largest)
     (h_covered : covers rs n = true) :
     covers (range_remove_until rs largest) n = true := by
-  sorry
+  induction rs with
+  | nil => simp [covers] at h_covered
+  | cons hd tl ih =>
+      obtain ⟨hs, he⟩ := hd
+      simp only [range_remove_until]
+      have h_eq_src : covers ((hs, he) :: tl) n =
+          (in_range (hs, he) n || covers tl n) := rfl
+      by_cases h1 : he ≤ largest + 1
+      · -- Range fully below threshold: it cannot cover n > largest.
+        rw [if_pos h1]
+        apply ih (sorted_disjoint_tail _ _ h_inv)
+        rw [h_eq_src] at h_covered
+        have h_not_in : in_range (hs, he) n = false := by
+          simp [in_range]; omega
+        rw [h_not_in, Bool.false_or] at h_covered
+        exact h_covered
+      · rw [if_neg h1]
+        by_cases h2 : hs ≤ largest
+        · -- Trimmed to (largest+1, he) :: tl.
+          rw [if_pos h2]
+          have h_eq_res : covers ((largest + 1, he) :: tl) n =
+              (in_range (largest + 1, he) n || covers tl n) := rfl
+          rw [h_eq_res]
+          rw [h_eq_src] at h_covered
+          cases h3 : in_range (hs, he) n with
+          | false =>
+              -- n not in (hs,he), so n must be in tl.
+              rw [h3, Bool.false_or] at h_covered
+              rw [h_covered, Bool.or_true]
+          | true =>
+              -- n ∈ [hs, he); since n > largest, n ∈ [largest+1, he).
+              have h_in_trim : in_range (largest + 1, he) n = true := by
+                simp [in_range] at h3 ⊢; omega
+              rw [h_in_trim, Bool.true_or]
+        · -- Range unchanged.
+          rw [if_neg h2]
+          exact h_covered
 
-/-- remove_until preserves the sorted_disjoint invariant. -/
+/-- I4c: remove_until preserves the sorted_disjoint invariant. -/
 theorem remove_until_preserves_invariant (rs : RangeSetModel) (largest : Nat)
     (h_inv : sorted_disjoint rs) :
     sorted_disjoint (range_remove_until rs largest) := by
-  sorry
+  induction rs with
+  | nil => exact h_inv
+  | cons hd tl ih =>
+      obtain ⟨hs, he⟩ := hd
+      simp only [range_remove_until]
+      by_cases h1 : he ≤ largest + 1
+      · -- Drop the range; invariant holds by induction.
+        rw [if_pos h1]
+        exact ih (sorted_disjoint_tail _ _ h_inv)
+      · rw [if_neg h1]
+        by_cases h2 : hs ≤ largest
+        · -- Result: (largest+1, he) :: tl.
+          rw [if_pos h2]
+          cases tl with
+          | nil =>
+              -- Singleton; just need valid_range.
+              simp [sorted_disjoint, valid_range]; omega
+          | cons next rest =>
+              obtain ⟨ts, te⟩ := next
+              rw [sorted_disjoint_cons2_iff]
+              rw [sorted_disjoint_cons2_iff] at h_inv
+              obtain ⟨_, h_le, h_rest⟩ := h_inv
+              -- valid_range (largest+1, he): he ≥ largest+2 since ¬(he ≤ largest+1)
+              -- (largest+1, he).2 ≤ (ts, te).1: both equal he ≤ ts from h_inv
+              exact ⟨by simp [valid_range]; omega, h_le, h_rest⟩
+        · -- Range unchanged.
+          rw [if_neg h2]
+          exact h_inv
