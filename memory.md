@@ -9,14 +9,15 @@
 - **Run 15**: Tasks 5+9 — proved 3 remove_until theorems + lean-ci.yml on branch that was never merged
 - **Run 16**: Tasks 5+6 — proved 3 remove_until theorems (again) + CORRESPONDENCE.md; PR #15 open
 - **Run 17**: Tasks 5+9 — proved insert_covers_union (not merged; branch gone)
-- **Run 18 (this)**: Tasks 6+9 — CORRESPONDENCE.md + lean-ci.yml added; merged PR #15 content
-  Branch: lean-squad-run18-correspondence-ci-1774928661 (PR pending)
+- **Run 18**: Tasks 6+9 — branch was same SHA as master; no content changes persisted
+- **Run 19 (this)**: Tasks 6+9 — CORRESPONDENCE.md + lean-ci.yml + RangeSet proofs applied
+  Branch: lean-squad-run19-correspondence-ci-1774950365 (PR created)
 
 ## IMPORTANT: Branch History Note
 All lean-squad branches BEFORE run 15 are based on a DIFFERENT git history
 (grafted). Only PRs #2, #5, #6 were successfully merged to master.
 Run 16 PR (#15) has unrelated history — must cherry-apply content.
-Run 18 branch created fresh from master, applied PR #15 content manually.
+Run 19 branch created fresh from master, applied PR #15 content manually.
 
 ## FV Targets
 
@@ -31,8 +32,8 @@ Run 18 branch created fresh from master, applied PR #15 content manually.
 - **Informal spec**: `formal-verification/specs/rangeset_informal.md`
 - **Lean file**: `formal-verification/lean/FVSquad/RangeSet.lean`
 - **Phase**: 5 — Proofs (partial)
-- **Status**: 🔄 In progress — Run 18 PR pending
-- **Proved (cumulative, in run 18 branch)**:
+- **Status**: 🔄 In progress — Run 19 PR pending
+- **Proved (cumulative, in run 19 branch)**:
     §7 structural: empty_sorted_disjoint, singleton_sorted_disjoint,
       empty_covers_nothing, singleton_covers_iff, insert_empty,
       remove_until_empty, insert_empty_covers, singleton_not_covers_left,
@@ -71,7 +72,7 @@ Run 18 branch created fresh from master, applied PR #15 content manually.
 - **Installed at**: `~/.elan/bin/lean` (installed each run via elan)
 - **Project**: `formal-verification/lean/` (lakefile.toml, no Mathlib)
 - **lean-toolchain**: `leanprover/lean4:v4.29.0`
-- **lake build (run 18)**: PASSED, 0 errors, 2 sorry remaining
+- **lake build (run 19)**: PASSED, 0 errors, 2 sorry remaining
 
 ## Key Lean 4.29.0 API Notes (no Mathlib)
 - `lemma` keyword NOT supported — use `theorem` instead!
@@ -89,7 +90,7 @@ Run 18 branch created fresh from master, applied PR #15 content manually.
   Use `left`/`right` before omega for disjunctive goals
 
 ## Correspondence
-- **CORRESPONDENCE.md**: Added to run 18 branch (from PR #15 content + updated)
+- **CORRESPONDENCE.md**: Added to run 19 PR (PENDING)
 - Varint.lean: approximation (OR → addition); exact for pure value mapping
 - RangeSet.lean: abstraction (dual repr, no capacity limit); exact for invariants
 - No mismatches found
@@ -97,19 +98,19 @@ Run 18 branch created fresh from master, applied PR #15 content manually.
   capacity eviction fires — needs `len < capacity` precondition
 
 ## CI Status
-- `lean-ci.yml`: ADDED in run 18 PR
+- `lean-ci.yml`: ADDED in run 19 PR (PENDING)
   Triggers on PR/push to formal-verification/lean/**
   Caches .lake artefacts on lake-manifest.json hash
   NOT yet merged to master
 
 ## Status Issue
 - **Issue #4** (open): `[Lean Squad] Formal Verification Status`
-  Updated in run 18
+  Updated in run 19
 
 ## Open PRs
 - **PR #15** (run 16): RangeSet remove_until proofs + CORRESPONDENCE.md
-  Content has been applied to run 18 branch; run 18 PR supersedes run 16
-- **Run 18 PR** (lean-squad-run18-correspondence-ci-1774928661): PENDING
+  Content has been applied to run 19 branch; superseded by run 19 PR
+- **Run 19 PR** (lean-squad-run19-correspondence-ci-1774950365): PENDING
 
 ## Open Tasks for Next Run
 1. **Prove insert_preserves_invariant** (Task 5 — hard)
