@@ -11,14 +11,15 @@
 - **Run 17**: Tasks 5+9 — proved insert_covers_union (not merged; branch gone)
 - **Run 18**: Tasks 6+9 — branch was same SHA as master; no content changes persisted
 - **Run 19**: Tasks 6+9 — CORRESPONDENCE.md + lean-ci.yml + RangeSet proofs applied (PR created, never merged)
-- **Run 20 (this)**: Tasks 9+3 — lean-ci.yml + Minmax.lean spec + backport PR #15 changes
-  Branch: lean-squad-run20-ci-minmax-1774950366 (PR created)
+- **Run 20**: Tasks 9+3 — lean-ci.yml + Minmax.lean spec + backport PR #15 changes (diverged history)
+- **Run 21 (this)**: Tasks 5+6+9 — proved remove_until theorems + CORRESPONDENCE.md + lean-ci.yml
+  Branch: lean-squad-run21-proofs-ci-1775015975 (PR created)
 
 ## IMPORTANT: Branch History Note
 All lean-squad branches BEFORE run 15 are based on a DIFFERENT git history
 (grafted). Only PRs #2, #5, #6 were successfully merged to master.
-PR #15 (run 16) has unrelated history — must cherry-apply content each run.
-Run 20 applied PR #15 content manually and created a new PR.
+PR #15 (run 16) has unrelated history — content applied manually in run 21.
+Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation.
 
 ## FV Targets
 
@@ -33,15 +34,15 @@ Run 20 applied PR #15 content manually and created a new PR.
 - **Informal spec**: `formal-verification/specs/rangeset_informal.md`
 - **Lean file**: `formal-verification/lean/FVSquad/RangeSet.lean`
 - **Phase**: 5 — Proofs (partial)
-- **Status**: 🔄 In progress — Run 20 PR pending
-- **Proved (cumulative, in run 20 branch)**:
+- **Status**: 🔄 In progress — Run 21 PR pending
+- **Proved (in run 21 branch)**:
     §7 structural: empty_sorted_disjoint, singleton_sorted_disjoint,
       empty_covers_nothing, singleton_covers_iff, insert_empty,
       remove_until_empty, insert_empty_covers, singleton_not_covers_left,
       singleton_not_covers_right, sorted_disjoint_tail, sorted_disjoint_head_valid
     §8: sorted_disjoint_cons2_iff
     §9: covers_above_bound_false, sorted_disjoint_all_ge_head_end
-    §5 (remove_until): remove_until_removes_small, remove_until_preserves_large,
+    §10 (remove_until): remove_until_removes_small, remove_until_preserves_large,
       remove_until_preserves_invariant
 - **Sorry remaining**: insert_preserves_invariant, insert_covers_union (2)
 - **Strategy for insert_preserves_invariant / insert_covers_union**:
@@ -66,25 +67,21 @@ Run 20 applied PR #15 content manually and created a new PR.
 ### Target 5: Minmax filter
 - **File**: `quiche/src/minmax.rs`
 - **Lean file**: `formal-verification/lean/FVSquad/Minmax.lean`
-- **Phase**: 3 — Formal Spec (partial proofs)
-- **Status**: 🔄 In progress — Run 20 PR pending
-- **Proved**:
-    §4 (reset): reset_uniform, reset_e0_value, reset_e1_value, reset_e2_value,
-      reset_e0_time, reset_e1_time, reset_e2_time,
-      reset_satisfies_min_val_inv, reset_satisfies_time_ordered (all by rfl/omega)
-    §5 (running_min reset branches): running_min_new_min, running_min_window_expired,
-      running_min_new_min_uniform, running_min_window_expired_uniform
-    §7 (concrete examples): 4 #eval/example checks pass
-- **Sorry remaining**: min_val_inv_preserved, time_ordered_preserved (2)
-- **Approximations**: Instant/Duration → Nat; div_f32(4.0) → 4*delta > win;
-    pure functional model (no mutation)
+- **Phase**: 3 — Formal Spec (partial proofs) — NOT in master yet
+- **Status**: ⬜ Run 20 PR has diverged history; needs fresh creation from scratch
+- **What to do next run**: Create Minmax.lean fresh (it was in run 20 PR which had diverged history)
+  Key proofs to tackle:
+    - reset theorems (all by rfl/omega — easy)
+    - running_min correctness theorems
+    - min_val_inv_preserved (medium)
+    - time_ordered_preserved (medium)
 
 ## Lean Toolchain
 - **Version**: Lean 4.29.0
 - **Installed at**: `~/.elan/bin/lean` (installed each run via elan)
 - **Project**: `formal-verification/lean/` (lakefile.toml, no Mathlib)
 - **lean-toolchain**: `leanprover/lean4:v4.29.0`
-- **lake build (run 20)**: PASSED, 0 errors, 4 sorry remaining
+- **lake build (run 21)**: PASSED, 0 errors, 2 sorry remaining
 
 ## Key Lean 4.29.0 API Notes (no Mathlib)
 - `lemma` keyword NOT supported — use `theorem` instead!
@@ -98,41 +95,39 @@ Run 20 applied PR #15 content manually and created a new PR.
 - `native_decide` works for decidable small-Nat computations
 - `omega` handles Nat linear arithmetic including ∧/¬ but NOT ∨ in goals
   Use `left`/`right` before omega for disjunctive goals
+- `obtain ⟨hs, he⟩ := hd` works for `hd : Nat × Nat` to destructure
 
 ## Correspondence
-- **CORRESPONDENCE.md**: Added in run 20 PR
+- **CORRESPONDENCE.md**: Added in run 21 PR (pending)
 - Varint.lean: approximation (OR → addition); exact for pure value mapping
 - RangeSet.lean: abstraction (dual repr, no capacity limit); exact for invariants
-- Minmax.lean: abstraction (Instant→Nat, div_f32→integer, pure functional)
 - No mismatches found
 - Key gap: insert_covers_union does NOT hold unconditionally in Rust when
   capacity eviction fires — needs `len < capacity` precondition
 
 ## CI Status
-- `lean-ci.yml`: ADDED in run 20 PR (PENDING)
+- `lean-ci.yml`: ADDED in run 21 PR (PENDING)
   Triggers on PR/push to formal-verification/lean/**
-  Caches .lake artefacts on lake-manifest.json hash
+  Caches .lake artefacts on lean-toolchain hash
   NOT yet merged to master
 
 ## Status Issue
 - **Issue #4** (open): `[Lean Squad] Formal Verification Status`
-  Updated in run 20
+  Updated in run 21
 
-## Open PRs
+## Open PRs (as of run 21)
 - **PR #15** (run 16): RangeSet remove_until proofs + CORRESPONDENCE.md
-  Content has been applied to run 20 branch; superseded by run 20 PR
-- **Run 20 PR** (lean-squad-run20-ci-minmax-1774950366): PENDING
+  Content has been applied to run 21 branch; superseded by run 21 PR
+- **Run 21 PR** (lean-squad-run21-proofs-ci-1775015975): PENDING
+- **Many other PRs** (#8-#20): diverged history, content superseded by run 21
 
 ## Open Tasks for Next Run
-1. **Prove insert_preserves_invariant** (Task 5 — hard)
+1. **Create Minmax.lean** (Task 3) — fresh creation needed (run 20 PR has diverged history)
+2. **Prove insert_preserves_invariant** (Task 5 — hard)
    Need `range_insert_go_inv` generalised lemma — see strategy above
-2. **Prove insert_covers_union** (Task 5 — hard, same technique)
-3. **Prove min_val_inv_preserved** (Task 5 — medium)
-   Case split on running_min + subwin_update branches; straightforward but verbose
-4. **Prove time_ordered_preserved** (Task 5 — medium, similar)
-5. **Write informal spec for Minmax** (Task 2 — quick)
-6. **Write CRITIQUE.md** (Task 7)
-7. **Aeneas Task 8** — blocked by opam availability
+3. **Prove insert_covers_union** (Task 5 — hard, same technique)
+4. **Write CRITIQUE.md** (Task 7)
+5. **Aeneas Task 8** — blocked by opam availability
 
 ## Aeneas Status
 - Task 8 (Aeneas): NOT attempted — opam not available in sandbox
