@@ -12,14 +12,27 @@
 - **Run 18**: Tasks 6+9 — branch was same SHA as master; no content changes persisted
 - **Run 19**: Tasks 6+9 — CORRESPONDENCE.md + lean-ci.yml + RangeSet proofs applied (PR created, never merged)
 - **Run 20**: Tasks 9+3 — lean-ci.yml + Minmax.lean spec + backport PR #15 changes (diverged history)
-- **Run 21 (this)**: Tasks 5+6+9 — proved remove_until theorems + CORRESPONDENCE.md + lean-ci.yml
+- **Run 21**: Tasks 5+6+9 — proved remove_until theorems + CORRESPONDENCE.md + lean-ci.yml
   Branch: lean-squad-run21-proofs-ci-1775015975 (PR created)
+- **Run 22 (this)**: Tasks 6+9+5 — CORRESPONDENCE.md + lean-ci.yml + 3 remove_until proofs + 3 auxiliary lemmas
+  Branch: lean-squad-run22-correspondence-ci-1775038123
+  NOTE: MCP server unavailable at PR creation time — branch committed, PR not created via safeoutputs.
+  PR should be created manually or will be retried next run.
 
 ## IMPORTANT: Branch History Note
 All lean-squad branches BEFORE run 15 are based on a DIFFERENT git history
 (grafted). Only PRs #2, #5, #6 were successfully merged to master.
-PR #15 (run 16) has unrelated history — content applied manually in run 21.
+PR #15 (run 16) has unrelated history — content applied manually in run 21/22.
 Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation.
+
+## Current master state (after run 22 commit)
+- FVSquad/Varint.lean: 10 theorems proved (no sorry) — MERGED
+- FVSquad/RangeSet.lean: includes all proofs from run 22 (sorry: 2 remain)
+  - Fixed merge conflict (stale import FVSquad.RttStats)
+  - Added: sorted_disjoint_cons2_iff (@[simp]), sorted_disjoint_head_le_rest, covers_lt_start
+  - Proved: remove_until_removes_small, remove_until_preserves_large, remove_until_preserves_invariant
+- CORRESPONDENCE.md: NEW (run 22 branch)
+- .github/workflows/lean-ci.yml: NEW (run 22 branch)
 
 ## FV Targets
 
@@ -33,15 +46,15 @@ Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation
 - **File**: `quiche/src/ranges.rs`
 - **Informal spec**: `formal-verification/specs/rangeset_informal.md`
 - **Lean file**: `formal-verification/lean/FVSquad/RangeSet.lean`
-- **Phase**: 5 — Proofs (partial)
-- **Status**: 🔄 In progress — Run 21 PR pending
-- **Proved (in run 21 branch)**:
+- **Phase**: 5 — Proofs (partial, pending merge)
+- **Status**: 🔄 In progress — Run 22 branch pending PR
+- **Proved (in run 22 branch)**:
     §7 structural: empty_sorted_disjoint, singleton_sorted_disjoint,
       empty_covers_nothing, singleton_covers_iff, insert_empty,
       remove_until_empty, insert_empty_covers, singleton_not_covers_left,
       singleton_not_covers_right, sorted_disjoint_tail, sorted_disjoint_head_valid
-    §8: sorted_disjoint_cons2_iff
-    §9: covers_above_bound_false, sorted_disjoint_all_ge_head_end
+    §8: sorted_disjoint_cons2_iff (@[simp]), sorted_disjoint_head_le_rest
+    §9: covers_lt_start
     §10 (remove_until): remove_until_removes_small, remove_until_preserves_large,
       remove_until_preserves_invariant
 - **Sorry remaining**: insert_preserves_invariant, insert_covers_union (2)
@@ -81,7 +94,7 @@ Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation
 - **Installed at**: `~/.elan/bin/lean` (installed each run via elan)
 - **Project**: `formal-verification/lean/` (lakefile.toml, no Mathlib)
 - **lean-toolchain**: `leanprover/lean4:v4.29.0`
-- **lake build (run 21)**: PASSED, 0 errors, 2 sorry remaining
+- **lake build (run 22)**: PASSED, 0 errors, 2 sorry remaining
 
 ## Key Lean 4.29.0 API Notes (no Mathlib)
 - `lemma` keyword NOT supported — use `theorem` instead!
@@ -96,9 +109,18 @@ Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation
 - `omega` handles Nat linear arithmetic including ∧/¬ but NOT ∨ in goals
   Use `left`/`right` before omega for disjunctive goals
 - `obtain ⟨hs, he⟩ := hd` works for `hd : Nat × Nat` to destructure
+- `List.mem_cons_self` does NOT work in some contexts — use
+  `List.mem_cons.mpr (Or.inl rfl)` instead
+- For `heq : (ts, te) = (a, b)`, to get `ts = a`: 
+  `have hts : ts = a := by have := congrArg Prod.fst heq; exact this`
+- `sorted_disjoint_cons2_iff.mp` is NOT valid dot notation in this context —
+  use `rw [sorted_disjoint_cons2_iff] at h` then destructure with `obtain`
+- `simp [valid_range] at hv_s` is needed to unfold `valid_range s` into `s.1 < s.2`
+  for omega to use it
+- `Prod.fst` projections need `simp only [Prod.fst]` or destructuring for omega
 
 ## Correspondence
-- **CORRESPONDENCE.md**: Added in run 21 PR (pending)
+- **CORRESPONDENCE.md**: Added in run 22 branch (pending PR)
 - Varint.lean: approximation (OR → addition); exact for pure value mapping
 - RangeSet.lean: abstraction (dual repr, no capacity limit); exact for invariants
 - No mismatches found
@@ -106,28 +128,30 @@ Run 20 had diverged history — not merged; its Minmax.lean needs fresh creation
   capacity eviction fires — needs `len < capacity` precondition
 
 ## CI Status
-- `lean-ci.yml`: ADDED in run 21 PR (PENDING)
+- `lean-ci.yml`: ADDED in run 22 branch (PENDING PR/MERGE)
   Triggers on PR/push to formal-verification/lean/**
   Caches .lake artefacts on lean-toolchain hash
   NOT yet merged to master
 
 ## Status Issue
 - **Issue #4** (open): `[Lean Squad] Formal Verification Status`
-  Updated in run 21
+  Last updated in run 21 (needs run 22 update next run)
 
-## Open PRs (as of run 21)
+## Open PRs (as of run 22)
 - **PR #15** (run 16): RangeSet remove_until proofs + CORRESPONDENCE.md
-  Content has been applied to run 21 branch; superseded by run 21 PR
-- **Run 21 PR** (lean-squad-run21-proofs-ci-1775015975): PENDING
-- **Many other PRs** (#8-#20): diverged history, content superseded by run 21
+  Content superseded by run 22 branch
+- **Run 22 branch** (lean-squad-run22-correspondence-ci-1775038123):
+  COMMITTED, PR NOT CREATED (MCP server unavailable)
+  Must create PR at start of next run
 
 ## Open Tasks for Next Run
-1. **Create Minmax.lean** (Task 3) — fresh creation needed (run 20 PR has diverged history)
-2. **Prove insert_preserves_invariant** (Task 5 — hard)
+1. **Create PR for run 22 branch** — MCP server was down, branch is committed
+2. **Update Status Issue #4** — run 22 results not yet posted
+3. **Create Minmax.lean** (Task 3) — fresh creation needed
+4. **Prove insert_preserves_invariant** (Task 5 — hard)
    Need `range_insert_go_inv` generalised lemma — see strategy above
-3. **Prove insert_covers_union** (Task 5 — hard, same technique)
-4. **Write CRITIQUE.md** (Task 7)
-5. **Aeneas Task 8** — blocked by opam availability
+5. **Prove insert_covers_union** (Task 5 — hard, same technique)
+6. **Write CRITIQUE.md** (Task 7)
 
 ## Aeneas Status
 - Task 8 (Aeneas): NOT attempted — opam not available in sandbox
