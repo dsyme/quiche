@@ -290,13 +290,250 @@ private theorem sorted_disjoint_all_ge_head_end
           omega
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- §10  Key propositions
+-- §10  Helpers for insert proofs
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
--- Proof strategy for insert_preserves_invariant:
--- Requires a generalised induction over range_insert_go that tracks the
--- accumulator invariant: acc_rev.reverse is sorted_disjoint and all its
--- elements end before the current merge window.  Complex; deferred.
+/-- Bool equality from a propositional iff on the `= true` form. -/
+private theorem bool_eq_of_iff {a b : Bool} (h : a = true ↔ b = true) : a = b := by
+  cases a <;> cases b <;> simp_all
+
+/-- in_range as a proposition. -/
+private theorem in_range_iff_prop (lo hi n : Nat) :
+    in_range (lo, hi) n = true ↔ lo ≤ n ∧ n < hi := by
+  simp [in_range, Bool.and_eq_true, decide_eq_true_eq]
+
+/-- covers distributes over list append. -/
+private theorem covers_append (l1 l2 : RangeSetModel) (n : Nat) :
+    covers (l1 ++ l2) n = (covers l1 n || covers l2 n) := by
+  unfold covers; rw [List.any_append]
+
+/-- covers of a singleton list equals in_range. -/
+private theorem covers_singleton (r : Nat × Nat) (n : Nat) :
+    covers [r] n = in_range r n := by
+  simp [covers, List.any, in_range]
+
+/-- The merged interval [min s rs, max e re) covers the union of [s,e) and
+    [rs,re) when those intervals overlap or are adjacent. -/
+private theorem in_range_merge_bool (s e rs re n : Nat)
+    (h1 : ¬ (e < rs)) (h2 : ¬ (s > re)) :
+    in_range (if s < rs then s else rs, if e > re then e else re) n =
+    (in_range (s, e) n || in_range (rs, re) n) := by
+  apply bool_eq_of_iff
+  simp only [in_range_iff_prop, Bool.or_eq_true]
+  by_cases hs : s < rs
+  · simp only [if_pos hs]
+    by_cases he : e > re
+    · simp only [if_pos he]
+      constructor
+      · intro ⟨h_le, h_lt⟩; exact Or.inl ⟨by omega, h_lt⟩
+      · rintro (⟨h_le, h_lt⟩ | ⟨h_le, h_lt⟩) <;> exact ⟨by omega, by omega⟩
+    · simp only [if_neg he]
+      constructor
+      · intro ⟨h_le, h_lt⟩
+        by_cases hlt : n < e
+        · exact Or.inl ⟨h_le, hlt⟩
+        · exact Or.inr ⟨by omega, h_lt⟩
+      · rintro (⟨h_le, h_lt⟩ | ⟨h_le, h_lt⟩) <;> exact ⟨by omega, by omega⟩
+  · simp only [if_neg hs]
+    by_cases he : e > re
+    · simp only [if_pos he]
+      constructor
+      · intro ⟨h_le, h_lt⟩
+        by_cases hlt : n < re
+        · exact Or.inr ⟨h_le, hlt⟩
+        · exact Or.inl ⟨by omega, h_lt⟩
+      · rintro (⟨h_le, h_lt⟩ | ⟨h_le, h_lt⟩) <;> exact ⟨by omega, by omega⟩
+    · simp only [if_neg he]
+      constructor
+      · intro h; exact Or.inr h
+      · rintro (⟨h_le, h_lt⟩ | h)
+        · exact ⟨by omega, by omega⟩
+        · exact h
+
+/-- Append a valid range (lo, hi) to a sorted list whose elements all end ≤ lo. -/
+private theorem sorted_disjoint_snoc (l : RangeSetModel) (lo hi : Nat)
+    (h_inv : sorted_disjoint l)
+    (h_bound : ∀ r ∈ l, r.2 ≤ lo)
+    (h_range : lo < hi) :
+    sorted_disjoint (l ++ [(lo, hi)]) := by
+  induction l with
+  | nil => simp [sorted_disjoint, valid_range, h_range]
+  | cons hd rest ih =>
+      cases rest with
+      | nil =>
+          simp only [List.cons_append, List.nil_append, sorted_disjoint_cons2_iff]
+          exact ⟨h_inv, h_bound hd List.mem_cons_self,
+                 by simp [sorted_disjoint, valid_range, h_range]⟩
+      | cons next more =>
+          simp only [List.cons_append, sorted_disjoint_cons2_iff]
+          simp only [sorted_disjoint_cons2_iff] at h_inv
+          obtain ⟨h_hd, h_le, h_rest⟩ := h_inv
+          exact ⟨h_hd, h_le,
+                 ih h_rest (fun r hr => h_bound r (List.mem_cons.mpr (Or.inr hr)))⟩
+
+/-- Concatenate two sorted_disjoint lists given a separation bound. -/
+private theorem sorted_disjoint_concat (l1 l2 : RangeSetModel)
+    (h1 : sorted_disjoint l1)
+    (h2 : sorted_disjoint l2)
+    (h_bound : ∀ r ∈ l1, ∀ q ∈ l2, r.2 ≤ q.1) :
+    sorted_disjoint (l1 ++ l2) := by
+  induction l2 generalizing l1 with
+  | nil => simp [h1]
+  | cons qhd qtl ih =>
+      rw [show l1 ++ (qhd :: qtl) = (l1 ++ [qhd]) ++ qtl from by simp [List.append_assoc]]
+      apply ih
+      · apply sorted_disjoint_snoc l1 qhd.1 qhd.2 h1
+        · intro r hr; exact h_bound r hr qhd List.mem_cons_self
+        · exact sorted_disjoint_head_valid qhd qtl h2
+      · exact sorted_disjoint_tail qhd qtl h2
+      · intro r hr q hq
+        simp only [List.mem_append, List.mem_singleton] at hr
+        cases hr with
+        | inl hr => exact h_bound r hr q (List.mem_cons.mpr (Or.inr hq))
+        | inr hr =>
+            rw [hr]
+            exact sorted_disjoint_all_ge_head_end qhd qtl h2 q hq
+
+/-- Generalised covers lemma: range_insert_go acc_rev rest s e covers exactly
+    the union of acc_rev.reverse, rest, and [s,e). -/
+private theorem range_insert_go_covers_gen
+    (acc_rev rest : RangeSetModel) (s e n : Nat) :
+    covers (range_insert_go acc_rev rest s e) n =
+    (covers acc_rev.reverse n || covers rest n || in_range (s, e) n) := by
+  induction rest generalizing acc_rev s e with
+  | nil =>
+      simp only [range_insert_go, covers_append, covers_singleton]
+      simp [covers]
+  | cons hd rest ih =>
+      obtain ⟨rs, re⟩ := hd
+      simp only [range_insert_go]
+      by_cases h1 : e < rs
+      · rw [if_pos h1]
+        rw [show acc_rev.reverse ++ [(s, e), (rs, re)] ++ rest =
+              (acc_rev.reverse ++ [(s, e)]) ++ ((rs, re) :: rest) from
+            by simp [List.append_assoc]]
+        rw [covers_append, covers_append, covers_singleton]
+        generalize covers acc_rev.reverse n = a
+        generalize in_range (s, e) n = b
+        generalize covers ((rs, re) :: rest) n = c
+        cases a <;> cases b <;> cases c <;> rfl
+      · rw [if_neg h1]
+        by_cases h2 : s > re
+        · rw [if_pos h2, ih, List.reverse_cons, covers_append, covers_singleton]
+          have : covers ((rs, re) :: rest) n = (in_range (rs, re) n || covers rest n) := rfl
+          rw [this]
+          generalize covers acc_rev.reverse n = a
+          generalize in_range (s, e) n = b
+          generalize in_range (rs, re) n = c
+          generalize covers rest n = d
+          cases a <;> cases b <;> cases c <;> cases d <;> rfl
+        · rw [if_neg h2, ih, in_range_merge_bool s e rs re n h1 h2]
+          have : covers ((rs, re) :: rest) n = (in_range (rs, re) n || covers rest n) := rfl
+          rw [this]
+          generalize covers acc_rev.reverse n = a
+          generalize in_range (s, e) n = b
+          generalize in_range (rs, re) n = c
+          generalize covers rest n = d
+          cases a <;> cases b <;> cases c <;> cases d <;> rfl
+
+/-- Generalised invariant lemma: range_insert_go preserves sorted_disjoint
+    given an appropriate accumulator invariant. -/
+private theorem range_insert_go_preserves_inv
+    (acc_rev rest : RangeSetModel) (s e : Nat)
+    -- acc_rev.reverse is sorted_disjoint
+    (h_acc_inv : sorted_disjoint acc_rev.reverse)
+    -- all acc elements end ≤ s (the current merge window start)
+    (h_acc_bound : ∀ r ∈ acc_rev, r.2 ≤ s)
+    -- acc ends before rest begins (separation invariant)
+    (h_sep : ∀ r ∈ acc_rev, ∀ q ∈ rest, r.2 ≤ q.1)
+    -- rest is sorted_disjoint
+    (h_rest_inv : sorted_disjoint rest)
+    -- current window is a valid non-empty range
+    (h_range : s < e) :
+    sorted_disjoint (range_insert_go acc_rev rest s e) := by
+  induction rest generalizing acc_rev s e with
+  | nil =>
+      simp only [range_insert_go]
+      exact sorted_disjoint_snoc acc_rev.reverse s e h_acc_inv
+              (fun r hr => h_acc_bound r (List.mem_reverse.mp hr)) h_range
+  | cons hd rest ih =>
+      obtain ⟨rs, re⟩ := hd
+      simp only [range_insert_go]
+      by_cases h1 : e < rs
+      · -- Insert before (rs,re): result = acc.rev ++ [(s,e)] ++ (rs,re) :: rest
+        rw [if_pos h1]
+        rw [show acc_rev.reverse ++ [(s, e), (rs, re)] ++ rest =
+              (acc_rev.reverse ++ [(s, e)]) ++ ((rs, re) :: rest) from
+            by simp [List.append_assoc]]
+        apply sorted_disjoint_concat
+        · exact sorted_disjoint_snoc acc_rev.reverse s e h_acc_inv
+                    (fun r hr => h_acc_bound r (List.mem_reverse.mp hr)) h_range
+        · exact h_rest_inv
+        · intro r hr q hq
+          simp only [List.mem_append, List.mem_singleton] at hr
+          cases hr with
+          | inl hr => exact h_sep r (List.mem_reverse.mp hr) q hq
+          | inr hr =>
+              rw [hr]
+              cases List.mem_cons.mp hq with
+              | inl h => rw [h]; omega
+              | inr h =>
+                  have hge := sorted_disjoint_all_ge_head_end (rs, re) rest h_rest_inv q h
+                  have hv := sorted_disjoint_head_valid (rs, re) rest h_rest_inv
+                  simp [valid_range] at hv; omega
+      · rw [if_neg h1]
+        by_cases h2 : s > re
+        · -- Skip (rs,re): recurse with updated acc
+          rw [if_pos h2]
+          apply ih
+          · -- sorted_disjoint ((rs,re) :: acc_rev).reverse
+            rw [List.reverse_cons]
+            apply sorted_disjoint_snoc acc_rev.reverse rs re h_acc_inv
+            · intro r hr
+              exact h_sep r (List.mem_reverse.mp hr) (rs, re) List.mem_cons_self
+            · exact sorted_disjoint_head_valid (rs, re) rest h_rest_inv
+          · -- all new acc elements end ≤ s
+            intro r hr
+            cases List.mem_cons.mp hr with
+            | inl h => rw [h]; omega
+            | inr h => exact h_acc_bound r h
+          · -- separation: new acc ends before rest
+            intro r hr q hq
+            cases List.mem_cons.mp hr with
+            | inl h =>
+                rw [h]
+                exact sorted_disjoint_all_ge_head_end (rs, re) rest h_rest_inv q hq
+            | inr h =>
+                exact h_sep r h q (List.mem_cons.mpr (Or.inr hq))
+          · exact sorted_disjoint_tail (rs, re) rest h_rest_inv
+          · exact h_range
+        · -- Overlap: merge (s,e) with (rs,re) and recurse
+          rw [if_neg h2]
+          apply ih
+          · exact h_acc_inv
+          · -- new s' = min s rs; all acc elements end ≤ s and ≤ rs, so ≤ min s rs
+            intro r hr
+            have hb := h_acc_bound r hr
+            have hs' := h_sep r hr (rs, re) List.mem_cons_self
+            by_cases hlt : s < rs
+            · simp only [if_pos hlt]; omega
+            · simp only [if_neg hlt]; omega
+          · -- separation: acc still ends before rest (tail only)
+            intro r hr q hq
+            exact h_sep r hr q (List.mem_cons.mpr (Or.inr hq))
+          · exact sorted_disjoint_tail (rs, re) rest h_rest_inv
+          · -- min s rs < max e re
+            have h_valid := sorted_disjoint_head_valid (rs, re) rest h_rest_inv
+            simp [valid_range] at h_valid
+            by_cases hlt : s < rs <;> by_cases hlt2 : e > re
+            · simp only [if_pos hlt, if_pos hlt2]; omega
+            · simp only [if_pos hlt, if_neg hlt2]; omega
+            · simp only [if_neg hlt, if_pos hlt2]; omega
+            · simp only [if_neg hlt, if_neg hlt2]; omega
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- §11  Key propositions
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 /-- I1+I2: insert preserves the sorted_disjoint invariant.
     This is the fundamental correctness property: every insert leaves the
@@ -304,10 +541,13 @@ private theorem sorted_disjoint_all_ge_head_end
 theorem insert_preserves_invariant (rs : RangeSetModel) (s e : Nat)
     (h_inv : sorted_disjoint rs) (h_range : s < e) :
     sorted_disjoint (range_insert rs s e) := by
-  sorry
-
--- Proof strategy for insert_covers_union: same accumulator difficulty.
--- Deferred to a future run alongside insert_preserves_invariant.
+  simp only [range_insert]
+  apply range_insert_go_preserves_inv
+  · simp [sorted_disjoint]
+  · intro r hr; simp at hr
+  · intro r hr q hq; simp at hr
+  · exact h_inv
+  · exact h_range
 
 /-- I3: insert is semantically correct — it is a set union.
     `covers (range_insert S [s,e)) n = covers S n ∨ s ≤ n < e`
@@ -317,7 +557,9 @@ theorem insert_preserves_invariant (rs : RangeSetModel) (s e : Nat)
 theorem insert_covers_union (rs : RangeSetModel) (s e n : Nat)
     (h_inv : sorted_disjoint rs) :
     covers (range_insert rs s e) n = (covers rs n || (s ≤ n && n < e)) := by
-  sorry
+  simp only [range_insert]
+  rw [range_insert_go_covers_gen]
+  simp [covers, in_range]
 
 /-- I4a: remove_until removes exactly the values ≤ `largest`.
     No value ≤ `largest` is covered after `remove_until`. -/
