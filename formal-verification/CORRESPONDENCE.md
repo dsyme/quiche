@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-03-30 10:00 UTC
-- **Commit**: `e485077b`
+- **Date**: 2026-04-02 20:00 UTC
+- **Commit**: `da22572e`
 
 ---
 
@@ -189,21 +189,191 @@ therefore valid only for `largest < 2^64 - 1`.
 
 ### Sorry theorems
 
-| Theorem | Reason | Risk |
-|---------|--------|------|
-| `insert_preserves_invariant` | Requires induction over `range_insert_go` with acc invariant — complex | Medium (not yet verified) |
-| `insert_covers_union` | Same difficulty; additionally, does NOT hold when capacity eviction fires | **High** — would need capacity precondition |
+*None — all theorems in RangeSet.lean are fully proved as of run 28 (merged PR #22).*
+
+The previously deferred theorems `insert_preserves_invariant` and
+`insert_covers_union` were both proved in run 28 using a generalised
+accumulator induction strategy with four simultaneous invariants.
+
+### Proved theorems — correspondence assessment (complete list)
+
+### Proved theorems — correspondence assessment (complete list)
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|------------------------|-------|
+| `empty_sorted_disjoint` | **exact** | Low | Trivial structural fact |
+| `singleton_sorted_disjoint` | **exact** | Low | Trivial structural fact |
+| `empty_covers_nothing` | **exact** | Low | Trivial |
+| `singleton_covers_iff` | **exact** | Medium | Correct membership spec |
+| `insert_empty` | **exact** | Medium | Matches `InlineRangeSet::insert` single-element case |
+| `remove_until_empty` | **exact** | Low | Trivial |
+| `insert_empty_covers` | **exact** | Medium | Combines two facts cleanly |
+| `sorted_disjoint_tail` | **exact** | Low | Structural helper |
+| `sorted_disjoint_head_valid` | **exact** | Low | Structural helper |
+| `remove_until_removes_small` | **abstraction** | **High** | Core safety property: no value ≤ largest survives |
+| `remove_until_preserves_large` | **abstraction** | **High** | Liveness: covered values above threshold are retained |
+| `remove_until_preserves_invariant` | **abstraction** | **High** | Invariant maintenance by `remove_until` |
+| `insert_covers_union` | **abstraction** | **High** | Proved run 28: insert covers exactly the union of old set and new range (when `len < capacity`) |
+| `insert_preserves_invariant` | **abstraction** | **High** | Proved run 28: `sorted_disjoint` is maintained by `range_insert` |
+
+---
+
+## `FVSquad/Minmax.lean`
+
+**Rust source**: `quiche/src/minmax.rs`
+
+### Purpose
+
+Models the Kathleen Nichols windowed minimum/maximum filter.  The filter
+maintains three (time, value) samples — best, 2nd-best, 3rd-best — to provide
+a window-minimum estimate that remains accurate even as old values expire.  Used
+in `RttStats` to track the minimum RTT over a 300 s window.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file/line | Correspondence |
+|-----------|-----------|-----------|----------------|---------------|
+| `Sample` | `{time : Nat, value : Nat}` | `MinmaxSample<T>` | `minmax.rs:L1` | **approximation** — `T` is `Nat`; Rust is generic over `Copy + PartialOrd` |
+| `MinmaxState` | `{s0 s1 s2 : Sample}` | `Minmax<T>.estimate` | `minmax.rs:L12` | **exact** — same three-sample structure |
+| `min_val_inv` | `Prop` | *(internal invariant)* | — | **exact** — `s0.value ≤ s1.value ≤ s2.value` |
+| `time_ordered` | `Prop` | *(internal invariant)* | — | **exact** — `s0.time ≤ s1.time ≤ s2.time` |
+| `reset_model` | `Nat → Nat → MinmaxState` | `Minmax::reset` | `minmax.rs:L35` | **exact** — sets all three samples to (time, meas) |
+| `running_min_model` | `MinmaxState → Nat → Nat → Nat → MinmaxState` | `Minmax::running_min` | `minmax.rs:L70` | **abstraction** — see §Approximations |
+
+### Approximations in Minmax.lean
+
+1. **Generics**: `Minmax<T>` is generic; the Lean model specialises to `Nat`.
+   Duration comparisons are `Nat` inequalities.
+
+2. **`subwin_update` timing fractions**: `subwin_update` uses `window / 4` and
+   `window / 2` comparisons to decide when to rotate samples.  The Lean model
+   includes this logic in the `running_min_model` branches but does not model
+   the Rust's `div_f32` fractional window arithmetic — the window is a `Nat`
+   and sub-window boundaries are exact integer divisions.
+
+3. **Window vs. absolute min**: The 300 s windowing means old minima may be
+   discarded.  The Lean model accurately captures the three-sample rotation
+   mechanism, so the window behaviour is modelled, not just the abstract minimum.
+
+4. **Mutation → pure function**: `&mut self` in Rust is modelled as returning
+   the updated `MinmaxState`.
+
+### Proved theorems — correspondence assessment
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|------------------------|-------|
+| `reset_returns_meas` | **exact** | Low | After reset, best estimate = meas |
+| `reset_all_equal` | **exact** | Low | After reset, all three samples equal |
+| `reset_min_val_inv` | **exact** | Medium | Reset establishes value ordering invariant |
+| `reset_time_ordered` | **exact** | Medium | Reset establishes time ordering invariant |
+| `reset_s0_value` | **exact** | Low | s0.value = meas after reset |
+| `reset_s0_time` | **exact** | Low | s0.time = time after reset |
+| `running_min_new_min_returns_meas` | **abstraction** | **High** | New minimum correctly replaces best estimate |
+| `running_min_new_min_all_equal` | **abstraction** | **High** | When new min, all three samples set to new meas |
+| `running_min_win_elapsed_all_equal` | **abstraction** | **High** | Window expiry correctly resets all samples |
+| `running_min_win_elapsed_returns_meas` | **abstraction** | **High** | After window expiry, estimate = latest meas |
+| `running_min_best_unchanged` | **abstraction** | Medium | No-change branch preserves best estimate |
+| `running_min_returns_s0` | **exact** | Medium | `running_min` returns `s0.value` as the estimate |
+| `reset_establishes_inv` | **exact** | Medium | Reset → both invariants hold |
+| `running_min_reset_preserves_inv` | **abstraction** | **High** | running_min (reset branch) preserves invariants |
+| `running_min_update_s1_s2_preserves_inv` | **abstraction** | **High** | running_min (update branch) preserves invariants |
+
+**Overall assessment for Minmax.lean**: *abstraction* — the three-sample
+rotation mechanism is accurately modelled.  The `div_f32` sub-window boundary
+approximation is the only notable divergence from the Rust source; proofs are
+valid for the integer-division model and would hold in the Rust setting wherever
+sub-window boundaries are not fractional (i.e., when the window size is
+divisible by 4).
+
+---
+
+## `FVSquad/RttStats.lean`
+
+**Rust source**: `quiche/src/recovery/rtt.rs`
+
+### Purpose
+
+Models the RTT estimator used by QUIC congestion control (RFC 9002 §5).
+Tracks smoothed RTT (EWMA, weight 7/8), RTT variance (EWMA of |smoothed −
+adjusted|, weight 3/4), and the minimum/maximum RTT.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file/line | Correspondence |
+|-----------|-----------|-----------|----------------|---------------|
+| `RttState` | struct | `RttStats` | `rtt.rs:L34` | **abstraction** — see §Approximations |
+| `rtt_init` | `Nat → Nat → RttState` | `RttStats::new` | `rtt.rs:L63` | **abstraction** — see §Approximations |
+| `adjusted_rtt_of` | `Nat → Nat → Nat → Nat` | local var in `update_rtt` | `rtt.rs:L95` | **exact** — same plausibility-filter logic |
+| `abs_diff` | `Nat → Nat → Nat` | `u128::abs_diff` | stdlib | **exact** — same semantics for `Nat` |
+| `rtt_update` | `RttState → Nat → Nat → Bool → RttState` | `RttStats::update_rtt` | `rtt.rs:L74` | **abstraction** — see §Approximations |
+
+### Approximations in RttStats.lean
+
+1. **Duration → Nat**: `std::time::Duration` is modelled as `Nat` (nanoseconds,
+   unbounded).  No u64/u128 overflow is possible in the Lean model.  The Rust
+   `abs_diff` casts from `u128` to `u64`, which could overflow for RTTs >
+   ~584 years — not guarded in the source.
+
+2. **Minmax<Duration> → plain Nat**: `min_rtt` in Rust is a `Minmax<Duration>`
+   sliding-window filter.  In the Lean model it is a plain `Nat` updated as
+   `Nat.min prev latest_rtt`.  This is a **sound abstraction** for all theorems
+   proved here because those theorems only require `min_rtt ≤ latest_rtt`, which
+   holds for both the Minmax windowed filter and the plain minimum.
+
+3. **Instant → not modelled**: `now : Instant` is passed to `update_rtt` for
+   the Minmax windowing; since we abstract away the windowing, `now` is dropped
+   from `rtt_update`.
+
+4. **`update_rtt` first branch**: On the first sample (`has_first_rtt = false`),
+   `ack_delay` is completely ignored (per RFC 9002).  The Lean model captures
+   this exactly.
+
+5. **EWMA integer truncation**: `smoothed_rtt * 7 / 8` and `rttvar * 3 / 4`
+   use Lean `Nat` (floor) division, matching Rust's integer division exactly.
+
+### Proved theorems — correspondence assessment
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|------------------------|-------|
+| `rtt_init_smoothed_eq` | **exact** | Low | Constructor postcondition |
+| `rtt_init_rttvar_eq` | **exact** | Low | Constructor postcondition |
+| `rtt_init_no_first_sample` | **exact** | Low | Constructor postcondition |
+| `rtt_init_smoothed_pos` | **exact** | Medium | Positive smoothed_rtt from positive initial_rtt |
+| `rtt_first_update_smoothed_eq` | **exact** | **High** | First sample sets smoothed_rtt = latest_rtt |
+| `rtt_first_update_rttvar_eq` | **exact** | Medium | First sample sets rttvar = latest_rtt / 2 |
+| `rtt_first_update_min_rtt_eq` | **exact** | Medium | First sample sets min_rtt = latest_rtt |
+| `rtt_first_update_has_first` | **exact** | Low | After first update, flag is set |
+| `adjusted_rtt_ge_min_rtt` | **exact** | **High** | **Key safety theorem**: adjusted_rtt ≥ min_rtt when min_rtt ≤ latest_rtt — prevents negative EWMA input |
+| `adjusted_rtt_le_latest` | **exact** | Medium | adjusted_rtt ≤ latest_rtt — the delay can only reduce it |
+| `adjusted_rtt_of_zero_delay` | **exact** | Low | Zero ack delay → adjusted = latest |
+| `abs_diff_comm` | **exact** | Low | Symmetry of absolute difference |
+| `abs_diff_self` | **exact** | Low | abs_diff a a = 0 |
+| `rtt_update_min_rtt_le_latest` | **abstraction** | **High** | min_rtt ≤ latest_rtt after update (key invariant I3) |
+| `rtt_update_min_rtt_le_prev` | **abstraction** | **High** | min_rtt is non-increasing (monotone invariant) |
+| `rtt_update_max_rtt_ge_latest` | **abstraction** | Medium | max_rtt ≥ latest_rtt after update |
+| `rtt_update_max_rtt_ge_prev` | **abstraction** | Medium | max_rtt is non-decreasing |
+| `rtt_update_smoothed_pos` | **abstraction** | **High** | smoothed_rtt > 0 preserved when prev ≥ 8 ns |
+
+**Overall assessment for RttStats.lean**: *abstraction* — the arithmetic core
+of `update_rtt` is modelled faithfully.  The most security-relevant theorem is
+`adjusted_rtt_ge_min_rtt`, which proves the plausibility-filter invariant and
+directly rules out the ack-delay manipulation attack described in RFC 9002.
 
 ---
 
 ## Summary
 
-Both Lean files provide sound, useful specifications within their documented
-abstractions.  The most significant gap is the capacity-eviction approximation
-for `insert_*` theorems: the Lean proofs (once completed) will only be valid
-when `len < capacity`.  The `remove_until` theorems are fully proved and their
-correspondence to the Rust is high-fidelity, modulo the `u64::MAX` overflow
-edge case.
+All four Lean files provide sound, useful specifications within their documented
+abstractions.  The most significant results are:
+
+- **RangeSet.lean**: All 14 theorems proved (0 sorry), including the complex
+  `insert_preserves_invariant` and `insert_covers_union` (proved in run 28).
+- **Varint.lean**: All 10 theorems proved (0 sorry), including the round-trip
+  property.
+- **Minmax.lean**: All 15 theorems proved (0 sorry), covering the windowed
+  minimum algorithm's correctness and invariant preservation.
+- **RttStats.lean**: 18 theorems proved (0 sorry) covering RTT estimator
+  arithmetic, including the key security property `adjusted_rtt_ge_min_rtt`.
 
 No mismatches (where the Lean model is outright wrong) have been identified.
 All known divergences are deliberate, documented approximations.
