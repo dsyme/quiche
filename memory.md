@@ -3,7 +3,7 @@
 ## Tool & Approach
 - **FV tool**: Lean 4 (v4.29.0, no Mathlib)
 - **Project**: `formal-verification/lean/` — `lake init FVSquad` (no Mathlib)
-- **CI**: `.github/workflows/lean-ci.yml` (working, triggers on lean/** changes)
+- **CI**: `.github/workflows/lean-ci.yml` (added in PR #15, merged)
 
 ## Targets
 
@@ -17,28 +17,30 @@
 ### 2. RangeSet sorted-interval data structure
 - **File**: `quiche/src/ranges.rs`
 - **Lean file**: `FVSquad/RangeSet.lean`
-- **Phase**: 5 — COMPLETE (13+ theorems, 0 sorry as of run 28)
+- **Phase**: 5 — COMPLETE (14 theorems, 0 sorry)
 - **All proved**: insert_preserves_invariant, insert_covers_union,
   remove_until_removes_small, remove_until_preserves_large,
   remove_until_preserves_invariant, and all structural lemmas
-- **PR**: run-28 PR pending merge
-- **Proof strategy**: generalised accumulator induction via
-  range_insert_go_covers_gen and range_insert_go_preserves_inv
-  (4 acc invariants: sorted_disjoint, bound, separation, validity)
+- **PR**: #22 (merged)
 
 ### 3. WindowedMinimum running-minimum algorithm
 - **File**: `quiche/src/minmax.rs`
 - **Lean file**: `FVSquad/Minmax.lean`
-- **Phase**: 5 — COMPLETE (15 public + 3 private theorems, 0 sorry)
+- **Phase**: 5 — COMPLETE (15 theorems, 0 sorry)
 - **PR**: #15 (merged)
 
 ### 4. RTT estimator
 - **File**: `quiche/src/recovery/rtt.rs` — `RttStats::update_rtt`
-- **Phase**: 2 — Informal spec in prior run memory, NOT committed to master
-- **Priority**: HIGH — security-sensitive, affects congestion control
-- **Target properties**: min_rtt monotone, smoothed_rtt bounded, rttvar ≥ 0,
-  adjusted_rtt ≥ min_rtt, max_rtt monotone non-decreasing
-- **Note**: RttStats.lean was referenced in FVSquad.lean import (stale, now removed)
+- **Phase**: 3 — Lean spec written (run 29); 18 theorems, 0 sorry
+- **Lean file**: `FVSquad/RttStats.lean`
+- **Informal spec**: `specs/rtt_informal.md`
+- **Key theorems**:
+  - `adjusted_rtt_ge_min_rtt`: KEY security property (ack-delay attack prevention)
+  - `rtt_update_min_rtt_le_latest`: min_rtt ≤ latest_rtt invariant
+  - `rtt_update_max_rtt_ge_prev`: max_rtt non-decreasing
+  - `rtt_update_smoothed_pos`: smoothed_rtt > 0 preservation
+- **PR**: `lean-squad-rtt-run29-23919941340` (pending merge)
+- **Next**: EWMA convergence proofs, per-update invariant preservation chain
 
 ### 5. Flow control window arithmetic
 - **File**: `quiche/src/flowcontrol.rs`
@@ -46,9 +48,8 @@
 - **Priority**: MEDIUM
 
 ## Open PRs / Branches
-- `lean-squad-rangeset-proofs-run28-23913360731` — run 28:
-  insert_preserves_invariant + insert_covers_union proved (0 sorry total)
-  Also fixes stale FVSquad.lean import
+- `lean-squad-rtt-run29-23919941340` — run 29:
+  RTT informal spec + Lean spec (18 theorems, 0 sorry) + CORRESPONDENCE.md update
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -58,32 +59,31 @@
   OR `simp only [range_insert_go]` (the latter works)
 - `List.mem_cons_self` takes NO explicit args (zero explicit args)
 - Bool `=` precedence trap: `||` has precedence 30, `=` has 50
-- Bool AC tactic: use `generalize (...expr...) = bX` for each Bool atom,
-  then `cases bA <;> ... <;> rfl` (not simp or omega)
+- Bool AC tactic: generalize Bool atoms, `cases bA <;> ... <;> rfl`
 - `covers_append`: unfold covers; rw [List.any_append] works
-- sorted_disjoint_cons2_iff as `@[simp]` works for goal simplification;
-  but `rw [sorted_disjoint_cons2_iff]` fails when variable name `s` in scope
-  shadows the pattern variable — use `simp only [...]` instead
-- `List.mem_reverse.mp`: converts `r ∈ l.reverse → r ∈ l` (use `.mp` not `.mpr`)
-- For generalised accumulator invariant (insert_preserves_invariant):
-  4 invariants: sorted_disjoint, acc_bound (≤ s), sep (acc ends before rest),
-  rest_inv — all preserved through skip, overlap, and base cases
-- `sorted_disjoint_snoc` uses `lo hi` (not `s e`) to avoid naming conflict
-  with sorted_disjoint_cons2_iff @[simp] pattern variable
-- `covers_singleton r n = in_range r n` via simp [covers, List.any, in_range]
-- `in_range_merge_bool`: proved via bool_eq_of_iff + 4 by_cases (hs × he)
-  + omega in each branch. Uses h1: ¬(e<rs), h2: ¬(s>re) as Prop hypotheses.
+- `sorted_disjoint_cons2_iff` as `@[simp]` works; but `rw [...]` fails when
+  variable `s` in scope shadows pattern variable — use `simp only [...]`
+- `List.mem_reverse.mp`: converts `r ∈ l.reverse → r ∈ l`
+- For if-then-else proofs: `split <;> omega` often works cleanly
+- `simp [ite_self]` closes `if p then a else a = a` goals
+- `Nat.min_le_left a b : min a b ≤ a`, `Nat.min_le_right a b : min a b ≤ b`
+- `Nat.le_max_left a b : a ≤ max a b`, `Nat.le_max_right a b : b ≤ max a b`
+- After `simp [f, h]` closes a goal, subsequent `have h7 := by omega` gives
+  "No goals to be solved" — detect this by removing the extra tactics
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
 - All three in `formal-verification/`
-
-## Next Priorities
-1. Write RTT estimator Lean spec (Task 3) — pure arithmetic, Duration as Nat
-   - Key theorems: smoothed_rtt_pos, rttvar_nonneg, min_rtt_le_latest_rtt
-2. Write informal spec for Flow control (Task 2)
-3. Task 7 (Proof Utility Critique) — update CRITIQUE.md now that RangeSet complete
+- CORRESPONDENCE.md updated in run 29 with Minmax + RttStats sections
+- TARGETS.md updated in run 29 to reflect accurate phases
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
-- FVSquad.lean had stale `import FVSquad.RttStats` — FIXED in run 28.
-  Do NOT add RttStats import until the file is actually created.
+- FVSquad.lean imports: Varint, RangeSet, Minmax, RttStats (as of run 29)
+- Concrete example check: rtt_update with srtt=120ms gives (120, 45, 100, 130)
+  — verified via #eval in RttStats.lean
+
+## Next Priorities
+1. Expand RTT proofs (Task 5): EWMA step invariant, invariant preservation chain
+   after multiple updates, prove `smoothed_rtt_pos` without the 8ns guard
+2. Write informal spec + Lean spec for Flow control (Tasks 2+3)
+3. Task 7 (Proof Utility Critique) — update CRITIQUE.md with RttStats findings
