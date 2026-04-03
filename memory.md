@@ -47,17 +47,24 @@
   - `fc_max_data_next_gt_when_should_update`: limit strictly grows
   - `fc_update_idempotent`: double update is no-op
   - `fc_autotune_window_when_tuned`: window = min(window*2, max_window)
-- **PR**: `lean-squad-flowcontrol-critique-run32-23932599559` (pending)
+- **PR**: #26 (pending merge)
+- **Correspondence**: fully documented in CORRESPONDENCE.md (run 33)
 
-### 6. Congestion window
-- **File**: `quiche/src/recovery/congestion/`
-- **Phase**: 1 — IDENTIFIED
-- **Target properties**: window grows on ACK, halves on loss, ≥ min_cwnd
-- **Notes**: Start with CUBIC or NewReno (simpler); see CRITIQUE.md
+### 6. Congestion window (NewReno)
+- **File**: `quiche/src/recovery/congestion/reno.rs`
+- **Phase**: 2 — INFORMAL SPEC (added run 33)
+- **Informal spec**: `specs/congestion_informal.md`
+- **Target properties**:
+  - `cwnd_floor`: after any congestion event, cwnd ≥ mss * MINIMUM_WINDOW_PACKETS (2)
+  - `slow_start_growth`: in slow start, each non-guarded ACK increases cwnd by ≥ 1
+  - `ca_aimd`: in CA, cwnd increases by exactly 1 MSS per cwnd bytes ACKed
+  - `single_halving`: only one reduction per loss epoch (in_congestion_recovery guard)
+- **Open questions in spec**: CA counter init, integer floor in halving, CSS minimum inc
+- **Next**: write `FVSquad/NewReno.lean` with Lean spec + proofs for floor and AIMD
 
 ## Open PRs / Branches
-- `lean-squad-flowcontrol-critique-run32-23932599559` — run 32:
-  FlowControl (22 theorems) + flowcontrol_informal.md + CRITIQUE.md
+- PR #26 `lean-squad-flowcontrol-critique-run32-23932599559-404d595898b24e9c` — FlowControl + CRITIQUE.md (pending)
+- PR (run 33) `lean-squad-run33-23941720399` — CORRESPONDENCE.md FlowControl + congestion informal spec
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -87,23 +94,23 @@
   (NOT `Bool.decide_eq_true`)
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
-- TARGETS.md: 5 targets at Phase 5, Target 6 identified
-- CORRESPONDENCE.md: updated run 30 (all 5 targets documented)
-- CRITIQUE.md: WRITTEN — run 32 (105 theorems assessed)
+- TARGETS.md: 5 targets at Phase 5, Target 6 at Phase 2 (informal spec done)
+- CORRESPONDENCE.md: updated run 33 (all 5 Lean files documented)
+- CRITIQUE.md: WRITTEN — run 32 (85 theorems assessed)
 
-## Status Issue: #4 (open), updated run 32
+## Status Issue: #4 (open), updated run 33
 
 ## Summary
 - **85 total theorems, 0 sorry** across 5 files
 - Varint.lean: 10 | RangeSet.lean: 14 | Minmax.lean: 15 | RttStats.lean: 24 | FlowControl.lean: 22
-- Note: RttStats theorem count in source shows 24 (not 26 from memory stale state)
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
 - FVSquad.lean imports: Varint, RangeSet, Minmax, RttStats, FlowControl
 
 ## Next Priorities
-1. Target 6: congestion window — write informal spec for `recovery/congestion/`
+1. Target 6: write `FVSquad/NewReno.lean` — Lean spec + proofs for cwnd_floor,
+   slow_start_growth, ca_aimd properties. Use Nat model for cwnd (drop f64).
 2. FlowControl: u64 overflow guard (add bounded model, prove no overflow under 2^62 limit)
 3. RangeSet semantic completeness — prove flatten(insert(rs,r)) = set_union
 4. RTT lower bounds — prove smoothed_rtt ≥ min_rtt after first sample
