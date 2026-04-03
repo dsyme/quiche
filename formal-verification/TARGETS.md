@@ -11,7 +11,7 @@
 | 3 | Minmax filter | `quiche/src/minmax.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 15 theorems; PR #15 merged |
 | 4 | RTT estimation | `quiche/src/recovery/rtt.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 24 theorems incl. `adjusted_rtt_ge_min_rtt`; `FVSquad/RttStats.lean` |
 | 5 | Flow control | `quiche/src/flowcontrol.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 22 theorems; `FVSquad/FlowControl.lean`; informal spec in `specs/flowcontrol_informal.md` |
-| 6 | Congestion window (NewReno) | `quiche/src/recovery/congestion/reno.rs` | 2 — Informal Spec | 🔄 In progress | Informal spec written (run 33): `specs/congestion_informal.md` |
+| 6 | Congestion window (NewReno) | `quiche/src/recovery/congestion/reno.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 13 theorems incl. `cwnd_floor_new_event`, `single_halving`; `FVSquad/NewReno.lean` |
 
 ## Phase Definitions
 
@@ -26,10 +26,13 @@
 
 ## Next Actions
 
-1. **Congestion window** (Target 6) — informal spec written (run 33); next: write
-   Lean spec (`FVSquad/NewReno.lean`) for window-floor and AIMD properties
-2. **Stream flow control** — similar to flowcontrol.rs but per-stream; reuse FlowControl model
-3. **RangeSet semantic completeness** — prove flatten(insert(rs,r)) = set_union; see CRITIQUE.md
+1. **Stream flow control** — similar to `flowcontrol.rs` but per-stream; reuse
+   FlowControl model as a foundation
+2. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
+   `set_union`; see CRITIQUE.md
+3. **NewReno AIMD rate theorem** — prove exact growth rate (one MSS per cwnd
+   bytes ACKed) across multiple ACK callbacks; currently only per-callback
+   growth is verified
 
 ## Archived / Completed Targets
 

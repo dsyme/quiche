@@ -4,23 +4,25 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 04:00 UTC
-- **Commit**: `7db3af29065d8c9154c9fc0194a1ae64138f24fb`
+- **Date**: 2026-04-03 16:08 UTC
+- **Commit**: `ce100e6`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` covers five modules with **105 theorems
-and 0 sorry** (Lean 4.29.0, no Mathlib).  The suite provides machine-checked
-confidence in the core arithmetic properties of the QUIC varint codec, the
-RangeSet interval data structure, the Minmax running-minimum filter, the RTT
-estimator, and the flow-control window manager.  The most valuable results are
-the `varint_round_trip` property (encode/decode identity), the
-`RangeSet.insert_preserves_invariant` structural invariant, and the
-`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing attack.
-The main limitation across all files is that Lean models use unbounded `Nat`
-instead of bounded Rust integers, so overflow/underflow edge cases are not verified.
+The formal verification suite for `quiche` now covers **six modules with 99
+theorems and 0 sorry** (Lean 4.29.0, no Mathlib).  The suite provides
+machine-checked confidence in the QUIC varint codec, the RangeSet interval
+data structure, the Minmax running-minimum filter, the RTT estimator, the
+flow-control window manager, and the NewReno congestion controller.  The most
+valuable results are the `varint_round_trip` property (encode/decode identity),
+the `RangeSet.insert_preserves_invariant` structural invariant, the
+`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing
+attack, and the NewReno `cwnd_floor_new_event` property that guarantees the
+minimum congestion window floor after any loss event.  The main limitation
+across all files is that Lean models use unbounded `Nat` instead of bounded
+Rust integers, so overflow/underflow edge cases are not verified.
 
 ---
 
@@ -213,3 +215,33 @@ Prioritised by impact:
   sorted+disjoint+merged under insertion required substantial case splitting and
   was the most complex proof in the suite.  Its success gives high confidence in
   the ACK-range deduplication logic.
+
+---
+
+### `FVSquad/NewReno.lean` — 13 theorems (added run 34)
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `cwnd_floor_new_event` | high | **high** | cwnd ≥ mss\*2 after any fresh congestion event — directly captures the RFC 6582 minimum-window floor |
+| `single_halving` | high | **high** | In-recovery congestion_event is a no-op; prevents compounding halvings for multiple losses in one epoch |
+| `congestion_event_sets_recovery` | mid | medium | `in_recovery` flag is set correctly; guards subsequent events |
+| `congestion_event_idempotent` | mid | medium | Two consecutive loss events = one; structural safety |
+| `slow_start_growth` | mid | medium | Slow start increases cwnd by exactly mss per ACK (not guarded) |
+| `ca_ack_no_growth` | mid | medium | CA counter below threshold — window unchanged |
+| `ca_ack_growth` | mid | medium | CA counter at threshold — window grows by exactly mss |
+| `recovery_no_growth` | low | medium | In-recovery ACK has no effect on cwnd |
+| `app_limited_no_growth` | low | low | App-limited ACK has no effect on cwnd |
+| `acked_cwnd_monotone` | mid | **high** | on_packet_acked never decreases cwnd — monotone growth invariant |
+| `acked_preserves_floor_inv` | mid | **high** | FloorInv is an inductive invariant under ACKs |
+| `congestion_event_cwnd_le_of_floor` | mid | medium | Under FloorInv, congestion_event cannot raise cwnd |
+| `congestion_event_establishes_floor` | mid | **high** | Any fresh congestion event establishes FloorInv from scratch |
+
+**Assessment**: The floor invariant (`cwnd ≥ mss * 2`) is the most valuable
+property — it prevents the connection from stalling at sub-MSS window sizes and
+is directly required by RFC 6582.  `single_halving` and `acked_cwnd_monotone`
+together guarantee the two core AIMD safety properties: the window never grows
+on losses and never shrinks on ACKs.  **Gaps**: (1) no theorem verifies the
+exact AIMD growth rate (one MSS per cwnd bytes ACKed) across multiple ACK
+callbacks; (2) HyStart++ (CSS branch) is fully abstracted away; (3) the
+`f64 * 0.5` cast is modelled as Nat `/2` — the floor-vs-round question from the
+informal spec remains unaddressed.
