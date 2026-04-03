@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 09:36 UTC
-- **Commit**: `7327c68e094b924b1db1d39ee04d9dfd953cb3b2`
+- **Date**: 2026-04-03 17:30 UTC
+- **Commit**: `b8098a51`
 
 ---
 
@@ -485,7 +485,84 @@ abstractions.  The most significant results are:
   window arithmetic, update idempotence, and the non-decreasing MAX_DATA
   invariant (QUIC protocol requirement).
 
-**Total: 85 theorems, 0 sorry** across all five Lean files.
+**Total: 99 theorems, 0 sorry** across all six Lean files.
 
 No mismatches (where the Lean model is outright wrong) have been identified.
 All known divergences are deliberate, documented approximations.
+
+---
+
+## `FVSquad/NewReno.lean` ↔ `quiche/src/recovery/congestion/reno.rs`
+
+*Added: run 34 (2026-04-03)*
+
+### Type correspondence
+
+| Lean type | Rust type | Correspondence | Notes |
+|-----------|-----------|----------------|-------|
+| `NewReno` (structure) | `Congestion` (struct, `mod.rs`) | abstraction | Only fields relevant to Reno are modelled; others (e.g. HyStart, CUBIC-specific) omitted |
+| `NewReno.cwnd : Nat` | `congestion_window: usize` | exact | Nat is unbounded; usize overflow not modelled |
+| `NewReno.ssthresh : Nat` | `ssthresh: Saturating<usize>` | abstraction | `Saturating` wrapper dropped; Nat is sufficient for Reno proofs |
+| `NewReno.bytes_acked_ca : Nat` | `bytes_acked_ca: usize` | exact | |
+| `NewReno.bytes_acked_sl : Nat` | `bytes_acked_sl: usize` | exact | Not used in current proofs |
+| `NewReno.mss : Nat` | `max_datagram_size: usize` | exact | |
+| `NewReno.in_recovery : Bool` | `congestion_recovery_start_time: Option<Instant>` | abstraction | Full `Instant` comparison replaced by a single boolean |
+| `NewReno.app_limited : Bool` | `app_limited: bool` | exact | |
+
+### Function correspondence
+
+| Lean function | Rust function | File | Lines | Correspondence | Divergences |
+|--------------|---------------|------|-------|----------------|-------------|
+| `halve` | `(x as f64 * LOSS_REDUCTION_FACTOR) as usize` | `reno.rs` | ~104, ~108 | exact | `f64 * 0.5` cast = Nat floor-div-2; identical on all `usize` values |
+| `NewReno.congestion_event` | `congestion_event` | `reno.rs` | 99–117 | abstraction | HyStart CSS notification omitted; `ssthresh.update(…)` replaced by direct assignment; `Instant` comparison abstracted to `in_recovery` |
+| `NewReno.on_packet_acked` | `on_packet_acked` | `reno.rs` | 68–95 | abstraction | HyStart++ CSS branch (`hystart.in_css()`) abstracted away — only plain slow-start modelled; `hystart.on_packet_acked(…)` call omitted |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| D1 | `NewReno.in_recovery : Bool` | `in_congestion_recovery(time_sent)` compares `time_sent` against `congestion_recovery_start_time` | All theorems about recovery guard are proved only for the boolean abstraction. The timing property (packets sent *before* recovery start are still guarded) is not captured. |
+| D2 | HyStart++ branch omitted | `if r.hystart.in_css() { cwnd += hystart.css_cwnd_inc(mss) }` in slow start | `slow_start_growth` only applies to the non-CSS branch. Properties of CSS growth are not verified. |
+| D3 | `NewReno.congestion_event` omits HyStart notification | `r.hystart.congestion_event()` called in Rust | No impact on cwnd/ssthresh proofs; HyStart++ state is not modelled. |
+| D4 | `Saturating<usize>` wrapper dropped | `ssthresh` uses `Saturating` to prevent overflow on very large values | No overflow is possible in Lean's `Nat` model anyway; the `Saturating` wrapper's saturation behaviour at `usize::MAX` is not tested. |
+
+### Theorem impact
+
+The key theorems are sound with respect to the modelled abstractions:
+- `cwnd_floor_new_event`: valid for all NewReno state regardless of HyStart/timing abstractions; directly mirrors the `cmp::max(…, mss * MINIMUM_WINDOW_PACKETS)` expression in `congestion_event`.
+- `single_halving`: valid; corresponds exactly to the `if !r.in_congestion_recovery(time_sent)` guard.
+- `acked_cwnd_monotone` / `acked_preserves_floor_inv`: valid for the plain slow-start and CA branches; holds regardless of the CSS abstraction because the CSS branch also grows `cwnd`.
+
+No mismatches (where Lean is outright wrong) have been identified.  All divergences are deliberate, documented abstractions.
+
+---
+
+## `FVSquad/DatagramQueue.lean` ↔ `quiche/src/dgram.rs`
+
+**Target**: `DatagramQueue<F: BufFactory>` — a bounded FIFO queue of QUIC DATAGRAM frames.
+
+| Lean definition | Rust source | File | Lines | Correspondence | Notes |
+|-----------------|-------------|------|-------|----------------|-------|
+| `DgramQueue` | `DatagramQueue<F>` | `dgram.rs` | 40–49 | abstraction | `F::DgramBuf` abstracted to `Nat` (byte length); `Option<VecDeque<_>>` modelled as `List Nat` (always non-None when non-empty) |
+| `DgramQueue.push` | `DatagramQueue::push` | `dgram.rs` | 51–60 | abstraction | Returns `Option DgramQueue` instead of `Result<(), Error::Done>` |
+| `DgramQueue.pop` | `DatagramQueue::pop` | `dgram.rs` | 78–86 | abstraction | Returns `Option (Nat × DgramQueue)`; `queue_bytes_size.saturating_sub` is exact under ByteInv |
+| `DgramQueue.purge` | `DatagramQueue::purge` | `dgram.rs` | 88–93 | exact | `filter (!f)` matches `q.retain(\|d\| !f(d))`; `byte_size` recomputed via fold |
+| `DgramQueue.byteSize` | `DatagramQueue.queue_bytes_size` | `dgram.rs` | 44 | exact | Lean uses `foldl (· + ·) 0`; Rust increments/decrements on push/pop/purge |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| D1 | `List Nat` | `Option<VecDeque<F::DgramBuf>>` (lazy init) | Lazy-init optimization not modelled; byte equality holds but allocation behaviour not verified |
+| D2 | `Nat` payload lengths | `F::DgramBuf` — actual byte slices | Content of payloads not modelled; only lengths used in byte-size proofs |
+| D3 | `saturating_sub` in pop | direct subtraction | Under `ByteInv`, no underflow occurs; `saturating_sub` matches regular subtraction |
+| D4 | `peek_front_bytes` not modelled | copies bytes into caller buffer | Buffer-copy operation not formalized (requires modelling byte slices) |
+
+### Theorem impact
+
+All 26 theorems are sound:
+- **Capacity invariant** (`push_preserves_cap_inv`, `pop_preserves_cap_inv`, `purge_preserves_cap_inv`): directly correspond to the `is_full()` guard in push.
+- **FIFO ordering** (`push_then_pop_front_unchanged`, `push_pop_singleton`): exact for the `List` model; `VecDeque` shares the same head/tail order.
+- **Byte-size tracking** (`push_byteSize_inc`, `pop_byteSize_dec`): correct for the `Nat`-length model; diverges from Rust only when payload content matters (not the case for size proofs).
+
+No mismatches found.
