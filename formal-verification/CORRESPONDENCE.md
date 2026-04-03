@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-02 20:00 UTC
-- **Commit**: `da22572e`
+- **Date**: 2026-04-03 00:18 UTC
+- **Commit**: `c877602810ce13a38df7044518a505977ff5cb90`
 
 ---
 
@@ -302,6 +302,7 @@ adjusted|, weight 3/4), and the minimum/maximum RTT.
 | Lean name | Lean type | Rust name | Rust file/line | Correspondence |
 |-----------|-----------|-----------|----------------|---------------|
 | `RttState` | struct | `RttStats` | `rtt.rs:L34` | **abstraction** — see §Approximations |
+| `RttState.has_first_rtt` | `Bool` | `RttStats.has_first_rtt_sample` | `rtt.rs:L48` | **exact** — same semantics; Lean field renamed for brevity |
 | `rtt_init` | `Nat → Nat → RttState` | `RttStats::new` | `rtt.rs:L63` | **abstraction** — see §Approximations |
 | `adjusted_rtt_of` | `Nat → Nat → Nat → Nat` | local var in `update_rtt` | `rtt.rs:L95` | **exact** — same plausibility-filter logic |
 | `abs_diff` | `Nat → Nat → Nat` | `u128::abs_diff` | stdlib | **exact** — same semantics for `Nat` |
@@ -331,6 +332,9 @@ adjusted|, weight 3/4), and the minimum/maximum RTT.
 5. **EWMA integer truncation**: `smoothed_rtt * 7 / 8` and `rttvar * 3 / 4`
    use Lean `Nat` (floor) division, matching Rust's integer division exactly.
 
+6. **Field name**: The Rust field is `has_first_rtt_sample` (`rtt.rs:L48`);
+   the Lean model uses `has_first_rtt` for brevity.  Semantics are identical.
+
 ### Proved theorems — correspondence assessment
 
 | Theorem | Level | Bug-catching potential | Notes |
@@ -353,11 +357,19 @@ adjusted|, weight 3/4), and the minimum/maximum RTT.
 | `rtt_update_max_rtt_ge_latest` | **abstraction** | Medium | max_rtt ≥ latest_rtt after update |
 | `rtt_update_max_rtt_ge_prev` | **abstraction** | Medium | max_rtt is non-decreasing |
 | `rtt_update_smoothed_pos` | **abstraction** | **High** | smoothed_rtt > 0 preserved when prev ≥ 8 ns |
+| `ewma_floor_sum` | **exact** | Low | Pure arithmetic: `a * 7/8 + a/8 ≤ a`; building block for EWMA bounds |
+| `rtt_update_latest_rtt_eq` | **exact** | Medium | update always records the new sample in `.latest_rtt` |
+| `rtt_update_has_first_true` | **exact** | Low | `has_first_rtt` is permanently set after any update |
+| `rtt_update_smoothed_upper_bound` | **abstraction** | **High** | smoothed_rtt ≤ max(prev_smoothed, latest_rtt) — EWMA cannot overshoot both inputs |
+| `rtt_update_min_rtt_inv` | **abstraction** | **High** | Combined joint invariant: min_rtt ≤ latest_rtt in the result state |
 
 **Overall assessment for RttStats.lean**: *abstraction* — the arithmetic core
 of `update_rtt` is modelled faithfully.  The most security-relevant theorem is
 `adjusted_rtt_ge_min_rtt`, which proves the plausibility-filter invariant and
 directly rules out the ack-delay manipulation attack described in RFC 9002.
+The new `rtt_update_smoothed_upper_bound` and `rtt_update_min_rtt_inv` theorems
+(run 30) complete an invariant chain showing that both key state fields
+remain within their expected bounds after every update.
 
 ---
 
@@ -372,8 +384,12 @@ abstractions.  The most significant results are:
   property.
 - **Minmax.lean**: All 15 theorems proved (0 sorry), covering the windowed
   minimum algorithm's correctness and invariant preservation.
-- **RttStats.lean**: 18 theorems proved (0 sorry) covering RTT estimator
-  arithmetic, including the key security property `adjusted_rtt_ge_min_rtt`.
+- **RttStats.lean**: 23 theorems proved (0 sorry) covering RTT estimator
+  arithmetic, including the key security property `adjusted_rtt_ge_min_rtt`
+  and new EWMA bounding theorems (`rtt_update_smoothed_upper_bound`,
+  `rtt_update_min_rtt_inv`) added in run 30.
+
+**Total: 62 theorems, 0 sorry** across all four Lean files.
 
 No mismatches (where the Lean model is outright wrong) have been identified.
 All known divergences are deliberate, documented approximations.
