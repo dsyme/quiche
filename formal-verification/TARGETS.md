@@ -6,11 +6,11 @@
 
 | # | Target | Location | Phase | Status | Notes |
 |---|--------|----------|-------|--------|-------|
-| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done | **0 sorry** — all 10 theorems proved (round_trip, first_byte_tag, etc.) |
-| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 3 — Lean Spec | 🔄 In progress | `FVSquad/RangeSet.lean` written; 5 sorry (deferred proofs) |
-| 3 | RTT estimation | `quiche/src/recovery/rtt.rs` | 1 — Research | ⬜ Not started | RFC 9002 §5 EWMA update |
-| 4 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ⬜ Not started | Arithmetic invariants |
-| 5 | Minmax filter | `quiche/src/minmax.rs` | 1 — Research | ⬜ Not started | Windowed min/max |
+| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 10 theorems proved; PR #5 merged |
+| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 14 theorems proved incl. `insert_preserves_invariant`; PR #22 merged |
+| 3 | Minmax filter | `quiche/src/minmax.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 15 theorems proved; PR #15 merged |
+| 4 | RTT estimation | `quiche/src/recovery/rtt.rs` | 3 — Lean Spec | 🔄 In progress | `FVSquad/RttStats.lean` written; 18 theorems proved (0 sorry); informal spec in `specs/rtt_informal.md` |
+| 5 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ⬜ Not started | Arithmetic window invariants |
 
 ## Phase Definitions
 
@@ -19,25 +19,21 @@
 | 0 | Identified | Added to this list |
 | 1 | Research | Surveyed; benefit, tractability, approach documented in RESEARCH.md |
 | 2 | Informal Spec | `specs/<name>_informal.md` written |
-| 3 | Lean Spec | Lean 4 file with type definitions and theorem statements (sorry proofs) |
-| 4 | Implementation | Lean functional model of the Rust code |
-| 5 | Proofs | Key theorems proved (or counterexamples found) |
+| 3 | Lean Spec | Lean 4 file with type definitions, theorem statements, and implementation model |
+| 4 | Implementation | Lean functional model with implementation details extracted |
+| 5 | Proofs | Key theorems proved (or counterexamples found) — 0 sorry |
 
 ## Next Actions
 
-1. **Prove** deferred RangeSet theorems (Target 2) — Task 5
-   - `insert_preserves_invariant`: structural induction on the list
-   - `insert_covers_union`: the key I3 union property
-   - `remove_until_*`: three theorems about the prefix-removal operation
-2. **Write Lean spec** for Target 3 (RTT estimation) — Task 3
-3. **Write informal spec** for Target 3 (RTT estimation) — Task 2
+1. **Advance RTT estimation** to phase 4/5 — implementation model already in `RttStats.lean`;
+   expand proofs of EWMA convergence and per-update invariant preservation
+2. **Write informal spec** for Flow control (Target 5) — Task 2
+3. **Write Lean spec** for Flow control (Target 5) — Task 3
 
-## Archived Targets
-
-*(None yet — targets move here when phase 5 is complete and PR is merged.)*
-
-## Completed Targets (awaiting PR merge)
+## Archived / Completed Targets
 
 | # | Target | Phase | PR | Notes |
 |---|--------|-------|----|-------|
-| 1 | QUIC varint codec | 5 — All Proofs | PR #5 (open) | round_trip + first_byte_tag proved; 0 sorry |
+| 1 | QUIC varint codec | 5 — All Proofs | PR #5 (merged) | round_trip + 9 others; 0 sorry |
+| 2 | RangeSet invariants | 5 — All Proofs | PR #22 (merged) | insert_preserves_invariant + 13 others; 0 sorry |
+| 3 | Minmax filter | 5 — All Proofs | PR #15 (merged) | 15 theorems; 0 sorry |
