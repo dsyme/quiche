@@ -31,7 +31,7 @@
 
 ### 4. RTT estimator
 - **File**: `quiche/src/recovery/rtt.rs` — `RttStats::update_rtt`
-- **Phase**: 3 — Lean spec written (run 29); 18 theorems, 0 sorry
+- **Phase**: 5 — COMPLETE (23 theorems, 0 sorry as of run 30)
 - **Lean file**: `FVSquad/RttStats.lean`
 - **Informal spec**: `specs/rtt_informal.md`
 - **Key theorems**:
@@ -39,17 +39,22 @@
   - `rtt_update_min_rtt_le_latest`: min_rtt ≤ latest_rtt invariant
   - `rtt_update_max_rtt_ge_prev`: max_rtt non-decreasing
   - `rtt_update_smoothed_pos`: smoothed_rtt > 0 preservation
-- **PR**: `lean-squad-rtt-run29-23919941340` (pending merge)
-- **Next**: EWMA convergence proofs, per-update invariant preservation chain
+  - `ewma_floor_sum` (run 30): a * 7/8 + a/8 ≤ a — EWMA partition lemma
+  - `rtt_update_latest_rtt_eq` (run 30): update records new sample
+  - `rtt_update_has_first_true` (run 30): has_first_rtt is sticky
+  - `rtt_update_smoothed_upper_bound` (run 30): smoothed ≤ max(prev, latest)
+  - `rtt_update_min_rtt_inv` (run 30): min_rtt ≤ latest_rtt joint invariant
+- **PR**: lean-squad-run30-23927792642 (pending)
+- **Next**: Write informal spec + Lean spec for flow control (Tasks 2+3)
 
 ### 5. Flow control window arithmetic
 - **File**: `quiche/src/flowcontrol.rs`
 - **Phase**: 1 — Research identified
-- **Priority**: MEDIUM
+- **Priority**: HIGH (next main target)
 
 ## Open PRs / Branches
-- `lean-squad-rtt-run29-23919941340` — run 29:
-  RTT informal spec + Lean spec (18 theorems, 0 sorry) + CORRESPONDENCE.md update
+- `lean-squad-run30-23927792642` — run 30:
+  5 new EWMA bounding theorems for RttStats + CORRESPONDENCE.md update
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -70,11 +75,20 @@
 - `Nat.le_max_left a b : a ≤ max a b`, `Nat.le_max_right a b : b ≤ max a b`
 - After `simp [f, h]` closes a goal, subsequent `have h7 := by omega` gives
   "No goals to be solved" — detect this by removing the extra tactics
+- `cases h : st.has_first_rtt <;> simp [rtt_update, h]` works for
+  unconditional theorems about rtt_update (both branches)
+- `omega` handles `a * 7 / 8 + a / 8 ≤ a` and similar floor-div arithmetic
+  with constant denominators
+- Bool struct field inheritance: `{ st with f := v }` inherits all fields
+  not listed; `simp [rtt_update, h]` properly evaluates Bool conditions
+  like `!st.has_first_rtt` when `h : st.has_first_rtt = true/false`
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
 - All three in `formal-verification/`
-- CORRESPONDENCE.md updated in run 29 with Minmax + RttStats sections
-- TARGETS.md updated in run 29 to reflect accurate phases
+- CORRESPONDENCE.md updated in run 30: header refresh, has_first_rtt note,
+  5 new theorems documented, total count 62
+- TARGETS.md: accurate as of run 29 (no update needed in run 30)
+- CRITIQUE.md: not yet written (has_critique = false in phase_flags)
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
@@ -83,7 +97,7 @@
   — verified via #eval in RttStats.lean
 
 ## Next Priorities
-1. Expand RTT proofs (Task 5): EWMA step invariant, invariant preservation chain
-   after multiple updates, prove `smoothed_rtt_pos` without the 8ns guard
-2. Write informal spec + Lean spec for Flow control (Tasks 2+3)
-3. Task 7 (Proof Utility Critique) — update CRITIQUE.md with RttStats findings
+1. Write informal spec for Flow control (Task 2): `quiche/src/flowcontrol.rs`
+2. Write Lean spec for Flow control (Task 3)
+3. Task 7 (Proof Utility Critique) — create CRITIQUE.md with assessment of
+   all 62 theorems across 4 files
