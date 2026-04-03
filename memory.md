@@ -17,7 +17,7 @@
 ### 2. RangeSet sorted-interval data structure
 - **File**: `quiche/src/ranges.rs`
 - **Lean file**: `FVSquad/RangeSet.lean`
-- **Phase**: 5 — COMPLETE (14 theorems, 0 sorry)
+- **Phase**: 5 — COMPLETE (16 theorems, 0 sorry)
 - **PR**: #22 (merged)
 
 ### 3. WindowedMinimum running-minimum algorithm
@@ -28,9 +28,8 @@
 
 ### 4. RTT estimator
 - **File**: `quiche/src/recovery/rtt.rs` — `RttStats::update_rtt`
-- **Phase**: 5 — COMPLETE (24 theorems, 0 sorry)
+- **Phase**: 5 — COMPLETE (23 theorems, 0 sorry)
 - **Lean file**: `FVSquad/RttStats.lean`
-- **Informal spec**: `specs/rtt_informal.md`
 - **Key theorems**:
   - `adjusted_rtt_ge_min_rtt`: KEY security property (ack-delay attack prevention)
   - `rtt_update_smoothed_upper_bound`: EWMA contraction theorem
@@ -39,32 +38,30 @@
 
 ### 5. Flow control window arithmetic
 - **File**: `quiche/src/flowcontrol.rs`
-- **Phase**: 5 — COMPLETE (22 theorems, 0 sorry) — added run 32
+- **Phase**: 5 — COMPLETE (22 theorems, 0 sorry)
 - **Lean file**: `FVSquad/FlowControl.lean`
-- **Informal spec**: `specs/flowcontrol_informal.md`
 - **Key theorems**:
   - `fc_no_update_needed_after_update`: should_update=false after update
   - `fc_max_data_next_gt_when_should_update`: limit strictly grows
   - `fc_update_idempotent`: double update is no-op
   - `fc_autotune_window_when_tuned`: window = min(window*2, max_window)
-- **PR**: #26 (pending merge)
-- **Correspondence**: fully documented in CORRESPONDENCE.md (run 33)
+- **PR**: #26 (merged)
 
 ### 6. Congestion window (NewReno)
 - **File**: `quiche/src/recovery/congestion/reno.rs`
-- **Phase**: 2 — INFORMAL SPEC (added run 33)
+- **Phase**: 5 — COMPLETE (13 theorems, 0 sorry) — added run 34
+- **Lean file**: `FVSquad/NewReno.lean`
 - **Informal spec**: `specs/congestion_informal.md`
-- **Target properties**:
-  - `cwnd_floor`: after any congestion event, cwnd ≥ mss * MINIMUM_WINDOW_PACKETS (2)
-  - `slow_start_growth`: in slow start, each non-guarded ACK increases cwnd by ≥ 1
-  - `ca_aimd`: in CA, cwnd increases by exactly 1 MSS per cwnd bytes ACKed
-  - `single_halving`: only one reduction per loss epoch (in_congestion_recovery guard)
-- **Open questions in spec**: CA counter init, integer floor in halving, CSS minimum inc
-- **Next**: write `FVSquad/NewReno.lean` with Lean spec + proofs for floor and AIMD
+- **Key theorems**:
+  - `cwnd_floor_new_event`: cwnd ≥ mss*2 after fresh congestion event (RFC 6582)
+  - `single_halving`: congestion_event no-op when in_recovery (epoch guard)
+  - `acked_cwnd_monotone`: on_packet_acked never decreases cwnd
+  - `acked_preserves_floor_inv`: FloorInv is inductive invariant under ACKs
+- **PR**: run 34 PR (pending merge)
+- **Correspondence**: documented in CORRESPONDENCE.md (run 34)
 
 ## Open PRs / Branches
-- PR #26 `lean-squad-flowcontrol-critique-run32-23932599559-404d595898b24e9c` — FlowControl + CRITIQUE.md (pending)
-- PR (run 33) `lean-squad-run33-23941720399` — CORRESPONDENCE.md FlowControl + congestion informal spec
+- PR (run 34) `lean-squad-run34-23952827355` — NewReno.lean + CRITIQUE/TARGETS/CORRESPONDENCE update
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -79,38 +76,38 @@
   SOLUTION: helper theorems `ewma_le_prev`, `ewma_le_next` using single-var omega
 - omega CANNOT bridge Nat.max (function app `d`) and if-expression `c` even when
   definitionally equal. SOLUTION: use `Nat.le_trans` with `Nat.le_max_left/right`
-- `Nat.sub_le : n - k ≤ n` — available in Lean 4 core
-- `abs_diff a b ≤ Nat.max a b` — use Nat.le_trans with Nat.sub_le and Nat.le_max_*
-- `Nat.div_le_div_right` does NOT take a Nat argument as first arg in Lean 4.29
-  — use omega with the bound hypothesis instead
-- `simp [ht]` on Bool if-then-else: when `ht : cond = true`, simp closes the
-  whole goal if nothing remains (don't add `exact ...` after)
-- `by_cases ht : Bool_expr = true` + `simp [ht]` works for if-then-else dispatch
-- Record field access after `unfold` may not reduce for omega;
-  use `simp [def_name]` first to project fields
-- `split` tactic works on if-then-else in the goal (better than by_cases for
-  preserving goal structure)
-- `decide_eq_true_eq` is the right simp lemma for `decide P = true ↔ P`
-  (NOT `Bool.decide_eq_true`)
+- `simp [h]` on an if-expr where `h` resolves the condition: simp closes the goal
+  entirely (including obvious arithmetic follow-ons). If `; omega` follows, it
+  fails with "no goals". Don't add `omega` after `simp` if simp can close it.
+- `simp [h]` does NOT use hypothesis values for arithmetic (e.g. `h : a ≥ b`)
+  — to prove `b ≤ a + c` from `h`, use `omega` (not simp)
+- `simp only [hg]` on a Bool in_recovery hypothesis: use `by_cases hg : expr`
+  then `simp [hg]` — no need for `ite_false` simp lemma, Lean handles it
+- `let` bindings inside function definitions cause proof complications — inline
+  them to avoid issues with `split` and goal structure
+- `FloorInv` defined as `r.FloorInv` refers to `r.mss`, not the outer `mss`.
+  After `congestion_event`, `(r.congestion_event).FloorInv` needs
+  `(r.congestion_event).mss = r.mss` — prove by unfolding, or prove directly
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
-- TARGETS.md: 5 targets at Phase 5, Target 6 at Phase 2 (informal spec done)
-- CORRESPONDENCE.md: updated run 33 (all 5 Lean files documented)
-- CRITIQUE.md: WRITTEN — run 32 (85 theorems assessed)
+- TARGETS.md: 6 targets, all at Phase 5
+- CORRESPONDENCE.md: updated run 34 (all 6 Lean files documented)
+- CRITIQUE.md: updated run 34 (99 theorems assessed, NewReno section added)
 
-## Status Issue: #4 (open), updated run 33
+## Status Issue: #4 (open), updated run 34
 
 ## Summary
-- **85 total theorems, 0 sorry** across 5 files
-- Varint.lean: 10 | RangeSet.lean: 14 | Minmax.lean: 15 | RttStats.lean: 24 | FlowControl.lean: 22
+- **99 total theorems, 0 sorry** across 6 files
+- Varint.lean: 10 | RangeSet.lean: 16 | Minmax.lean: 15 | RttStats.lean: 23
+  FlowControl.lean: 22 | NewReno.lean: 13
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
-- FVSquad.lean imports: Varint, RangeSet, Minmax, RttStats, FlowControl
+- FVSquad.lean imports: Varint, RangeSet, Minmax, RttStats, FlowControl, NewReno
 
 ## Next Priorities
-1. Target 6: write `FVSquad/NewReno.lean` — Lean spec + proofs for cwnd_floor,
-   slow_start_growth, ca_aimd properties. Use Nat model for cwnd (drop f64).
-2. FlowControl: u64 overflow guard (add bounded model, prove no overflow under 2^62 limit)
-3. RangeSet semantic completeness — prove flatten(insert(rs,r)) = set_union
-4. RTT lower bounds — prove smoothed_rtt ≥ min_rtt after first sample
+1. **Stream flow control** — per-stream window; reuse FlowControl.lean as model
+2. **RangeSet semantic completeness** — prove flatten(insert(rs,r)) = set_union
+3. **NewReno AIMD rate** — prove one-MSS-per-RTT-worth across multiple ACKs
+   (currently only per-callback growth is verified)
+4. **RTT lower bounds** — prove smoothed_rtt ≥ min_rtt after first sample
