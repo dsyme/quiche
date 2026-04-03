@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 00:18 UTC
-- **Commit**: `c877602810ce13a38df7044518a505977ff5cb90`
+- **Date**: 2026-04-03 09:36 UTC
+- **Commit**: `7327c68e094b924b1db1d39ee04d9dfd953cb3b2`
 
 ---
 
@@ -373,9 +373,103 @@ remain within their expected bounds after every update.
 
 ---
 
+## `FVSquad/FlowControl.lean`
+
+**Rust source**: `quiche/src/flowcontrol.rs`
+
+### Purpose
+
+Models the receive-side flow-control window management for QUIC streams and the
+connection as a whole.  The key abstractions are the "consumed" byte counter, the
+advertised `MAX_DATA` limit, and the adaptive-window autotune mechanism.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file:line | Correspondence |
+|-----------|-----------|-----------|---------------|---------------|
+| `FcState` | `structure` | `FlowControl` | `flowcontrol.rs:L39` | **abstraction** — see §Approximations |
+| `FcState.consumed` | `Nat` | `FlowControl.consumed : u64` | `flowcontrol.rs:L46` | **approximation** — Nat vs u64; overflow not captured |
+| `FcState.max_data` | `Nat` | `FlowControl.max_data : u64` | `flowcontrol.rs:L42` | **approximation** — same |
+| `FcState.window` | `Nat` | `FlowControl.window : u64` | `flowcontrol.rs:L50` | **approximation** — same |
+| `FcState.max_window` | `Nat` | `FlowControl.max_window : u64` | `flowcontrol.rs:L54` | **approximation** — same |
+| `FcState.tuned` | `Bool` | `FlowControl.last_update : Option<Instant>` | `flowcontrol.rs:L56` | **abstraction** — `tuned = last_update.is_some()` |
+
+### Function mapping
+
+| Lean name | Rust name | Rust file:line | Correspondence | Notes |
+|-----------|-----------|---------------|---------------|-------|
+| `fc_new` | `FlowControl::new` | `flowcontrol.rs:L58` | **exact** | Window clamped to `max_window` in both |
+| `fc_add_consumed` | `FlowControl::add_consumed` | `flowcontrol.rs:L87` | **abstraction** | No bounds-check vs `max_data` |
+| `fc_should_update` | `FlowControl::should_update_max_data` | `flowcontrol.rs:L95` | **exact** | `(max_data - consumed) < window/2` |
+| `fc_max_data_next` | `FlowControl::max_data_next` | `flowcontrol.rs:L102` | **exact** | `consumed + window` |
+| `fc_update_max_data` | `FlowControl::update_max_data` | `flowcontrol.rs:L107` | **abstraction** | `now` timestamp omitted; sets `tuned = true` |
+| `fc_set_window` | `FlowControl::set_window` | `flowcontrol.rs:L123` | **exact** | Clamps to `max_window` |
+| `fc_autotune_window` | `FlowControl::autotune_window` | `flowcontrol.rs:L115` | **abstraction** | `should_tune : Bool` replaces the `now - last_update < rtt * 2` condition |
+| `fc_set_window_if_not_tuned` | `FlowControl::set_window_if_not_tuned_yet` | `flowcontrol.rs:L128` | **exact** | Guards on `!tuned` |
+| `fc_ensure_window_lower_bound` | `FlowControl::ensure_window_lower_bound` | `flowcontrol.rs:L136` | **exact** | Raises window if below `min_window` |
+
+### Approximations
+
+1. **`u64` → `Nat`**: All byte-offset fields are modelled as `Nat` (unbounded
+   natural numbers) rather than `u64`.  Overflow cannot occur in the Lean model.
+   In practice, QUIC restricts all offsets to 2^62-1, so overflow is unreachable
+   on compliant connections; this abstraction is acceptable.
+
+2. **`Instant`/`Duration` → `Bool should_tune`**: The timing condition in
+   `autotune_window` (`now - last_update ≥ 2 * rtt`) is abstracted to an opaque
+   boolean `should_tune`.  Properties about the autotune logic are stated and
+   proved for arbitrary values of `should_tune`, not for the actual time-based
+   condition.  Time-domain properties (e.g. "the window doubles at most once per
+   2-RTT interval") are **not** captured.
+
+3. **`Option<Instant>` → `Bool tuned`**: The `last_update` field is abstracted to
+   `tuned : Bool`.  All properties that depend only on whether `update_max_data`
+   was ever called are correctly captured; properties that depend on the actual
+   timestamp are not.
+
+4. **`add_consumed` no bounds check**: The Lean model does not verify that
+   `consumed ≤ max_data` is maintained by callers.  The informal spec documents
+   this as a caller invariant; the formal model omits the check.
+
+### Theorems and correspondence
+
+| Theorem | Category | Level | Bug-catching | Correspondence quality |
+|---------|----------|-------|-------------|----------------------|
+| `fc_new_inv` | invariant | Low | Low | **exact** |
+| `fc_new_consumed_zero` | constructor | Low | Low | **exact** |
+| `fc_new_window_le_max` | constructor | Low | Low | **exact** |
+| `fc_set_window_inv` | invariant | Low | Low | **exact** |
+| `fc_add_consumed_preserves_inv` | invariant | Low | Low | **exact** |
+| `fc_add_consumed_window_unchanged` | helper | Low | Low | **exact** |
+| `fc_update_preserves_inv` | invariant | Medium | Medium | **abstraction** (timestamp omitted) |
+| `fc_update_max_data_eq` | arithmetic | Medium | Medium | **exact** |
+| `fc_no_update_needed_after_update` | protocol | **High** | **High** | **exact** |
+| `fc_max_data_next_gt_when_should_update` | protocol | **High** | **High** | **exact** |
+| `fc_max_data_next_ge_consumed` | safety | **High** | **High** | **exact** |
+| `fc_update_idempotent` | protocol | **High** | **High** | **exact** |
+| `fc_consumed_monotone` | monotonicity | Medium | Medium | **exact** |
+| `fc_should_update_iff` | helper | Low | Low | **exact** |
+| `fc_autotune_preserves_inv` | invariant | Low | Medium | **abstraction** (timing omitted) |
+| `fc_autotune_window_when_tuned` | autotune | Medium | **High** | **abstraction** (timing omitted) |
+| `fc_autotune_window_unchanged` | autotune | Low | Low | **abstraction** |
+| `fc_autotune_consumed_unchanged` | helper | Low | Low | **abstraction** |
+| `fc_autotune_max_data_unchanged` | helper | Low | Low | **abstraction** |
+| `fc_ensure_lb_preserves_inv` | invariant | Low | Low | **exact** |
+| `fc_ensure_lb_ge` | postcondition | Medium | Medium | **exact** |
+| `fc_set_window_if_not_tuned_inv` | invariant | Low | Low | **exact** |
+
+**Overall assessment for FlowControl.lean**: *abstraction* — the arithmetic and
+state-machine core of flow control is modelled faithfully.  The three highest-value
+results are `fc_no_update_needed_after_update` (proves no redundant MAX_DATA
+frames), `fc_max_data_next_gt_when_should_update` (proves the non-decreasing
+MAX_DATA QUIC requirement), and `fc_update_idempotent` (proves double-update
+safety).  Timing-domain properties are not captured; no mismatches found.
+
+---
+
 ## Summary
 
-All four Lean files provide sound, useful specifications within their documented
+All five Lean files provide sound, useful specifications within their documented
 abstractions.  The most significant results are:
 
 - **RangeSet.lean**: All 14 theorems proved (0 sorry), including the complex
@@ -384,12 +478,14 @@ abstractions.  The most significant results are:
   property.
 - **Minmax.lean**: All 15 theorems proved (0 sorry), covering the windowed
   minimum algorithm's correctness and invariant preservation.
-- **RttStats.lean**: 23 theorems proved (0 sorry) covering RTT estimator
+- **RttStats.lean**: 24 theorems proved (0 sorry) covering RTT estimator
   arithmetic, including the key security property `adjusted_rtt_ge_min_rtt`
-  and new EWMA bounding theorems (`rtt_update_smoothed_upper_bound`,
-  `rtt_update_min_rtt_inv`) added in run 30.
+  and EWMA bounding theorems.
+- **FlowControl.lean**: 22 theorems proved (0 sorry) covering flow-control
+  window arithmetic, update idempotence, and the non-decreasing MAX_DATA
+  invariant (QUIC protocol requirement).
 
-**Total: 62 theorems, 0 sorry** across all four Lean files.
+**Total: 85 theorems, 0 sorry** across all five Lean files.
 
 No mismatches (where the Lean model is outright wrong) have been identified.
 All known divergences are deliberate, documented approximations.
