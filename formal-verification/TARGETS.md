@@ -6,11 +6,12 @@
 
 | # | Target | Location | Phase | Status | Notes |
 |---|--------|----------|-------|--------|-------|
-| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 10 theorems proved; PR #5 merged |
-| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 14 theorems proved incl. `insert_preserves_invariant`; PR #22 merged |
-| 3 | Minmax filter | `quiche/src/minmax.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 15 theorems proved; PR #15 merged |
-| 4 | RTT estimation | `quiche/src/recovery/rtt.rs` | 3 — Lean Spec | 🔄 In progress | `FVSquad/RttStats.lean` written; 18 theorems proved (0 sorry); informal spec in `specs/rtt_informal.md` |
-| 5 | Flow control | `quiche/src/flowcontrol.rs` | 1 — Research | ⬜ Not started | Arithmetic window invariants |
+| 1 | QUIC varint codec | `octets/src/lib.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 10 theorems; PR #5 merged |
+| 2 | `RangeSet` invariants | `quiche/src/ranges.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 14 theorems incl. `insert_preserves_invariant`; PR #22 merged |
+| 3 | Minmax filter | `quiche/src/minmax.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 15 theorems; PR #15 merged |
+| 4 | RTT estimation | `quiche/src/recovery/rtt.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 24 theorems incl. `adjusted_rtt_ge_min_rtt`; `FVSquad/RttStats.lean` |
+| 5 | Flow control | `quiche/src/flowcontrol.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 22 theorems; `FVSquad/FlowControl.lean`; informal spec in `specs/flowcontrol_informal.md` |
+| 6 | Congestion window (NewReno) | `quiche/src/recovery/congestion/reno.rs` | 2 — Informal Spec | 🔄 In progress | Informal spec written (run 33): `specs/congestion_informal.md` |
 
 ## Phase Definitions
 
@@ -25,10 +26,10 @@
 
 ## Next Actions
 
-1. **Advance RTT estimation** to phase 4/5 — implementation model already in `RttStats.lean`;
-   expand proofs of EWMA convergence and per-update invariant preservation
-2. **Write informal spec** for Flow control (Target 5) — Task 2
-3. **Write Lean spec** for Flow control (Target 5) — Task 3
+1. **Congestion window** (Target 6) — informal spec written (run 33); next: write
+   Lean spec (`FVSquad/NewReno.lean`) for window-floor and AIMD properties
+2. **Stream flow control** — similar to flowcontrol.rs but per-stream; reuse FlowControl model
+3. **RangeSet semantic completeness** — prove flatten(insert(rs,r)) = set_union; see CRITIQUE.md
 
 ## Archived / Completed Targets
 
