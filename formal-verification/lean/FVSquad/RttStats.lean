@@ -299,7 +299,77 @@ theorem rtt_update_smoothed_pos
   -- adj_rtt / 8 ≥ 0 trivially; sum ≥ 7 + 0 > 0
   omega
 
--- §5.7  Concrete example (sanity check via native_decide)
+-- §5.7  EWMA floor arithmetic
+
+/-- The weighted floor average of a number with itself is at most that number.
+    Key arithmetic building block: `a * 7 / 8 + a / 8 ≤ a` for all `a : Nat`.
+    This shows the EWMA coefficients 7/8 and 1/8 are a valid partition (sum ≤ 1
+    under Nat floor division). -/
+theorem ewma_floor_sum (a : Nat) : a * 7 / 8 + a / 8 ≤ a := by omega
+
+-- §5.8  Per-update completeness
+
+/-- Every call to `rtt_update` sets `latest_rtt` to the new sample.
+    This holds unconditionally (both first-sample and subsequent-sample branches). -/
+theorem rtt_update_latest_rtt_eq
+    (st : RttState) (lr ad : Nat) (hc : Bool) :
+    (rtt_update st lr ad hc).latest_rtt = lr := by
+  cases h : st.has_first_rtt <;> simp [rtt_update, h]
+
+/-- After any call to `rtt_update`, `has_first_rtt` is permanently `true`.
+    Once a sample has been recorded the flag is never cleared. -/
+theorem rtt_update_has_first_true
+    (st : RttState) (lr ad : Nat) (hc : Bool) :
+    (rtt_update st lr ad hc).has_first_rtt = true := by
+  cases h : st.has_first_rtt <;> simp [rtt_update, h]
+
+-- §5.9  EWMA upper bound
+
+/-- The updated `smoothed_rtt` is bounded above by the maximum of the previous
+    smoothed estimate and the new sample.
+
+    Proof sketch (subsequent branch):
+      `smoothed' = old * 7/8 + adj/8`
+      where `adj ≤ latest_rtt` (plausibility filter can only reduce the sample).
+      Since `a * 7/8 + b/8 ≤ max(a, b)` for any `a, b : Nat`,
+      and `max(old, adj) ≤ max(old, latest_rtt)`, the bound follows. -/
+theorem rtt_update_smoothed_upper_bound
+    (st : RttState) (lr ad : Nat) (hc : Bool) :
+    (rtt_update st lr ad hc).smoothed_rtt ≤ Nat.max st.smoothed_rtt lr := by
+  cases h : st.has_first_rtt
+  · -- First update: smoothed' = lr ≤ max(old, lr)
+    simp [rtt_update, h]
+    exact Nat.le_max_right _ _
+  · -- Subsequent: smoothed' = old * 7/8 + adj/8 ≤ max(old, lr)
+    simp [rtt_update, h]
+    have h_adj_le : adjusted_rtt_of lr (Nat.min st.min_rtt lr)
+                       (if hc then Nat.min ad st.max_ack_delay else ad) ≤ lr :=
+      adjusted_rtt_le_latest _ _ _
+    have h_sm : st.smoothed_rtt ≤ Nat.max st.smoothed_rtt lr :=
+      Nat.le_max_left _ _
+    have h_adj : adjusted_rtt_of lr (Nat.min st.min_rtt lr)
+                     (if hc then Nat.min ad st.max_ack_delay else ad) ≤
+                 Nat.max st.smoothed_rtt lr :=
+      Nat.le_trans h_adj_le (Nat.le_max_right _ _)
+    omega
+
+-- §5.10  Combined invariant: min_rtt ≤ latest_rtt
+
+/-- After any update, `min_rtt ≤ latest_rtt` holds as a joint property of the
+    result state.  This invariant is the key safety property used by the
+    plausibility filter in `adjusted_rtt_of`. -/
+theorem rtt_update_min_rtt_inv
+    (st : RttState) (lr ad : Nat) (hc : Bool) :
+    (rtt_update st lr ad hc).min_rtt ≤
+    (rtt_update st lr ad hc).latest_rtt := by
+  rw [rtt_update_latest_rtt_eq]
+  cases h : st.has_first_rtt
+  · -- First update: min_rtt' = lr
+    simp [rtt_update, h]
+  · -- Subsequent: min_rtt' = Nat.min old lr ≤ lr
+    exact rtt_update_min_rtt_le_latest st lr ad hc h
+
+-- §5.11  Concrete example (sanity check via native_decide)
 
 -- Verify Example 3 from the informal spec (nanosecond values):
 -- State: smoothed_rtt=120ms, min_rtt=100ms, rttvar=60ms
