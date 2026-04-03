@@ -4,23 +4,26 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 04:00 UTC
-- **Commit**: `7db3af29065d8c9154c9fc0194a1ae64138f24fb`
+- **Date**: 2026-04-03 17:30 UTC
+- **Commit**: `b8098a51`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` covers five modules with **105 theorems
-and 0 sorry** (Lean 4.29.0, no Mathlib).  The suite provides machine-checked
-confidence in the core arithmetic properties of the QUIC varint codec, the
-RangeSet interval data structure, the Minmax running-minimum filter, the RTT
-estimator, and the flow-control window manager.  The most valuable results are
-the `varint_round_trip` property (encode/decode identity), the
-`RangeSet.insert_preserves_invariant` structural invariant, and the
-`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing attack.
-The main limitation across all files is that Lean models use unbounded `Nat`
-instead of bounded Rust integers, so overflow/underflow edge cases are not verified.
+The formal verification suite for `quiche` now covers **seven modules with 125
+theorems and 0 sorry** (Lean 4.29.0, no Mathlib).  The suite provides
+machine-checked confidence in the QUIC varint codec, the RangeSet interval
+data structure, the Minmax running-minimum filter, the RTT estimator, the
+flow-control window manager, the NewReno congestion controller, and the
+DatagramQueue bounded FIFO.  The most valuable results are the
+`varint_round_trip` property (encode/decode identity), the
+`RangeSet.insert_preserves_invariant` structural invariant, the
+`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing
+attack, and the NewReno `cwnd_floor_new_event` property that guarantees the
+minimum congestion window floor after any loss event.  The main limitation
+across all files is that Lean models use unbounded `Nat` instead of bounded
+Rust integers, so overflow/underflow edge cases are not verified.
 
 ---
 
@@ -213,3 +216,63 @@ Prioritised by impact:
   sorted+disjoint+merged under insertion required substantial case splitting and
   was the most complex proof in the suite.  Its success gives high confidence in
   the ACK-range deduplication logic.
+
+---
+
+### `FVSquad/NewReno.lean` — 13 theorems (added run 34)
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `cwnd_floor_new_event` | high | **high** | cwnd ≥ mss\*2 after any fresh congestion event — directly captures the RFC 6582 minimum-window floor |
+| `single_halving` | high | **high** | In-recovery congestion_event is a no-op; prevents compounding halvings for multiple losses in one epoch |
+| `congestion_event_sets_recovery` | mid | medium | `in_recovery` flag is set correctly; guards subsequent events |
+| `congestion_event_idempotent` | mid | medium | Two consecutive loss events = one; structural safety |
+| `slow_start_growth` | mid | medium | Slow start increases cwnd by exactly mss per ACK (not guarded) |
+| `ca_ack_no_growth` | mid | medium | CA counter below threshold — window unchanged |
+| `ca_ack_growth` | mid | medium | CA counter at threshold — window grows by exactly mss |
+| `recovery_no_growth` | low | medium | In-recovery ACK has no effect on cwnd |
+| `app_limited_no_growth` | low | low | App-limited ACK has no effect on cwnd |
+| `acked_cwnd_monotone` | mid | **high** | on_packet_acked never decreases cwnd — monotone growth invariant |
+| `acked_preserves_floor_inv` | mid | **high** | FloorInv is an inductive invariant under ACKs |
+| `congestion_event_cwnd_le_of_floor` | mid | medium | Under FloorInv, congestion_event cannot raise cwnd |
+| `congestion_event_establishes_floor` | mid | **high** | Any fresh congestion event establishes FloorInv from scratch |
+
+**Assessment**: The floor invariant (`cwnd ≥ mss * 2`) is the most valuable
+property — it prevents the connection from stalling at sub-MSS window sizes and
+is directly required by RFC 6582.  `single_halving` and `acked_cwnd_monotone`
+together guarantee the two core AIMD safety properties: the window never grows
+on losses and never shrinks on ACKs.  **Gaps**: (1) no theorem verifies the
+exact AIMD growth rate (one MSS per cwnd bytes ACKed) across multiple ACK
+callbacks; (2) HyStart++ (CSS branch) is fully abstracted away; (3) the
+`f64 * 0.5` cast is modelled as Nat `/2` — the floor-vs-round question from the
+informal spec remains unaddressed.
+
+---
+
+### DatagramQueue (`FVSquad/DatagramQueue.lean`) — 26 theorems
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `push_preserves_cap_inv` | mid | high | Capacity bound enforced by push: `len ≤ maxLen` after every successful push |
+| `pop_preserves_cap_inv` | mid | medium | Capacity can only decrease on pop |
+| `purge_preserves_cap_inv` | mid | medium | Purge can only decrease len |
+| `push_byteSize_inc` | mid | high | Byte-size counter stays accurate after push |
+| `pop_byteSize_dec` | mid | high | Byte-size counter stays accurate after pop — key for bandwidth estimation |
+| `push_pop_singleton` | mid | medium | Round-trip: push then pop on empty queue recovers element |
+| `push_then_pop_front_unchanged` | mid | high | FIFO ordering: pop returns original front, not the just-pushed element |
+| `purge_removes_matching` | mid | medium | Purge correctness: no matching element survives |
+| `purge_keeps_non_matching` | mid | medium | Purge completeness: all non-matching elements survive |
+| `push_fails_iff_full` | low | medium | Error path: push returns None iff at capacity |
+| `purge_noop` / `purge_all` | low | low | Purge identity and full-removal edge cases |
+| 15 others | low | low | isEmpty/isFull consistency, new postconditions |
+
+**Assessment**: Mid-level utility.  The three most valuable theorems are
+`push_byteSize_inc`/`pop_byteSize_dec` (byte-size invariant, important for
+send-budget accounting), `push_then_pop_front_unchanged` (FIFO ordering,
+important for datagram delivery order), and `push_preserves_cap_inv` (capacity
+bound, important for backpressure).  A real implementation bug in the
+`queue_bytes_size` counter would be caught by the byte-size theorems.
+**Gaps**: (1) zero-length datagram edge case (byteSize=0 yet !isEmpty) not
+covered; (2) `peek_front_bytes` not modelled (requires byte-slice model);
+(3) `max_len=0` (immediately full) is consistent with the model but not
+separately exercised.
