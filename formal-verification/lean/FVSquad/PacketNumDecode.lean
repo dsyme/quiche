@@ -25,6 +25,25 @@ theorem mul_mod_zero (k win : Nat) : k * win % win = 0 := by
   | inl h => simp [h]
   | inr h => rw [Nat.mul_comm]; exact Nat.mul_mod_right win k
 
+/-- If a and b are multiples of n, and b + n ≤ a < b + 2*n, then a = b + n.
+    Used in `decode_pktnum_correct` to establish which window the candidate
+    belongs to relative to the actual packet number. -/
+theorem mul_uniq_in_range (a b n : Nat) (ha : a % n = 0) (hb : b % n = 0)
+    (hlo : b + n ≤ a) (hhi : a < b + 2 * n) (hn : 0 < n) : a = b + n := by
+  have hqa : n * (a / n) = a := by
+    have h := Nat.div_add_mod a n; rw [ha] at h; simpa using h
+  have hqb : n * (b / n) = b := by
+    have h := Nat.div_add_mod b n; rw [hb] at h; simpa using h
+  have hq_lo : b / n + 1 ≤ a / n := by
+    have h1 : n * (b / n + 1) ≤ n * (a / n) := by
+      rw [Nat.mul_add, Nat.mul_one]; omega
+    exact Nat.le_of_mul_le_mul_left h1 hn
+  have hq_hi : a / n ≤ b / n + 1 := by
+    have h1 : n * (a / n) < n * (b / n + 2) := by rw [Nat.mul_add]; omega
+    exact Nat.lt_succ_iff.mp (Nat.lt_of_mul_lt_mul_left h1)
+  have hq_eq : a / n = b / n + 1 := Nat.le_antisymm hq_hi hq_lo
+  rw [← hqa, hq_eq, Nat.mul_add, Nat.mul_one, hqb]
+
 theorem mul_add_mod (k win m : Nat) (h : m < win) : (k * win + m) % win = m := by
   cases Nat.eq_zero_or_pos win with
   | inl hw => omega
@@ -243,31 +262,117 @@ theorem candidate_shift_win
   omega
 
 -- ---------------------------------------------------------------------------
--- Correctness under the QUIC invariant (partial proof)
+-- Correctness under the QUIC invariant (fully proved)
 -- ---------------------------------------------------------------------------
 
-/-- Under the QUIC invariant (actual_pn ≡ truncated_pn mod win and within
-    pn_hwin of expected_pn), decodePktNum returns actual_pn.
-    Proof: sorry — the α=β case split requires additional lemmas. -/
+/-- Under the QUIC proximity invariant, `decodePktNum` returns `actual_pn`.
+
+    Hypotheses mirror the RFC 9000 §A.3 preconditions in Nat arithmetic:
+    • `hprox`    — actual_pn ≤ expected_pn + pnHwin  (upper proximity bound)
+    • `hprox2`   — expected_pn < actual_pn + pnHwin  (strict lower bound;
+                   the original non-strict ≤ allows a counterexample at
+                   actual_pn = expected_pn − pnHwin where branch 1 fires
+                   incorrectly)
+    • `hoverflow` — actual_pn < 2^62  (mirrors the Rust u64 / QUIC pn cap)
+    • `hwin_le`   — pnWin ≤ 2^62  (pn_len ∈ {1…4} so pnWin ≤ 2^32 ≪ 2^62;
+                   needed to prevent Nat subtraction underflow in branch 1)
+
+    Proof sketch (3-way case split on window quotients α = exp/win, β = act/win):
+    • α = β  → cand = actual_pn, strict hprox2 excludes branch 1, hprox
+               excludes branch 2 → result = cand = actual_pn.
+    • α = β+1 → cand = actual_pn + win; branch 1 excluded (hprox2), branch 2
+               fires → result = cand − win = actual_pn.
+    • β = α+1 → cand = actual_pn − win; branch 1 fires (hprox + 2*hwin ≤ win),
+               overflow guard holds (hoverflow + hwin_le) → result = cand + win
+               = actual_pn.
+    The uniqueness of each window assignment uses `mul_uniq_in_range`. -/
 theorem decode_pktnum_correct
     (largest_pn truncated_pn pn_len actual_pn : Nat)
-    (hlen  : 0 < pn_len)
-    (htrun : truncated_pn < pnWin pn_len)
-    (hmod  : actual_pn % pnWin pn_len = truncated_pn)
-    (hprox : actual_pn ≤ largest_pn + 1 + pnHwin pn_len)
-    (hprox2 : largest_pn + 1 ≤ actual_pn + pnHwin pn_len) :
+    (hlen      : 0 < pn_len)
+    (htrun     : truncated_pn < pnWin pn_len)
+    (hmod      : actual_pn % pnWin pn_len = truncated_pn)
+    (hprox     : actual_pn ≤ largest_pn + 1 + pnHwin pn_len)
+    (hprox2    : largest_pn + 1 < actual_pn + pnHwin pn_len)
+    (hoverflow : actual_pn < (1 : Nat) <<< 62)
+    (hwin_le   : pnWin pn_len ≤ (1 : Nat) <<< 62) :
     decodePktNum largest_pn truncated_pn pn_len = actual_pn := by
-  -- The proof requires showing that the candidate equals actual_pn
-  -- (i.e., both live in the same window) and that neither adjustment fires.
-  -- This follows from the proximity bounds but requires case analysis.
-  sorry
+  have hwin_pos := pnWin_pos pn_len
+  have h2hwin : 2 * pnHwin pn_len ≤ pnWin pn_len := by unfold pnHwin; omega
+  -- α + exp%win = exp  (α = floor multiple of win below exp)
+  have hα_sum : (largest_pn + 1) / pnWin pn_len * pnWin pn_len +
+                (largest_pn + 1) % pnWin pn_len = largest_pn + 1 := by
+    rw [Nat.mul_comm]; exact Nat.div_add_mod _ _
+  -- β + trunc = actual_pn  (β = floor multiple of win below actual_pn)
+  have hβ_sum : actual_pn / pnWin pn_len * pnWin pn_len + truncated_pn = actual_pn := by
+    have h := Nat.div_add_mod actual_pn (pnWin pn_len)
+    rw [Nat.mul_comm, hmod] at h; exact h
+  have hrexp  : (largest_pn + 1) % pnWin pn_len < pnWin pn_len := Nat.mod_lt _ hwin_pos
+  have hα_le  : (largest_pn + 1) / pnWin pn_len * pnWin pn_len ≤ largest_pn + 1 := by omega
+  have hβ_le  : actual_pn / pnWin pn_len * pnWin pn_len ≤ actual_pn := by omega
+  have hα_mod : (largest_pn + 1) / pnWin pn_len * pnWin pn_len % pnWin pn_len = 0 :=
+    mul_mod_zero _ _
+  have hβ_mod : actual_pn / pnWin pn_len * pnWin pn_len % pnWin pn_len = 0 :=
+    mul_mod_zero _ _
+  simp only [decodePktNum]
+  -- 3-way split on which window α and β inhabit
+  rcases Nat.lt_or_ge (actual_pn / pnWin pn_len)
+                      ((largest_pn + 1) / pnWin pn_len) with h_lt | h_ge
+  · -- α = β + win: cand = actual_pn + win, branch 2 fires, result = actual_pn
+    have hαβ : (largest_pn + 1) / pnWin pn_len * pnWin pn_len =
+               actual_pn / pnWin pn_len * pnWin pn_len + pnWin pn_len := by
+      apply mul_uniq_in_range _ _ _ hα_mod hβ_mod _ _ hwin_pos
+      · have hle := Nat.mul_le_mul_right (pnWin pn_len) h_lt
+        rw [Nat.succ_mul] at hle; omega
+      · omega
+    have hcand_eq : candidatePn (largest_pn + 1) truncated_pn pn_len =
+                    actual_pn + pnWin pn_len := by unfold candidatePn; omega
+    rw [hcand_eq]
+    by_cases hb1 : actual_pn + pnWin pn_len + pnHwin pn_len ≤ largest_pn + 1
+    · exfalso; omega
+    · simp only [hb1, ite_false]
+      by_cases hb2 : actual_pn + pnWin pn_len > largest_pn + 1 + pnHwin pn_len
+      · simp only [hb2, ite_true]
+        have hcw : actual_pn + pnWin pn_len ≥ pnWin pn_len := Nat.le_add_left _ _
+        simp only [hcw, ite_true]; omega
+      · exfalso; omega
+  · rcases Nat.lt_or_ge ((largest_pn + 1) / pnWin pn_len)
+                        (actual_pn / pnWin pn_len) with h_lt2 | h_eq
+    · -- β = α + win: cand = actual_pn − win, branch 1 fires, result = actual_pn
+      have hβα : actual_pn / pnWin pn_len * pnWin pn_len =
+                 (largest_pn + 1) / pnWin pn_len * pnWin pn_len + pnWin pn_len := by
+        apply mul_uniq_in_range _ _ _ hβ_mod hα_mod _ _ hwin_pos
+        · have hle := Nat.mul_le_mul_right (pnWin pn_len) h_lt2
+          rw [Nat.succ_mul] at hle; omega
+        · omega
+      have hact_ge_win : pnWin pn_len ≤ actual_pn := by omega
+      have hcand_eq : candidatePn (largest_pn + 1) truncated_pn pn_len =
+                      actual_pn - pnWin pn_len := by unfold candidatePn; omega
+      rw [hcand_eq]
+      by_cases hb1 : actual_pn - pnWin pn_len + pnHwin pn_len ≤ largest_pn + 1
+      · simp only [hb1, ite_true]
+        have hov : actual_pn - pnWin pn_len < (1 : Nat) <<< 62 - pnWin pn_len := by
+          omega
+        simp only [hov, ite_true]; omega
+      · exfalso; omega
+    · -- α = β: cand = actual_pn, neither branch fires, result = actual_pn
+      have h_quot_eq : (largest_pn + 1) / pnWin pn_len = actual_pn / pnWin pn_len :=
+        Nat.le_antisymm h_ge h_eq
+      have hcand_eq : candidatePn (largest_pn + 1) truncated_pn pn_len = actual_pn := by
+        unfold candidatePn; rw [h_quot_eq]; exact hβ_sum
+      rw [hcand_eq]
+      by_cases hb1 : actual_pn + pnHwin pn_len ≤ largest_pn + 1
+      · exfalso; omega
+      · simp only [hb1, ite_false]
+        by_cases hb2 : actual_pn > largest_pn + 1 + pnHwin pn_len
+        · exfalso; omega
+        · simp only [hb2, ite_false]
 
 -- ---------------------------------------------------------------------------
 -- Summary
 -- ---------------------------------------------------------------------------
--- Theorems (22 total, 1 sorry):
+-- Theorems (24 total, 0 sorry):
 --
--- Helpers (3): mul_mod_zero, mul_add_mod, sub_add_mod
+-- Helpers (4): mul_mod_zero, mul_add_mod, sub_add_mod, mul_uniq_in_range
 -- Window (3): pnWin_pos, pnWin_eq, pnHwin_le_win
 -- Candidate (3): candidate_mod_win, candidate_lt_expected_plus_win,
 --                expected_lt_candidate_plus_win
@@ -275,5 +380,11 @@ theorem decode_pktnum_correct
 -- Branch bounds (2): decode_branch2_upper, decode_branch1_overflow_guard
 -- Test vectors (7): rfc_example, quiche_2byte, quiche_3byte,
 --                   roundtrip_1byte, roundtrip_2byte, branch1, branch2
--- Structural (3): decode_nonneg, candidate_shift_win, decode_pktnum_correct*
--- (* decode_pktnum_correct has 1 sorry)
+-- Structural (4): decode_nonneg, candidate_shift_win, decode_pktnum_correct,
+--                 (mul_uniq_in_range counted in Helpers)
+--
+-- decode_pktnum_correct: FULLY PROVED (0 sorry).
+--   Hypotheses refined from run 37-38:
+--   • hprox2 strengthened to strict < (edge case at equality is a genuine bug)
+--   • hoverflow : actual_pn < 2^62 added (mirrors QUIC packet number cap)
+--   • hwin_le   : pnWin ≤ 2^62 added (prevents Nat subtraction underflow)

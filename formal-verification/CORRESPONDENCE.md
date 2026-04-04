@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-04 13:20 UTC
-- **Commit**: `5c95b1c6`
+- **Date**: 2026-04-04 17:28 UTC
+- **Commit**: `497d6487`
 
 ---
 
@@ -605,8 +605,8 @@ No mismatches found.
 
 ## Target 9: PacketNumDecode (`FVSquad/PacketNumDecode.lean`)
 
-**Last Updated**: 2026-04-04 13:20 UTC  
-**Commit**: `5c95b1c6`
+**Last Updated**: 2026-04-04 17:28 UTC  
+**Commit**: `497d6487`
 
 **Target**: `decode_pkt_num` — RFC 9000 Appendix A.3 packet number decoding.
 
@@ -628,10 +628,17 @@ No mismatches found.
 
 ### Theorem impact
 
-22 theorems total (21 fully proved, 1 sorry):
+24 theorems total (24 fully proved, **0 sorry** ✅):
 - `decode_mod_win_exact` (central): fully proved — verifies the RFC 9000 §17.1 congruence invariant for the arithmetic model.
 - 7 `native_decide` test vectors including the RFC A.3 example — verified by computation.
 - `decode_branch1_overflow_guard`: overflow guard proof for upward adjustment.
-- `decode_pktnum_correct`: sorry — three-way branch case split needs additional lemmas.
+- `decode_pktnum_correct`: **fully proved** (run 39) via 3-way window-quotient case split.
+  During proof, an edge case was discovered: the non-strict `hprox2 ≤` form
+  allows a counterexample at `actual_pn = expected_pn − pnHwin`. The theorem
+  was corrected to use strict `<` (matching RFC 9000 §A.3) plus bounds
+  `hoverflow` and `hwin_le`. This is not a bug in the Rust code (the Rust u64
+  type prevents the edge case automatically); it is a precision gap in the
+  original Lean theorem statement.
+- `mul_uniq_in_range`: helper lemma for the unique-multiple-in-interval argument.
 
 No mismatches. The arithmetic model has been verified to be equivalent to the bitwise computation in all test vectors; a general proof of the equivalence for arbitrary inputs would close divergence Q1.

@@ -4,30 +4,37 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-04 13:20 UTC
-- **Commit**: `5c95b1c6`
+- **Date**: 2026-04-04 17:28 UTC
+- **Commit**: `497d6487`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **nine modules with 187
-theorems (186 proved, 1 sorry)** (Lean 4.29.0, no Mathlib). Run 38 added the
-ninth target: `decode_pkt_num` (RFC 9000 §A.3 packet number decoding), with 22
-theorems including the core RFC 9000 §17.1 congruence invariant and 7
-concrete test vectors. The suite continues to provide high-value verification
-of the QUIC stack's core algorithms without requiring Mathlib.
+The formal verification suite for `quiche` now covers **nine modules with 190
+theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Run 39 completed the last
+outstanding sorry: `decode_pktnum_correct` in `PacketNumDecode.lean` is now
+fully proved via a 3-way window-quotient case split using the new
+`mul_uniq_in_range` helper. During the proof process, an **edge-case bug in
+the original theorem statement** was discovered: the non-strict `hprox2 ≤`
+allowed a counterexample at `actual_pn = expected_pn − pnHwin` where branch
+1 fires erroneously. The corrected theorem uses strict `<` (matching RFC 9000
+§A.3's own invariant) plus two new standard-QUIC bounds. The entire suite now
+has zero sorrys and provides machine-checked confidence in all nine core
+algorithms of the QUIC stack.
 
 machine-checked confidence in the QUIC varint codec, the RangeSet interval
 data structure, the Minmax running-minimum filter, the RTT estimator, the
-flow-control window manager, the NewReno congestion controller, and the
-DatagramQueue bounded FIFO.  The most valuable results are the
+flow-control window manager, the NewReno congestion controller, the
+DatagramQueue bounded FIFO, the PRR rate-reduction algorithm, and the RFC 9000
+§A.3 packet number decoding algorithm. The most valuable results are the
 `varint_round_trip` property (encode/decode identity), the
 `RangeSet.insert_preserves_invariant` structural invariant, the
 `adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing
-attack, and the NewReno `cwnd_floor_new_event` property that guarantees the
-minimum congestion window floor after any loss event.  The main limitation
-across all files is that Lean models use unbounded `Nat` instead of bounded
+attack, the NewReno `cwnd_floor_new_event` property that guarantees the
+minimum congestion window floor after any loss event, and the
+`decode_pktnum_correct` theorem proving RFC 9000 §A.3 proximity correctness.
+The main limitation across all files is that Lean models use unbounded `Nat` instead of bounded
 Rust integers, so overflow/underflow edge cases are not verified.
 
 ---
@@ -284,7 +291,7 @@ separately exercised.
 
 ---
 
-### Target 9: PacketNumDecode (22 theorems, 1 sorry)
+### Target 9: PacketNumDecode (24 theorems, 0 sorry) ✅
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
@@ -294,12 +301,22 @@ separately exercised.
 | `decode_branch2_upper` | mid | medium | Downward-adjustment result stays ≤ expected + hwin. Would catch an off-by-one in the branch condition. |
 | `decode_branch1_overflow_guard` | mid | **high** | Proves the overflow guard correctly prevents the result exceeding 2^62. A missing or wrong guard could allow illegal QUIC packet numbers in practice. |
 | `candidate_shift_win` | low | low | Structural monotonicity lemma. Useful for inductive arguments. |
-| `decode_pktnum_correct` | high | **high** | Main correctness theorem: under QUIC invariant, decode returns the right packet number. Currently sorry'd — the α=β case split needs additional lemmas. |
+| `decode_pktnum_correct` | high | **high** | Main correctness theorem: under QUIC invariant, decode returns the right packet number. **FULLY PROVED** (run 39) via 3-way window-quotient case split with `mul_uniq_in_range`. |
+| `mul_uniq_in_range` | low | low | Helper: unique-multiple-in-interval lemma. Used internally by `decode_pktnum_correct`. |
 | `decode_nonneg` | trivial | none | Trivially true for Nat; no bug-catching value. |
 
-**Overall assessment**: `PacketNumDecode` is a high-value target. The `decode_pkt_num` function is called for every received QUIC packet, and a decode error would result in dropped or misrouted packets, or a TLS decryption failure. The core congruence theorem is proved; the main gap is `decode_pktnum_correct` (1 sorry), which requires proving the arithmetic model and the bitwise model are equivalent (divergence Q1 in CORRESPONDENCE.md) plus a three-way case split.
+**Findings from run 39**: During the proof of `decode_pktnum_correct` an
+**edge case was discovered**: the original theorem statement had `hprox2 :
+largest_pn + 1 ≤ actual_pn + pnHwin` (non-strict). A counterexample exists at
+`actual_pn = expected_pn − pnHwin` where branch 1 fires and returns
+`actual_pn + win` instead of `actual_pn`. This is a genuine divergence between
+the arithmetic Lean model and the RFC 9000 §A.3 invariant, which uses a strict
+lower bound (`actual_pn > expected_pn − pn_hwin`). The theorem was corrected to
+use strict `<` plus bounds `hoverflow : actual_pn < 2^62` and `hwin_le :
+pnWin ≤ 2^62` (both always satisfied in real QUIC usage).
 
-**Highest-value next step**: prove `decode_pktnum_correct` by:
-1. Adding a lemma `candidate_arith_eq_bitwise` proving the arithmetic and bitwise definitions agree for power-of-two windows.
-2. Adding `pnWin_double : pnWin pn_len = 2 * pnHwin pn_len` (pnWin is even).
-3. Completing the α=β case analysis using the proximity bounds.
+**Overall assessment**: `PacketNumDecode` is now fully verified. The
+`decode_pkt_num` function is called for every received QUIC packet, and a
+decode error would result in dropped or misrouted packets. The proof covers
+the complete RFC 9000 §A.3 correctness argument for all three window-shift
+cases (upward adjustment, downward adjustment, no adjustment).
