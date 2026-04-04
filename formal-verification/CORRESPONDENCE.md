@@ -566,3 +566,37 @@ All 26 theorems are sound:
 - **Byte-size tracking** (`push_byteSize_inc`, `pop_byteSize_dec`): correct for the `Nat`-length model; diverges from Rust only when payload content matters (not the case for size proofs).
 
 No mismatches found.
+
+---
+
+## `FVSquad/PRR.lean` ↔ `quiche/src/recovery/congestion/prr.rs`
+
+**Last Updated**: 2026-04-04 03:40 UTC  
+**Commit**: `d61b6578df8892b011c73019e6aa4672c1decb60`
+
+**Target**: `PRR` struct — Proportional Rate Reduction (RFC 6937) for congestion recovery pacing.
+
+| Lean definition | Rust source | File | Lines | Correspondence | Notes |
+|-----------------|-------------|------|-------|----------------|-------|
+| `PRR` (structure) | `PRR` (struct) | `prr.rs` | 37–48 | exact | All four `usize` fields modelled as `Nat`; `pub snd_cnt` correctly public |
+| `PRR.congestion_event` | `PRR::congestion_event` | `prr.rs` | 57–63 | exact | All fields reset identically |
+| `PRR.on_packet_sent` | `PRR::on_packet_sent` | `prr.rs` | 51–55 | exact | `prr_out += b`, `snd_cnt = snd_cnt.saturating_sub(b)` — Lean `Nat` sub is already saturating |
+| `PRR.on_packet_acked` | `PRR::on_packet_acked` | `prr.rs` | 67–96 | exact | PRR and PRR-SSRB modes; `cmp::max(snd_cnt, 0)` elided (Nat is always ≥ 0) |
+| `divCeil` | `usize::div_ceil` | `prr.rs` | 77 | exact | `(a + b - 1) / b` matches Rust's `div_ceil`; `= 0` when `b = 0` matches Lean Nat convention and Rust's `recoverfs > 0` guard |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| P1 | `Nat` (unbounded) | `usize` (64-bit) | No overflow captured; `prr_delivered * ssthresh` could theoretically overflow in Rust on pathological workloads |
+| P2 | `cmp::max(snd_cnt, 0)` omitted | present at line 95 | No-op for `Nat`; Rust's `snd_cnt` is `usize` so it is also always ≥ 0 |
+| P3 | Protocol precondition not modelled | callers should only call `on_packet_sent` with `sent_bytes ≤ snd_cnt` | Theorems hold unconditionally; practical invariants require the protocol contract |
+
+### Theorem impact
+
+All 20 theorems are sound. The `exact` correspondence for all four operations means:
+- State-reset theorems (`congestion_event_*`): verified directly by `rfl`.
+- PRR mode formula (`prr_mode_snd_cnt_formula`): exactly matches lines 76–80.
+- SSRB mode bounds (`ssrb_snd_cnt_le_gap`, `ssrb_snd_cnt_ge_min_gap_mss`): capture the RFC 6937 §3 rate guarantees.
+
+No mismatches found.
