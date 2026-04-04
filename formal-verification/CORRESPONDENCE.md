@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 17:30 UTC
-- **Commit**: `b8098a51`
+- **Date**: 2026-04-04 13:20 UTC
+- **Commit**: `5c95b1c6`
 
 ---
 
@@ -600,3 +600,38 @@ All 20 theorems are sound. The `exact` correspondence for all four operations me
 - SSRB mode bounds (`ssrb_snd_cnt_le_gap`, `ssrb_snd_cnt_ge_min_gap_mss`): capture the RFC 6937 §3 rate guarantees.
 
 No mismatches found.
+
+---
+
+## Target 9: PacketNumDecode (`FVSquad/PacketNumDecode.lean`)
+
+**Last Updated**: 2026-04-04 13:20 UTC  
+**Commit**: `5c95b1c6`
+
+**Target**: `decode_pkt_num` — RFC 9000 Appendix A.3 packet number decoding.
+
+| Lean definition | Rust source | File | Lines | Correspondence | Notes |
+|-----------------|-------------|------|-------|----------------|-------|
+| `candidatePn` | `candidate_pn = (expected_pn & !pn_mask) \| truncated_pn` | `packet.rs` | 640 | abstraction | Arithmetic: `(exp/win)*win + trunc`. Equivalent to bitwise when `win = 2^k` and `trunc < win` |
+| `decodePktNum` | `decode_pkt_num` | `packet.rs` | 634–652 | abstraction | Nested `if` instead of `&&` — identical semantics. Nat arithmetic; u64 overflow not modelled |
+| `pnWin` | `pn_win = 1 << pn_nbits` | `packet.rs` | 637 | exact | `1 <<< (pn_len * 8)` — same shift |
+| `pnHwin` | `pn_hwin = pn_win / 2` | `packet.rs` | 638 | exact | Integer division |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| Q1 | Arithmetic `(exp/win)*win + trunc` | Bitwise `(exp & !mask) \| trunc` | Equivalent when `win = 2^k` and `trunc < win`. `decode_mod_win_exact` proves congruence holds for the arithmetic model; bridging to bitwise requires an additional lemma (not yet proved) |
+| Q2 | `Nat` arithmetic (unbounded) | `u64` arithmetic | Overflow at `2^64` not captured. The overflow guard (`cand < 2^62 - win`) is faithfully modelled as a Prop condition |
+| Q3 | `pn_len` unconstrained | `pn_len ∈ {1,2,3,4}` in QUIC | Theorems hold for all `pn_len : Nat` including 0 (degenerate). `native_decide` test vectors use pn_len ∈ {1,2,3} |
+| Q4 | QUIC proximity invariant is a hypothesis | Enforced by protocol | `decode_pktnum_correct` requires the invariant as a precondition; it is not verified from the Rust perspective |
+
+### Theorem impact
+
+22 theorems total (21 fully proved, 1 sorry):
+- `decode_mod_win_exact` (central): fully proved — verifies the RFC 9000 §17.1 congruence invariant for the arithmetic model.
+- 7 `native_decide` test vectors including the RFC A.3 example — verified by computation.
+- `decode_branch1_overflow_guard`: overflow guard proof for upward adjustment.
+- `decode_pktnum_correct`: sorry — three-way branch case split needs additional lemmas.
+
+No mismatches. The arithmetic model has been verified to be equivalent to the bitwise computation in all test vectors; a general proof of the equivalence for arbitrary inputs would close divergence Q1.
