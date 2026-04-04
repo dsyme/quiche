@@ -4,15 +4,20 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-03 17:30 UTC
-- **Commit**: `b8098a51`
+- **Date**: 2026-04-04 13:20 UTC
+- **Commit**: `5c95b1c6`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **seven modules with 125
-theorems and 0 sorry** (Lean 4.29.0, no Mathlib).  The suite provides
+The formal verification suite for `quiche` now covers **nine modules with 187
+theorems (186 proved, 1 sorry)** (Lean 4.29.0, no Mathlib). Run 38 added the
+ninth target: `decode_pkt_num` (RFC 9000 §A.3 packet number decoding), with 22
+theorems including the core RFC 9000 §17.1 congruence invariant and 7
+concrete test vectors. The suite continues to provide high-value verification
+of the QUIC stack's core algorithms without requiring Mathlib.
+
 machine-checked confidence in the QUIC varint codec, the RangeSet interval
 data structure, the Minmax running-minimum filter, the RTT estimator, the
 flow-control window manager, the NewReno congestion controller, and the
@@ -276,3 +281,25 @@ bound, important for backpressure).  A real implementation bug in the
 covered; (2) `peek_front_bytes` not modelled (requires byte-slice model);
 (3) `max_len=0` (immediately full) is consistent with the model but not
 separately exercised.
+
+---
+
+### Target 9: PacketNumDecode (22 theorems, 1 sorry)
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `decode_mod_win_exact` | mid | **high** | If the arithmetic model were wrong, the central RFC 9000 §17.1 invariant would fail. Proves the decoded number carries the right low-order bits. |
+| `test_vector_rfc_example` + 6 others | low | medium | 7 concrete test vectors cross-validate the model against quiche's own test suite. Any discrepancy in the arithmetic model would surface here. |
+| `candidate_lt_expected_plus_win` / `expected_lt_candidate_plus_win` | low | medium | Structural bounds on candidate proximity to expected_pn; used in branch-2 upper bound. |
+| `decode_branch2_upper` | mid | medium | Downward-adjustment result stays ≤ expected + hwin. Would catch an off-by-one in the branch condition. |
+| `decode_branch1_overflow_guard` | mid | **high** | Proves the overflow guard correctly prevents the result exceeding 2^62. A missing or wrong guard could allow illegal QUIC packet numbers in practice. |
+| `candidate_shift_win` | low | low | Structural monotonicity lemma. Useful for inductive arguments. |
+| `decode_pktnum_correct` | high | **high** | Main correctness theorem: under QUIC invariant, decode returns the right packet number. Currently sorry'd — the α=β case split needs additional lemmas. |
+| `decode_nonneg` | trivial | none | Trivially true for Nat; no bug-catching value. |
+
+**Overall assessment**: `PacketNumDecode` is a high-value target. The `decode_pkt_num` function is called for every received QUIC packet, and a decode error would result in dropped or misrouted packets, or a TLS decryption failure. The core congruence theorem is proved; the main gap is `decode_pktnum_correct` (1 sorry), which requires proving the arithmetic model and the bitwise model are equivalent (divergence Q1 in CORRESPONDENCE.md) plus a three-way case split.
+
+**Highest-value next step**: prove `decode_pktnum_correct` by:
+1. Adding a lemma `candidate_arith_eq_bitwise` proving the arithmetic and bitwise definitions agree for power-of-two windows.
+2. Adding `pnWin_double : pnWin pn_len = 2 * pnHwin pn_len` (pnWin is even).
+3. Completing the α=β case analysis using the proximity bounds.
