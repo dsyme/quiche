@@ -54,31 +54,27 @@
 - **File**: `quiche/src/recovery/congestion/prr.rs`
 - **Phase**: 5 — COMPLETE (20 theorems, 0 sorry)
 - **Lean file**: `FVSquad/PRR.lean`
-- **Informal spec**: `specs/prr_informal.md`
-- **Key theorems**:
-  - `prr_mode_snd_cnt_formula`: exact RFC 6937 PRR formula
-  - `prr_mode_snd_cnt_le_ratio`: rate-control bound
-  - `ssrb_snd_cnt_le_gap`: SSRB bounded by ssthresh gap
-  - `ssrb_snd_cnt_ge_min_gap_mss`: SSRB permits at least one MSS
-- **PR**: #30 (merged, run 36 → run 37 baseline)
+- **PR**: #30 (merged)
 
 ### 9. Packet number decode (RFC 9000 App. A.3)
 - **File**: `quiche/src/packet.rs` — `decode_pkt_num`
-- **Phase**: 5 — COMPLETE (21 theorems, 0 sorry)
+- **Phase**: 5 — COMPLETE (24 theorems, 0 sorry)
 - **Lean file**: `FVSquad/PacketNumDecode.lean`
 - **Informal spec**: `specs/packet_num_decode_informal.md`
 - **Key theorems**:
   - `decode_mod_win_exact`: lower bits preserved (core RFC 9000 §17.1)
-  - `decode_branch1/2_upper/lower`: proximity bounds (nearest-candidate guarantee)
-  - 5 concrete test vectors aligned with quiche test suite
-- **PR**: run37 branch `lean-squad-run37-23976038343-pktnum-decode` (pending merge)
+  - `decode_pktnum_correct`: FULLY PROVED (run 39) — 3-way window-quotient case split
+  - `mul_uniq_in_range`: helper for unique-multiple-in-interval argument
+  - 7 concrete test vectors aligned with quiche test suite
+- **PR**: branch `lean-squad-run39-23983513602-pktnum-prove` (run 39, pending)
+- **FINDING**: Original hprox2 was too weak (≤ should be <). Corrected + added hoverflow + hwin_le.
 
 ## Open PRs / Branches
-- Branch `lean-squad-run37-23976038343-pktnum-decode` — PacketNumDecode.lean (run 37, pending)
+- Branch `lean-squad-run39-23983513602-pktnum-prove` — PacketNumDecode.lean (run 39, pending)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
-- `split_ifs` NOT available without Std — use `split` on if-expressions
+- `split_ifs` NOT available without Std — use `split` or `by_cases`
 - `push_neg` NOT available — use `Nat.le_of_not_gt` or `omega` instead
 - `simp only [range_insert_go.eq_def]` LOOPS — use `unfold range_insert_go`
 - `List.mem_cons_self` takes NO explicit args (zero explicit args)
@@ -86,39 +82,45 @@
 - `bif` is a RESERVED KEYWORD in Lean 4 — do not use as variable name
 - `conv_rhs` tactic: NOT available without Mathlib — use explicit `have` + `rw`
 - `set` tactic: NOT available without Std4/Mathlib — use explicit `have` to name subexpressions
-- `positivity` tactic: NOT available without Mathlib
-- `ring` tactic: NOT available without Mathlib
-- `linarith` tactic: NOT available without Mathlib
-- omega CANNOT prove `(a + n) % n = a % n` for symbolic n → use `Nat.add_mod_right`
-- omega CANNOT prove `(k*n + m) % n = m % n` for symbolic n → use `mul_add_mod_left` induction
+- `positivity` / `ring` / `linarith` / `nlinarith` NOT available without Mathlib
+- omega CANNOT prove `(a + n) % n = a % n` → use `Nat.add_mod_right`
 - omega CANNOT prove nonlinear goals with two symbolic multiplied variables
-- **α-trick for proximity proofs**: introduce `α := (expected/win)*win` as explicit existential;
-  omega sees only linear constraints and α cancels from both sides
-- **hcsa bridge**: `have hcsa : cand - win + win = cand := by omega` (using h3 : cand ≥ win)
-  allows omega to handle Nat subtraction when both sides appear in the goal
-- `Nat.div_add_mod (m n : Nat) : n * (m / n) + m % n = m` (divisor first — note argument order)
-- `Nat.mul_mod_right (m n : Nat) : m * n % m = 0` (m first, not n)
+- **Nat.pos_pow_of_pos DOES NOT EXIST** — use `Nat.two_pow_pos` for powers of 2
+- **`Nat.dvd_sub'` DOES NOT EXIST** in Lean 4.29 core — use `obtain ⟨k,h⟩` + `Nat.mul_sub`
+- **`Nat.mul_sub (n m k : Nat) : n * (m - k) = n * m - n * k`** — available ✓
+- **`Nat.succ_mul : Nat.succ n * m = n * m + m`** — use for `(k+1)*n = k*n+n` rewrites
+- **`Nat.le_of_mul_le_mul_left : c * a ≤ c * b → 0 < c → a ≤ b`** (note arg order: c*a, c*b)
+- **`Nat.lt_of_mul_lt_mul_left : k * a < k * b → a < b`** (no pos hypothesis needed)
+- **`Nat.add_div_right (x : Nat) {z : Nat} (h : 0 < z) : (x + z) / z = x / z + 1`**
+- **`mul_uniq_in_range` proof pattern**: establish `n * (a/n) = a` via `Nat.div_add_mod + simpa`;
+  then `hq_lo` via `Nat.mul_add + Nat.mul_one + omega + Nat.le_of_mul_le_mul_left`;
+  then `hq_hi` via `Nat.mul_add + omega + Nat.lt_succ_iff.mp + Nat.lt_of_mul_lt_mul_left`;
+  conclude `rw [← hqa, hq_eq, Nat.mul_add, Nat.mul_one, hqb]`
+- **`decode_pktnum_correct` proof pattern**: provide `hα_sum` (via `Nat.div_add_mod`),
+  `hβ_sum` (via `Nat.div_add_mod + hmod`), `h2hwin : 2 * hwin ≤ win` (omega from unfold pnHwin);
+  3-way `rcases Nat.lt_or_ge` case split on quotients;
+  use `mul_uniq_in_range` + `rw [Nat.succ_mul] at hle` for upper bound;
+  use `by_cases + exfalso + omega` for impossible branches
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
-- TARGETS.md: 9 targets (PacketNumDecode added run 37), all at Phase 5
-- CORRESPONDENCE.md: updated run 37 (all 9 Lean files documented)
-- CRITIQUE.md: updated run 37 (166 theorems assessed, PRR + PacketNumDecode sections added)
+- TARGETS.md: 9 targets, all at Phase 5 Complete (0 sorry)
+- CORRESPONDENCE.md: updated run 39 (all 9 Lean files documented)
+- CRITIQUE.md: updated run 39 (190 theorems assessed, 0 sorry)
 
-## Status Issue: #4 (open), needs update for run 37
+## Status Issue: #4 (open), needs update for run 39
 
 ## Summary
-- **166 total theorems, 0 sorry** across 9 files
+- **190 total theorems, 0 sorry** across 9 files
 - Varint: 10 | RangeSet: 16 | Minmax: 15 | RttStats: 23 | FlowControl: 22
-  NewReno: 13 | DatagramQueue: 26 | PRR: 20 | PacketNumDecode: 21
+  NewReno: 13 | DatagramQueue: 26 | PRR: 20 | PacketNumDecode: 24
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
 - FVSquad.lean imports all 9 modules
 
-## Next Priorities
-1. **Packet number uniqueness** — prove decoded number is the *unique* candidate
-   within pkt_hwin of expected_pn congruent to truncated_pn mod pkt_win
-2. **PacketNumDecode overflow guard** — model `candidate < (1<<62) - pkt_win`
-3. **NewReno AIMD growth rate** — multi-callback accumulation theorem
-4. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
-5. **Cubic congestion** — `cubic_k` and `w_cubic` (uses f64; model as rational?)
+## Next Priorities (all 9 targets fully proved — new targets needed)
+1. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
+2. **NewReno AIMD growth rate** — multi-callback accumulation theorem
+3. **Cubic congestion** — `cubic_k` and `w_cubic` (uses f64; model as rational?)
+4. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
+5. **BBRv2 implementation** — gcongestion module (complex, but high value)
