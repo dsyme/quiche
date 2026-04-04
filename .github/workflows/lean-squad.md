@@ -35,12 +35,15 @@ network:
     - github
     - "arxiv.org"
     - "leanprover-community.github.io"
-    - "release.leanlang.org"
-    - "release.lean-lang.org"
-    - "releases.lean-lang.org"
+    - "leanlang.org"
+    - "lean-lang.org"
     - ocaml
     - "releaseassets.githubusercontent.com"
     - "raw.githubusercontent.com"  # required: elan installer bootstrap script
+
+checkout:
+  fetch: ["*"]      # fetch all remote branches
+  fetch-depth: 0   # fetch full history
 
 tools:
   web-fetch:
@@ -227,7 +230,7 @@ steps:
           json.dump(result, f, indent=2)
       EOF
 
-source: githubnext/agentics/workflows/lean-squad.md@7ee2b60744abf71b985bead4599640f165edcd93
+source: githubnext/agentics/workflows/lean-squad.md@4b17e80c4ba005a7d9b3507ca5facf9d1fce3b66
 ---
 
 # Lean Squad
@@ -576,8 +579,8 @@ This is a reflective task. The goal is not to prove more things, but to evaluate
      - **Date**: YYYY-MM-DD HH:MM UTC
      - **Commit**: `<SHA>`
      ```
-   - **Overall assessment**: 2–4 sentences on the current state of formal verification and its utility.
-   - **Proved theorems** table: theorem name, file, level (low/mid/high), bug-catching potential (low/medium/high), notes.
+   - **Overall assessment**: 2–4 sentences on the current state of formal verification and its utility. Include links to proofs and code where relevant.
+   - **Proved theorems** table: theorem name (with link), file, level (low/mid/high), bug-catching potential (low/medium/high), code link, notes. Link each theorem to the corresponding Lean proofs and Rust code it relates to.
    - **Gaps and recommendations**: what should be proved next and why — prioritised by impact.
    - **Concerns**: any theorems that look proved but may be vacuous due to model approximations (cross-reference CORRESPONDENCE.md).
    - **Positive findings**: highlight any case where FV revealed or confirmed something non-obvious.
