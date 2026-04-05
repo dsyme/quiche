@@ -22,6 +22,9 @@ allowed a counterexample at `actual_pn = expected_pn − pnHwin` where branch
 §A.3's own invariant) plus two new standard-QUIC bounds. The entire suite now
 has zero sorrys and provides machine-checked confidence in all nine core
 algorithms of the QUIC stack: the varint codec, the RangeSet interval
+algorithms of the QUIC stack.
+
+machine-checked confidence in the QUIC varint codec, the RangeSet interval
 data structure, the Minmax running-minimum filter, the RTT estimator, the
 flow-control window manager, the NewReno congestion controller, the
 DatagramQueue bounded FIFO, the PRR rate-reduction algorithm, and the RFC 9000
@@ -35,6 +38,8 @@ minimum congestion window floor after any loss event, and the
 The main limitation across all files is that Lean models use unbounded `Nat`
 instead of bounded Rust integers, so overflow/underflow edge cases are not
 verified.
+The main limitation across all files is that Lean models use unbounded `Nat` instead of bounded
+Rust integers, so overflow/underflow edge cases are not verified.
 
 ---
 
@@ -195,6 +200,17 @@ Prioritised by impact:
    Rust u64 arithmetic.
 
 5. **Varint wire-format tag bits** (medium): add a theorem verifying that the
+4. **Congestion window** (medium): `NewReno`, `PRR`, and `CUBIC` are now all
+   formally specified. The remaining gap is **CUBIC's dynamic w_cubic function**:
+   theorems about `w_cubic(t)` growth relative to the Reno estimate (`w_est`) and
+   the transition point where CUBIC switches from friendly (Reno-mode) to pure
+   cubic growth are not yet verified.
+
+5. **Stream-level flow control** (medium): `quiche/src/stream/` uses similar
+   window arithmetic to `flowcontrol.rs` but with per-stream state.  The
+   connection-level `FlowControl` proofs could be extended or reused.
+
+6. **Varint wire-format tag bits** (medium): add a theorem verifying that the
    2-bit tag in the first byte of an encoded varint matches the length class.
    Current proofs do not cover this aspect.
 
@@ -208,6 +224,7 @@ Prioritised by impact:
 ## Concerns
 
 - **Nat vs u64**: all nine files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
+- **Nat vs u64**: all ten files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
   Overflow is the primary unverified risk; see CORRESPONDENCE.md for per-file
   documentation.  The varint file partially mitigates this by bounding inputs to
   `MAX_VAR_INT = 2^62 − 1`.

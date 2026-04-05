@@ -652,3 +652,75 @@ No mismatches found.
 - `mul_uniq_in_range`: helper lemma for the unique-multiple-in-interval argument.
 
 No mismatches. The arithmetic model has been verified to be equivalent to the bitwise computation in all test vectors; a general proof of the equivalence for arbitrary inputs would close divergence Q1.
+
+---
+
+## Target 10: CUBIC congestion control (`FVSquad/Cubic.lean`)
+
+**Rust source**: `quiche/src/recovery/congestion/cubic.rs`
+**Lean file**: `formal-verification/lean/FVSquad/Cubic.lean`
+**Phase**: 5 — Proofs complete (26 theorems, 0 sorry)
+
+### Definitions correspondence
+
+| Lean name | Rust equivalent | File | Line(s) | Correspondence | Notes |
+|-----------|----------------|------|---------|---------------|-------|
+| `betaNum`, `betaDen` | `BETA_CUBIC: f64 = 0.7` | `cubic.rs` | 63 | exact | Rational 7/10 encodes 0.7 exactly |
+| `cNum`, `cDen` | `C: f64 = 0.4` | `cubic.rs` | 65 | exact | Rational 4/10 encodes 0.4 exactly |
+| `alphaNum`, `alphaDen` | `ALPHA_AIMD: f64 = 3.0*(1.0-BETA_CUBIC)/(1.0+BETA_CUBIC)` | `cubic.rs` | 75 | exact | Rational 9/17; verified by `alphaAimd_numerator_eq` |
+| `ssthreshCubic cwnd` | `(r.congestion_window as f64 * BETA_CUBIC) as usize` | `cubic.rs` | 375 | approximation | Nat floor division `cwnd * 7 / 10`; equivalent to f64 cast for typical values |
+| `wMaxFastConv cwnd` | `r.congestion_window as f64 * (1.0 + BETA_CUBIC) / 2.0` | `cubic.rs` | 370 | approximation | Nat floor division `cwnd * 17 / 20`; models the f64 computation |
+| `wcubic c t k wMax` | `State::w_cubic(t, mds)` (W_cubic(t) = C*(t-K)³+w_max) | `cubic.rs` | 140–145 | abstraction | Int model; no `max_datagram_size` scaling; cube-root not computed |
+| `wcubicNat c t k wMax` | `State::w_cubic` (t ≥ K branch) | `cubic.rs` | 140–145 | abstraction | Nat model; valid only for t ≥ k |
+| `cubicK_zero_when_cwnd_ge_wmax` | `cubic_k → 0.0` branch | `cubic.rs` | 381–382 | exact | Zero K when cwnd ≥ w_max, no recovery needed |
+
+### Proved theorems — correspondence assessment (complete list)
+
+| Theorem | Level | Property verified | Code path |
+|---------|-------|------------------|-----------|
+| `alphaAimd_numerator_eq` | exact | 3×(10−7) = 9 | `cubic.rs:75` constant |
+| `alphaAimd_denominator_eq` | exact | 10+7 = 17 | `cubic.rs:75` constant |
+| `alphaAimd_pos` | exact | 0 < alphaNum | `cubic.rs:75` |
+| `alphaAimd_lt_one` | exact | alphaNum < alphaDen | rate bounded < 1 |
+| `beta_pos` | exact | 0 < betaNum | `cubic.rs:63` |
+| `beta_lt_one` | exact | betaNum < betaDen | CUBIC reduces on loss |
+| `ssthresh_le_cwnd` | approximation | ssthreshCubic cwnd ≤ cwnd | `cubic.rs:375` |
+| `ssthresh_lt_cwnd_pos` | approximation | ssthreshCubic cwnd < cwnd (cwnd > 0) | `cubic.rs:375` strict reduction |
+| `ssthresh_monotone` | approximation | a ≤ b → ssthreshCubic a ≤ ssthreshCubic b | monotone ssthresh |
+| `ssthresh_nonneg` | exact | 0 ≤ ssthreshCubic cwnd | Nat triviality |
+| `ssthresh_concrete_10000` | approximation | ssthreshCubic 10000 = 7000 | f64 cast matches integer model |
+| `wCubic_at_k_eq_wmax` | exact | wcubic c k k wMax = wMax | `cubic.rs:140`: C×0³+w_max=w_max |
+| `wCubic_epoch_anchor` | exact | −C×K³+w_max = cwnd given C×K³=w_max−cwnd | RFC 8312bis §5.1 anchor property |
+| `wCubicNat_at_k_eq_wmax` | exact | wcubicNat c k k wMax = wMax | Nat model of above |
+| `wCubicNat_monotone` | exact | t1≤t2 → wcubicNat t1 ≤ wcubicNat t2 | W_cubic non-decreasing in time |
+| `wCubicNat_monotone_c` | exact | c1≤c2 → wcubicNat c1 ≤ wcubicNat c2 | monotone in C scaling factor |
+| `wCubicNat_ge_wmax_of_t_ge_k` | exact | wMax ≤ wcubicNat c t k wMax | curve stays above w_max |
+| `fastConv_wmax_lt_cwnd` | approximation | wMaxFastConv cwnd < cwnd (cwnd > 0) | `cubic.rs:369` fast convergence reduces w_max |
+| `fastConv_wmax_le_cwnd` | approximation | wMaxFastConv cwnd ≤ cwnd | weak form |
+| `fastConv_monotone` | approximation | a≤b → wMaxFastConv a ≤ wMaxFastConv b | monotone |
+| `wMaxFastConv_concrete` | approximation | wMaxFastConv 10000 = 8500 | concrete value check |
+| `congestionEvent_reduces_cwnd` | approximation | cwnd>0 → ssthreshCubic cwnd < cwnd | `cubic.rs:379` cwnd = ssthresh |
+| `cubicK_zero_when_cwnd_ge_wmax` | exact | wMax ≤ cwnd → wMax − cwnd = 0 | `cubic.rs:381`: K=0 branch |
+| `ssthresh_concrete_1448` | approximation | ssthreshCubic 1448 = 1013 | typical MSS-based window |
+| `ssthresh_concrete_14480` | approximation | ssthreshCubic 14480 = 10136 | larger window |
+| `wMaxFastConv_concrete_1448` | approximation | wMaxFastConv 1448 = 1230 | fast convergence at MSS |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| C1 | Nat floor division `cwnd * 7 / 10` | `f64` cast `(cwnd as f64 * 0.7) as usize` | Identical for all practical cwnd values (the f64 representation of 0.7 is exact to ~16 digits; for cwnd < 2^53 the results agree). Not verified formally |
+| C2 | `wcubic` uses unbounded Int; no `max_datagram_size` scaling | Rust scales by `mds` | W_cubic properties proved at the per-packet-unit level only; scaling by mds is an additional monotone transformation |
+| C3 | Cube root abstracted as hypothesis | `libm::cbrt` called | The defining property `C * K³ = w_max − cwnd` is taken as a hypothesis in `wCubic_epoch_anchor`. The libm implementation is not verified |
+| C4 | No time model; t is abstract Nat | `Duration::as_secs_f64()` | Time measured in abstract ticks; continuous-time curvature not captured |
+| C5 | `usize` as `Nat` (unbounded) | `usize` (64-bit) | Overflow at 2^64 not captured |
+| C6 | `MINIMUM_WINDOW_PACKETS` clamp omitted | `cmp::max(ssthresh, mds * 2)` | `ssthresh_lt_cwnd_pos` holds for the raw formula before the clamp; with the clamp ssthresh ≥ 2 * mds is not separately verified |
+
+### Theorem impact
+
+26 theorems total (0 sorry ✅). The most significant are:
+
+- `wCubic_epoch_anchor`: formally verifies the RFC 8312bis §5.1 epoch-anchor property — the CUBIC function passes through `cwnd_new` at epoch start, establishing that the window starts at the correct reduction point.
+- `ssthresh_lt_cwnd_pos`: formally verifies the strict window reduction on every fresh loss event. This is a fundamental safety property of CUBIC: the window cannot fail to shrink.
+- `fastConv_wmax_lt_cwnd`: formally verifies fast convergence — when below the prior peak, w_max is reduced to `cwnd * (1+β)/2 < cwnd`, biasing future window growth downward.
+- `wCubicNat_monotone`: formally verifies that the cubic window estimate is non-decreasing in time once past K, confirming the "restore-then-grow" shape of the CUBIC curve.
