@@ -3,7 +3,7 @@
 ## Tool & Approach
 - **FV tool**: Lean 4 (v4.29.0, no Mathlib)
 - **Project**: `formal-verification/lean/` — `lake init FVSquad` (no Mathlib)
-- **CI**: `.github/workflows/lean-ci.yml` (added in PR #15, merged)
+- **CI**: `.github/workflows/lean-ci.yml` (added run 15; improved run 42: sorry-in-source step + workflow path trigger)
 
 ## Targets
 
@@ -59,11 +59,6 @@
 - **File**: `quiche/src/packet.rs` — `decode_pkt_num`
 - **Phase**: 5 — COMPLETE (24 theorems, 0 sorry)
 - **Lean file**: `FVSquad/PacketNumDecode.lean`
-- **Key theorems**:
-  - `decode_mod_win_exact`: RFC 9000 §17.1 congruence (FULLY PROVED)
-  - `decode_pktnum_correct`: FULLY PROVED (run 39) — 3-way window-quotient case split
-  - `mul_uniq_in_range`: helper for unique-multiple-in-interval argument
-  - 7 concrete test vectors aligned with quiche test suite
 - **PR**: #32 (merged)
 - **FINDING**: Original hprox2 was non-strict (≤); corrected to strict (<) + hoverflow + hwin_le
 
@@ -71,21 +66,33 @@
 - **File**: `quiche/src/recovery/congestion/cubic.rs`
 - **Phase**: 5 — COMPLETE (26 theorems, 0 sorry)
 - **Lean file**: `FVSquad/Cubic.lean`
-- **Informal spec**: `specs/cubic_informal.md`
+- **PR**: #36 (merged)
+
+### 11. RangeBuf offset arithmetic
+- **File**: `quiche/src/range_buf.rs`
+- **Phase**: 5 — COMPLETE (16 theorems, 0 sorry)
+- **Lean file**: `FVSquad/RangeBuf.lean`
 - **Key theorems**:
-  - `alphaAimd_numerator_eq` / `alphaAimd_denominator_eq`: ALPHA_AIMD=9/17 verified
-  - `ssthresh_lt_cwnd_pos`: strict window reduction on loss
-  - `wCubic_epoch_anchor`: RFC 8312bis §5.1 epoch-anchor (C*K³=w_max-cwnd → epoch anchor)
-  - `wCubicNat_monotone`: W_cubic non-decreasing for t ≥ K
-  - `fastConv_wmax_lt_cwnd`: fast convergence strictly reduces w_max
-  - `congestionEvent_reduces_cwnd`: cwnd > 0 → ssthresh < cwnd
-- **PR**: branch lean-squad-run41-23998622683-cubic-proofs-2db1adfc4c3ec411 (#36, pending)
+  - `max_off_eq`: max_off = off + len (definition consistency)
+  - `consume_max_off`: consume preserves max_off (key reassembler property)
+  - `split_adjacent`: left.max_off = right.off (perfect partition)
+  - `split_max_off`: right half preserves original max_off
+  - `consume_split_max_off`: compose consume+split preserves max_off
+- **PR**: run 42 (pending)
+
+### 12. Stream receive buffer (RecvBuf)
+- **File**: `quiche/src/stream/recv_buf.rs`
+- **Phase**: 2 — INFORMAL SPEC written
+- **Lean file**: not yet written
+- **Informal spec**: `specs/stream_recv_buf_informal.md`
+- **Notes**: BTreeMap-based out-of-order reassembly. Complex. Key invariants:
+  off ≤ len, non-overlapping chunks, FIN monotone, chunks ahead of off.
+  Approach for Lean: model as abstract list of (off, len) chunks.
 
 ## Open PRs / Branches
-- PR #33: run 39, PacketNumDecode proved (190→190 theorems)
-- PR #34: run 39, duplicate of #33
-- PR #35: run 40, CORRESPONDENCE.md + CRITIQUE.md updates
-- PR #36: run 41, Cubic.lean (26 theorems) + docs
+- Branch `lean-squad-run42-24006276151-rangebuf-ci-a3f8e2b1c9d47f0e` (run 42, pending)
+  Contains: RangeBuf.lean (16 theorems), stream_recv_buf_informal.md, TARGETS.md update,
+  lean-ci.yml improvements (sorry-in-source step + workflow path trigger)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -95,39 +102,38 @@
 - `List.mem_cons_self` takes NO explicit args (zero explicit args)
 - `lemma` keyword NOT available in Lean 4.29 without Mathlib — use `theorem`
 - `bif` is a RESERVED KEYWORD in Lean 4 — do not use as variable name
+- `at` is a RESERVED KEYWORD in Lean 4 — do not use as variable name
 - `conv_rhs` tactic: NOT available without Mathlib — use explicit `have` + `rw`
 - `set` tactic: NOT available without Std4/Mathlib — use explicit `have`
 - `ring` tactic: NOT available without Mathlib
 - `linarith` / `nlinarith`: NOT available without Mathlib
+- `le_refl` NOT available without Mathlib — use `Nat.le_refl`
 - omega handles Nat.div (e.g., `cwnd * 7 / 10 < cwnd` for cwnd > 0) ✅
-- `Nat.pow_le_pow_left hbase 3`: works for cubic monotonicity ✅
-- `Nat.mul_le_mul_left c hpow`: works for scaling ✅
-- `Nat.mul_le_mul_right k h`: also available ✅
-- `simp` closes `c * (k - k)^3 + wMax = wMax` (sub_self, zero_pow, mul_zero, zero_add)
-- omega treats `c * k3` (product of variables) as an atom — can use in linear hypotheses ✅
-- CUBIC: all f64 constants can be modelled as Nat fractions; omega handles floor div proofs
+- `Nat.pos_pow_of_pos DOES NOT EXIST` in Lean 4.29 — use `Nat.two_pow_pos` for powers of 2
+- **Unused variable warnings**: use `_h` instead of `h` for proof-only bounds
+- **grep -rh**: use `-h` flag to suppress filenames so `grep -v '^\s*--'` works
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
-- TARGETS.md: 10 targets, all at Phase 5 Complete (0 sorry)
-- CORRESPONDENCE.md: updated run 41 (all 10 Lean files documented)
-- CRITIQUE.md: updated run 41 (216 theorems, 0 sorry)
+- TARGETS.md: 12 targets; #1-11 at Phase 5, #12 at Phase 2
+- CORRESPONDENCE.md: last updated run 41 (10 files; RangeBuf not yet added)
+- CRITIQUE.md: last updated run 41 (216 theorems assessed)
 
-## Status Issue: #4 (open), updated run 41
+## Status Issue: #4 (open), updated run 42
 
 ## Summary
-- **216 total theorems, 0 sorry** across 10 files
+- **232 total theorems, 0 sorry** across 11 files (run 42: +16 from RangeBuf.lean)
 - Varint: 10 | RangeSet: 16 | Minmax: 15 | RttStats: 23 | FlowControl: 22
   NewReno: 13 | DatagramQueue: 26 | PRR: 20 | PacketNumDecode: 24 | Cubic: 26
+  RangeBuf: 16
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
-- FVSquad.lean imports all 10 modules
+- FVSquad.lean imports all 11 modules
 
-## Next Priorities (all 10 targets fully proved — new targets needed)
-1. **RangeSet semantic completeness** — `flatten(insert(rs,r)) = set_union`
-2. **CUBIC W_est / TCP-friendliness** — prove w_est tracks Reno growth correctly;
-   the switch between CUBIC and Reno modes (w_cubic(t) < w_est) is not yet modelled
-3. **Stream receive buffer** — `quiche/src/stream/recv_buf.rs`
-   BTreeMap-based out-of-order reassembly; key: no data lost, no duplicates, off monotone
-4. **NewReno AIMD growth rate** — multi-callback accumulation theorem
-5. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
+## Next Priorities
+1. **RecvBuf Lean spec** — advance target #12 to Phase 3 using RangeBuf.lean
+   as a foundation. Key: model buffer as list of non-overlapping (off, len)
+   pairs; prove off_le_len invariant, write_monotone_len, is_fin_at_off
+2. **CORRESPONDENCE.md update** — add RangeBuf entry (run 42 target)
+3. **NewReno AIMD accumulation** — multi-step induction: sum of pkt_sizes = cwnd → cwnd += mds
+4. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
