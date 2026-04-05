@@ -4,31 +4,29 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-04 13:20 UTC
-- **Commit**: `5c95b1c6`
+- **Date**: 2026-04-05 09:30 UTC
+- **Commit**: `feecd68d`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **nine modules with 187
-theorems (186 proved, 1 sorry)** (Lean 4.29.0, no Mathlib). Run 38 added the
-ninth target: `decode_pkt_num` (RFC 9000 §A.3 packet number decoding), with 22
-theorems including the core RFC 9000 §17.1 congruence invariant and 7
-concrete test vectors. The suite continues to provide high-value verification
-of the QUIC stack's core algorithms without requiring Mathlib.
-
-machine-checked confidence in the QUIC varint codec, the RangeSet interval
-data structure, the Minmax running-minimum filter, the RTT estimator, the
-flow-control window manager, the NewReno congestion controller, and the
-DatagramQueue bounded FIFO.  The most valuable results are the
-`varint_round_trip` property (encode/decode identity), the
-`RangeSet.insert_preserves_invariant` structural invariant, the
-`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing
-attack, and the NewReno `cwnd_floor_new_event` property that guarantees the
-minimum congestion window floor after any loss event.  The main limitation
-across all files is that Lean models use unbounded `Nat` instead of bounded
-Rust integers, so overflow/underflow edge cases are not verified.
+The formal verification suite for `quiche` now covers **ten modules with 216
+theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Run 41 added `Cubic.lean` (26
+theorems) covering the CUBIC congestion controller's core mathematical
+properties: the RFC 8312bis §5.1 epoch-anchor property (`wCubic_epoch_anchor`),
+strict window reduction on loss (`ssthresh_lt_cwnd_pos`), fast convergence
+(`fastConv_wmax_lt_cwnd`), W_cubic monotonicity, and exact verification of the
+ALPHA_AIMD constant. Together with the existing NewReno and PRR coverage, all
+three congestion controllers in quiche are now formally specified. The suite
+provides machine-checked confidence in the core arithmetic of the QUIC varint
+codec, the RangeSet interval data structure, the Minmax running-minimum filter,
+the RTT estimator, the flow-control window manager, the NewReno congestion
+controller, the DatagramQueue bounded FIFO, the PRR rate-reduction algorithm,
+the RFC 9000 §A.3 packet number decoder, and the CUBIC congestion controller.
+The main limitation across all files is that Lean models use unbounded `Nat`
+instead of bounded Rust integers, so overflow/underflow edge cases are not
+verified.
 
 ---
 
@@ -171,10 +169,11 @@ Prioritised by impact:
    varint limit.  This closes the one known gap between the Lean model and the
    Rust u64 arithmetic.
 
-4. **Congestion window** (high): `quiche/src/recovery/congestion/` contains
-   the CUBIC and New Reno implementations.  Key properties: window only grows
-   after ACK; window halves on loss; window ≥ minimum congestion window.  This
-   is an important new target.
+4. **Congestion window** (medium): `NewReno`, `PRR`, and `CUBIC` are now all
+   formally specified. The remaining gap is **CUBIC's dynamic w_cubic function**:
+   theorems about `w_cubic(t)` growth relative to the Reno estimate (`w_est`) and
+   the transition point where CUBIC switches from friendly (Reno-mode) to pure
+   cubic growth are not yet verified.
 
 5. **Stream-level flow control** (medium): `quiche/src/stream/` uses similar
    window arithmetic to `flowcontrol.rs` but with per-stream state.  The
@@ -188,7 +187,7 @@ Prioritised by impact:
 
 ## Concerns
 
-- **Nat vs u64**: all five files model Rust `u64` values as Lean `Nat` (unbounded).
+- **Nat vs u64**: all ten files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
   Overflow is the primary unverified risk; see CORRESPONDENCE.md for per-file
   documentation.  The varint file partially mitigates this by bounding inputs to
   `MAX_VAR_INT = 2^62 − 1`.
@@ -284,7 +283,7 @@ separately exercised.
 
 ---
 
-### Target 9: PacketNumDecode (22 theorems, 1 sorry)
+### Target 9: PacketNumDecode (24 theorems, 0 sorry) ✅
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
@@ -294,12 +293,57 @@ separately exercised.
 | `decode_branch2_upper` | mid | medium | Downward-adjustment result stays ≤ expected + hwin. Would catch an off-by-one in the branch condition. |
 | `decode_branch1_overflow_guard` | mid | **high** | Proves the overflow guard correctly prevents the result exceeding 2^62. A missing or wrong guard could allow illegal QUIC packet numbers in practice. |
 | `candidate_shift_win` | low | low | Structural monotonicity lemma. Useful for inductive arguments. |
-| `decode_pktnum_correct` | high | **high** | Main correctness theorem: under QUIC invariant, decode returns the right packet number. Currently sorry'd — the α=β case split needs additional lemmas. |
+| `decode_pktnum_correct` | high | **high** | Main correctness theorem: under QUIC invariant, decode returns the right packet number. **FULLY PROVED** (run 39) via 3-way window-quotient case split with `mul_uniq_in_range`. |
+| `mul_uniq_in_range` | low | low | Helper: unique-multiple-in-interval lemma. Used internally by `decode_pktnum_correct`. |
 | `decode_nonneg` | trivial | none | Trivially true for Nat; no bug-catching value. |
 
-**Overall assessment**: `PacketNumDecode` is a high-value target. The `decode_pkt_num` function is called for every received QUIC packet, and a decode error would result in dropped or misrouted packets, or a TLS decryption failure. The core congruence theorem is proved; the main gap is `decode_pktnum_correct` (1 sorry), which requires proving the arithmetic model and the bitwise model are equivalent (divergence Q1 in CORRESPONDENCE.md) plus a three-way case split.
+**Findings from run 39**: During the proof of `decode_pktnum_correct` an
+**edge case was discovered**: the original theorem statement had `hprox2 :
+largest_pn + 1 ≤ actual_pn + pnHwin` (non-strict). A counterexample exists at
+`actual_pn = expected_pn − pnHwin` where branch 1 fires and returns
+`actual_pn + win` instead of `actual_pn`. This is a genuine divergence between
+the arithmetic Lean model and the RFC 9000 §A.3 invariant, which uses a strict
+lower bound (`actual_pn > expected_pn − pn_hwin`). The theorem was corrected to
+use strict `<` plus bounds `hoverflow : actual_pn < 2^62` and `hwin_le :
+pnWin ≤ 2^62` (both always satisfied in real QUIC usage).
 
-**Highest-value next step**: prove `decode_pktnum_correct` by:
-1. Adding a lemma `candidate_arith_eq_bitwise` proving the arithmetic and bitwise definitions agree for power-of-two windows.
-2. Adding `pnWin_double : pnWin pn_len = 2 * pnHwin pn_len` (pnWin is even).
-3. Completing the α=β case analysis using the proximity bounds.
+**Overall assessment**: `PacketNumDecode` is now fully verified. The
+`decode_pkt_num` function is called for every received QUIC packet, and a
+decode error would result in dropped or misrouted packets. The proof covers
+the complete RFC 9000 §A.3 correctness argument for all three window-shift
+cases (upward adjustment, downward adjustment, no adjustment).
+
+---
+
+### Target 10: CUBIC congestion control (`FVSquad/Cubic.lean`) — 26 theorems, 0 sorry ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `alphaAimd_numerator_eq` | low | medium | Exact verification of the ALPHA_AIMD constant formula. Would catch a transcription error in the Rust constant |
+| `alphaAimd_denominator_eq` | low | medium | Denominators are consistent across the rational representation |
+| `alphaAimd_pos` / `alphaAimd_lt_one` | low | medium | ALPHA_AIMD ∈ (0, 1): ensures CUBIC's TCP-friendliness factor is well-bounded |
+| `beta_pos` / `beta_lt_one` | low | medium | BETA_CUBIC ∈ (0, 1): guarantees the window is reduced — not set to zero or left unchanged |
+| `ssthresh_le_cwnd` | mid | **high** | ssthresh ≤ cwnd after loss: CUBIC cannot increase the congestion window on a loss event. A bug that accidentally multiplied by a factor > 1 would be caught |
+| `ssthresh_lt_cwnd_pos` | mid | **high** | Strict reduction: cwnd > 0 → ssthresh < cwnd. Prevents CUBIC from being a no-op on loss |
+| `ssthresh_monotone` | mid | medium | Larger cwnd → larger ssthresh: the threshold scale correctly with window size |
+| `ssthresh_concrete_{10000,1448,14480}` | low | medium | Concrete value checks validating the Nat floor-division model matches the f64 cast |
+| `wCubic_at_k_eq_wmax` | mid | **high** | W_cubic(K) = w_max: the cubic curve passes through w_max at exactly time K. A wrong K calculation would violate this |
+| `wCubic_epoch_anchor` | mid | **high** | W_cubic(0) = cwnd: the epoch-anchor property from RFC 8312bis §5.1. This formally verifies the key invariant that ties K to the current window |
+| `wCubicNat_at_k_eq_wmax` | mid | high | Nat-model version of the above |
+| `wCubicNat_monotone` | mid | **high** | W_cubic is non-decreasing for t ≥ K: confirms the intended "restore-then-grow" window shape. A sign error in the cubic formula would break this |
+| `wCubicNat_monotone_c` | low | medium | Monotone in the C scaling factor |
+| `wCubicNat_ge_wmax_of_t_ge_k` | mid | medium | W_cubic ≥ w_max always: the cubic curve stays above the target. Useful for proving Reno-friendliness arguments |
+| `fastConv_wmax_lt_cwnd` | mid | **high** | Fast convergence strictly reduces w_max below cwnd: prevents CUBIC from "forgetting" that it needs to converge when sharing a bottleneck |
+| `fastConv_wmax_le_cwnd` / `fastConv_monotone` | low | low | Monotonicity and weak bound |
+| `wMaxFastConv_concrete` / `wMaxFastConv_concrete_1448` | low | medium | Concrete fast-convergence values |
+| `congestionEvent_reduces_cwnd` | mid | **high** | The state after a congestion event has cwnd < prev_cwnd. The critical CUBIC safety property |
+| `cubicK_zero_when_cwnd_ge_wmax` | low | medium | K=0 when window is already at or above w_max: no recovery phase needed |
+
+**Assessment**: High utility. The most significant theorems are `ssthresh_lt_cwnd_pos`
+(window strictly shrinks on loss), `wCubic_epoch_anchor` (RFC 8312bis epoch-anchor
+invariant), and `wCubicNat_monotone` (cubic curve shape). These three together
+formally establish the key safety and liveness properties of CUBIC. **Gaps**:
+(1) The transition from CUBIC-mode to TCP-friendliness (Reno-mode via `w_est`)
+is not modelled; (2) HyStart++ interactions are fully abstracted; (3) The
+continuous-time derivative argument (why CUBIC is smooth) is not captured;
+(4) `f64 → usize` rounding vs Nat floor-division equivalence not formally proved.
