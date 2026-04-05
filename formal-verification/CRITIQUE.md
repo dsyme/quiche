@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-04 17:28 UTC
-- **Commit**: `497d6487`
+- **Date**: 2026-04-05 03:46 UTC
+- **Commit**: `8f8e2881`
 
 ---
 
@@ -21,6 +21,7 @@ allowed a counterexample at `actual_pn = expected_pn − pnHwin` where branch
 1 fires erroneously. The corrected theorem uses strict `<` (matching RFC 9000
 §A.3's own invariant) plus two new standard-QUIC bounds. The entire suite now
 has zero sorrys and provides machine-checked confidence in all nine core
+algorithms of the QUIC stack: the varint codec, the RangeSet interval
 algorithms of the QUIC stack.
 
 machine-checked confidence in the QUIC varint codec, the RangeSet interval
@@ -34,6 +35,9 @@ DatagramQueue bounded FIFO, the PRR rate-reduction algorithm, and the RFC 9000
 attack, the NewReno `cwnd_floor_new_event` property that guarantees the
 minimum congestion window floor after any loss event, and the
 `decode_pktnum_correct` theorem proving RFC 9000 §A.3 proximity correctness.
+The main limitation across all files is that Lean models use unbounded `Nat`
+instead of bounded Rust integers, so overflow/underflow edge cases are not
+verified.
 The main limitation across all files is that Lean models use unbounded `Nat` instead of bounded
 Rust integers, so overflow/underflow edge cases are not verified.
 
@@ -63,31 +67,33 @@ there would corrupt the wire format without failing `round_trip`.
 
 ---
 
-### `FVSquad/RangeSet.lean` — 14 theorems
+### `FVSquad/RangeSet.lean` — 16 theorems
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
-| `insert_preserves_invariant` | high | **high** | Sorted + disjoint + merged invariant |
-| `insert_mem` | high | **high** | Inserted range is in the result |
-| `insert_superset` | mid | medium | Existing ranges survive insertion |
-| `sorted_cons` | low | low | Helper for invariant reasoning |
-| `ranges_sorted` | mid | medium | Structural invariant on the list |
-| `ranges_nonempty` | mid | medium | No empty intervals stored |
-| `range_insert_monotone` | mid | medium | Insert only grows the set |
-| `empty_inv` | low | low | Constructor postcondition |
-| `insert_go_result_sorted` | mid | medium | Internal helper well-behaved |
-| `contains_after_insert` | high | **high** | Membership correct after insert |
-| `invariant_after_multiple_inserts` | high | **high** | Stability under repeated ops |
-| `merge_preserves_lower` | mid | medium | Merge doesn't lose the lower bound |
-| `no_empty_range` | low | low | Helper lemma |
-| `sorted_tail_preserved` | low | low | Structural helper |
+| `insert_preserves_invariant` | high | **high** | `sorted_disjoint` maintained by `range_insert` — core structural guarantee |
+| `insert_covers_union` | high | **high** | Semantic completeness: inserted range is covered by result (within no-eviction bound) |
+| `remove_until_removes_small` | high | **high** | No value ≤ largest survives `range_remove_until` — direct ACK dedup safety property |
+| `remove_until_preserves_large` | high | **high** | Covered values above threshold are retained — liveness guarantee |
+| `remove_until_preserves_invariant` | mid | **high** | `sorted_disjoint` maintained by `range_remove_until` |
+| `singleton_covers_iff` | mid | medium | Membership spec for single-element sets |
+| `insert_empty` | mid | medium | Single-range insertion result is structurally correct |
+| `insert_empty_covers` | mid | medium | Fresh insertion with correct coverage |
+| `sorted_disjoint_tail` | low | low | Structural helper: invariant preserved on tail |
+| `sorted_disjoint_head_valid` | low | low | Structural helper: first element satisfies `valid_range` |
+| `empty_sorted_disjoint` | low | low | Constructor postcondition |
+| `singleton_sorted_disjoint` | low | low | Single-element invariant |
+| `empty_covers_nothing` | low | low | Empty set membership is always false |
+| `remove_until_empty` | low | low | `range_remove_until` on empty is identity |
+| `singleton_not_covers_left` | low | low | Membership excludes values strictly before range start |
+| `singleton_not_covers_right` | low | low | Membership excludes values at or after range end |
 
-**Assessment**: The invariant and membership theorems are high-value for a data
-structure that directly affects QUIC packet deduplication (ACK tracking).  A bug
-in RangeSet could silently cause duplicate-packet acceptance or lost-range
-misreporting.  **Gap**: no theorem verifies that `flatten(insert(rs, r))` contains
-exactly the union of the points in `rs` and `r` — the current suite verifies
-structural properties but not full semantic equivalence to a set union.
+**Assessment**: The invariant and semantic-union theorems are high-value for a
+data structure that directly affects QUIC packet deduplication (ACK tracking).
+`remove_until_removes_small` is a direct safety property: if it were false, a
+received packet could be falsely acknowledged again.  **Gap**: the model omits
+capacity eviction — proved theorems apply only when the set is below capacity.
+A future theorem bounding behaviour under eviction would close this gap.
 
 ---
 
@@ -116,14 +122,17 @@ time-based eviction is not verified.
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
-| `adjusted_rtt_ge_min_rtt` | **high** | **high** | Security property: prevents ack-delay attack |
-| `rtt_update_smoothed_le_max_prev_adj` | high | high | EWMA contraction — no unbounded growth |
-| `rtt_update_rttvar_upper_bound` | high | medium | Variance bounded by max of inputs |
-| `rtt_init_invariant` | mid | medium | Initial state satisfies invariants |
-| `rtt_update_first_sample` | mid | medium | First RTT sets smoothed = sample |
+| `adjusted_rtt_ge_min_rtt` | **high** | **high** | Security property: prevents ack-delay timing attack (RFC 9002 §5.3) |
+| `rtt_update_smoothed_upper_bound` | high | high | EWMA contraction — smoothed RTT ≤ adjusted_rtt when updated |
+| `rtt_first_update_smoothed_eq` | mid | medium | First RTT sample sets smoothed = sample exactly |
+| `rtt_first_update_min_rtt_eq` | mid | medium | First sample sets min_rtt correctly |
 | `adjusted_rtt_le_latest` | mid | medium | Adjustment never exceeds raw sample |
-| `smoothed_rtt_nonneg` | low | low | Trivial non-negativity |
-| + 17 further structural/arithmetic theorems | low–mid | low–medium | |
+| `rtt_update_min_rtt_le_latest` | mid | medium | min_rtt ≤ latest RTT |
+| `rtt_update_min_rtt_le_prev` | mid | medium | min_rtt is non-increasing |
+| `rtt_update_max_rtt_ge_latest` | mid | medium | max_rtt tracks maximum correctly |
+| `rtt_update_smoothed_pos` | mid | low | Smoothed RTT remains positive |
+| `rtt_update_min_rtt_inv` | mid | medium | min_rtt invariant preserved by update |
+| + 13 further structural/helper theorems | low–mid | low–medium | Constructor postconditions, helper lemmas |
 
 **Assessment**: `adjusted_rtt_ge_min_rtt` is the highest-value result in the
 entire suite — it directly closes a class of timing attacks described in RFC 9002
@@ -167,17 +176,30 @@ Prioritised by impact:
 
 1. **Semantic set-union for RangeSet** (high): prove that after inserting range
    `[a,b)`, the points covered by the result equal the old set ∪ `{a..b-1}`.
-   This would catch bugs that merge ranges incorrectly.
+   `insert_covers_union` in `RangeSet.lean` already proves this; the gap is that
+   the theorem is stated for the unbounded model (no capacity eviction).  A
+   stronger version bounded by `len < capacity` would close the abstraction gap.
 
-2. **RTT lower-bound / decay rate** (medium): add theorems showing `smoothed_rtt`
+2. **CUBIC congestion control** (high): `quiche/src/recovery/congestion/cubic.rs`
+   implements RFC 8312.  Key pure-function targets are `cubic_k` (the time to
+   reach the last maximum window) and `w_cubic` (the CUBIC window function at
+   time `t`).  Both are arithmetic expressions involving cube roots (modelled via
+   `f64`).  A Lean model could use rational or fixed-point arithmetic.  Properties
+   worth verifying: `w_cubic(0) = β·W_max`, `w_cubic` is convex (window growth
+   accelerates as it approaches `W_max`), and that `congestion_event` reduces
+   `cwnd` by exactly `(1 - β) * cwnd`.  This is the only congestion algorithm
+   in `quiche` that remains without FV coverage.
+
+3. **RTT lower-bound / decay rate** (medium): add theorems showing `smoothed_rtt`
    cannot fall *below* some fraction of `min_rtt`.  This would catch an
    under-smoothing bug that could make the congestion controller too aggressive.
 
-3. **Flow control u64 overflow guard** (medium): add a bounded model (e.g.,
+4. **Flow control u64 overflow guard** (medium): add a bounded model (e.g.,
    restrict `consumed + window < 2^62`) and prove no overflow occurs under the
    varint limit.  This closes the one known gap between the Lean model and the
    Rust u64 arithmetic.
 
+5. **Varint wire-format tag bits** (medium): add a theorem verifying that the
 4. **Congestion window** (medium): `NewReno`, `PRR`, and `CUBIC` are now all
    formally specified. The remaining gap is **CUBIC's dynamic w_cubic function**:
    theorems about `w_cubic(t)` growth relative to the Reno estimate (`w_est`) and
@@ -192,10 +214,16 @@ Prioritised by impact:
    2-bit tag in the first byte of an encoded varint matches the length class.
    Current proofs do not cover this aspect.
 
+6. **Stream receive buffer** (medium): `quiche/src/stream/recv_buf.rs` implements
+   a `BTreeMap`-based out-of-order reassembly buffer.  Key properties: no data
+   lost under reordering; no duplicate data returned; `off` monotonically advances.
+   This would be the first FV target touching Rust `BTreeMap` semantics.
+
 ---
 
 ## Concerns
 
+- **Nat vs u64**: all nine files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
 - **Nat vs u64**: all ten files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
   Overflow is the primary unverified risk; see CORRESPONDENCE.md for per-file
   documentation.  The varint file partially mitigates this by bounding inputs to
@@ -229,6 +257,16 @@ Prioritised by impact:
   sorted+disjoint+merged under insertion required substantial case splitting and
   was the most complex proof in the suite.  Its success gives high confidence in
   the ACK-range deduplication logic.
+
+- **`decode_pktnum_correct`** (PacketNumDecode.lean, run 39): the first
+  end-to-end algorithm correctness theorem in the suite — proves that RFC 9000
+  §A.3's packet number decoding function returns the correct result under the
+  QUIC proximity invariant, for all three window-shift cases.  During the proof,
+  a genuine counterexample to the original (run 38) theorem statement was
+  discovered: the non-strict lower-bound allowed an erroneous branch-1 fire at
+  `actual_pn = expected_pn − pnHwin`.  The theorem was tightened to use strict
+  `<` (as specified in RFC 9000 §A.3 itself), confirming that the FV process
+  caught a real precision gap that the original code review missed.
 
 ---
 
