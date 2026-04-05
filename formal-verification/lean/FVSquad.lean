@@ -7,3 +7,4 @@ import FVSquad.NewReno
 import FVSquad.DatagramQueue
 import FVSquad.PRR
 import FVSquad.PacketNumDecode
+import FVSquad.Cubic
