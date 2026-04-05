@@ -18,7 +18,6 @@
 - **Lean file**: `FVSquad/RangeSet.lean`
 - **Phase**: 5 — COMPLETE (16 theorems, 0 sorry)
 - **PR**: #22 (merged)
-- **Note**: CRITIQUE.md had phantom theorem names (run 40 fixed them)
 
 ### 3. WindowedMinimum running-minimum algorithm
 - **File**: `quiche/src/minmax.rs`
@@ -31,7 +30,6 @@
 - **Phase**: 5 — COMPLETE (23 theorems, 0 sorry)
 - **Lean file**: `FVSquad/RttStats.lean`
 - **PR**: #23 (merged)
-- **Note**: CRITIQUE.md had incorrect theorem names (run 40 fixed them)
 
 ### 5. Flow control window arithmetic
 - **File**: `quiche/src/flowcontrol.rs`
@@ -61,19 +59,33 @@
 - **File**: `quiche/src/packet.rs` — `decode_pkt_num`
 - **Phase**: 5 — COMPLETE (24 theorems, 0 sorry)
 - **Lean file**: `FVSquad/PacketNumDecode.lean`
-- **Informal spec**: `specs/packet_num_decode_informal.md`
 - **Key theorems**:
   - `decode_mod_win_exact`: RFC 9000 §17.1 congruence (FULLY PROVED)
   - `decode_pktnum_correct`: FULLY PROVED (run 39) — 3-way window-quotient case split
   - `mul_uniq_in_range`: helper for unique-multiple-in-interval argument
   - 7 concrete test vectors aligned with quiche test suite
-- **PR**: branch lean-squad-run39-23983513602-pktnum-prove-53fdae0a25e124ea (#33, pending)
+- **PR**: #32 (merged)
 - **FINDING**: Original hprox2 was non-strict (≤); corrected to strict (<) + hoverflow + hwin_le
 
+### 10. CUBIC congestion control
+- **File**: `quiche/src/recovery/congestion/cubic.rs`
+- **Phase**: 5 — COMPLETE (26 theorems, 0 sorry)
+- **Lean file**: `FVSquad/Cubic.lean`
+- **Informal spec**: `specs/cubic_informal.md`
+- **Key theorems**:
+  - `alphaAimd_numerator_eq` / `alphaAimd_denominator_eq`: ALPHA_AIMD=9/17 verified
+  - `ssthresh_lt_cwnd_pos`: strict window reduction on loss
+  - `wCubic_epoch_anchor`: RFC 8312bis §5.1 epoch-anchor (C*K³=w_max-cwnd → epoch anchor)
+  - `wCubicNat_monotone`: W_cubic non-decreasing for t ≥ K
+  - `fastConv_wmax_lt_cwnd`: fast convergence strictly reduces w_max
+  - `congestionEvent_reduces_cwnd`: cwnd > 0 → ssthresh < cwnd
+- **PR**: branch lean-squad-run41-23998622683-cubic-proofs-2db1adfc4c3ec411 (#36, pending)
+
 ## Open PRs / Branches
-- PR #33: branch lean-squad-run39-23983513602-pktnum-prove-53fdae0a25e124ea (run 39, pending)
-- PR #34: branch lean-squad-run39-23983513602-pktnum-prove-115496a2624eb7b8 (run 39, duplicate, pending)
-- PR #35: lean-squad-run40-23993631568-correspondence-critique (run 40, correspondence+critique docs)
+- PR #33: run 39, PacketNumDecode proved (190→190 theorems)
+- PR #34: run 39, duplicate of #33
+- PR #35: run 40, CORRESPONDENCE.md + CRITIQUE.md updates
+- PR #36: run 41, Cubic.lean (26 theorems) + docs
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -84,49 +96,38 @@
 - `lemma` keyword NOT available in Lean 4.29 without Mathlib — use `theorem`
 - `bif` is a RESERVED KEYWORD in Lean 4 — do not use as variable name
 - `conv_rhs` tactic: NOT available without Mathlib — use explicit `have` + `rw`
-- `set` tactic: NOT available without Std4/Mathlib — use explicit `have` to name subexpressions
-- `positivity` / `ring` / `linarith` / `nlinarith` NOT available without Mathlib
-- omega CANNOT prove `(a + n) % n = a % n` → use `Nat.add_mod_right`
-- omega CANNOT prove nonlinear goals with two symbolic multiplied variables
-- **Nat.pos_pow_of_pos DOES NOT EXIST** — use `Nat.two_pow_pos` for powers of 2
-- **`Nat.dvd_sub'` DOES NOT EXIST** in Lean 4.29 core — use `obtain ⟨k,h⟩` + `Nat.mul_sub`
-- **`Nat.mul_sub (n m k : Nat) : n * (m - k) = n * m - n * k`** — available ✓
-- **`Nat.succ_mul : Nat.succ n * m = n * m + m`** — use for `(k+1)*n = k*n+n` rewrites
-- **`Nat.le_of_mul_le_mul_left : c * a ≤ c * b → 0 < c → a ≤ b`** (note arg order: c*a, c*b)
-- **`Nat.lt_of_mul_lt_mul_left : k * a < k * b → a < b`** (no pos hypothesis needed)
-- **`Nat.add_div_right (x : Nat) {z : Nat} (h : 0 < z) : (x + z) / z = x / z + 1`**
-- **`mul_uniq_in_range` proof pattern**: establish `n * (a/n) = a` via `Nat.div_add_mod + simpa`;
-  then `hq_lo` via `Nat.mul_add + Nat.mul_one + omega + Nat.le_of_mul_le_mul_left`;
-  then `hq_hi` via `Nat.mul_add + omega + Nat.lt_succ_iff.mp + Nat.lt_of_mul_lt_mul_left`;
-  conclude `rw [← hqa, hq_eq, Nat.mul_add, Nat.mul_one, hqb]`
-- **`decode_pktnum_correct` proof pattern**: provide `hα_sum` (via `Nat.div_add_mod`),
-  `hβ_sum` (via `Nat.div_add_mod + hmod`), `h2hwin : 2 * hwin ≤ win` (omega from unfold pnHwin);
-  3-way `rcases Nat.lt_or_ge` case split on quotients;
-  use `mul_uniq_in_range` + `rw [Nat.succ_mul] at hle` for upper bound;
-  use `by_cases + exfalso + omega` for impossible branches
+- `set` tactic: NOT available without Std4/Mathlib — use explicit `have`
+- `ring` tactic: NOT available without Mathlib
+- `linarith` / `nlinarith`: NOT available without Mathlib
+- omega handles Nat.div (e.g., `cwnd * 7 / 10 < cwnd` for cwnd > 0) ✅
+- `Nat.pow_le_pow_left hbase 3`: works for cubic monotonicity ✅
+- `Nat.mul_le_mul_left c hpow`: works for scaling ✅
+- `Nat.mul_le_mul_right k h`: also available ✅
+- `simp` closes `c * (k - k)^3 + wMax = wMax` (sub_self, zero_pow, mul_zero, zero_add)
+- omega treats `c * k3` (product of variables) as an atom — can use in linear hypotheses ✅
+- CUBIC: all f64 constants can be modelled as Nat fractions; omega handles floor div proofs
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
-- TARGETS.md: 9 targets, all at Phase 5 Complete (0 sorry)
-- CORRESPONDENCE.md: updated run 40 (all 9 Lean files documented, Summary fixed)
-- CRITIQUE.md: updated run 40 (190 theorems, 0 sorry; phantom names fixed; CUBIC as next target)
+- TARGETS.md: 10 targets, all at Phase 5 Complete (0 sorry)
+- CORRESPONDENCE.md: updated run 41 (all 10 Lean files documented)
+- CRITIQUE.md: updated run 41 (216 theorems, 0 sorry)
 
-## Status Issue: #4 (open), updated run 40
+## Status Issue: #4 (open), updated run 41
 
 ## Summary
-- **190 total theorems, 0 sorry** across 9 files
+- **216 total theorems, 0 sorry** across 10 files
 - Varint: 10 | RangeSet: 16 | Minmax: 15 | RttStats: 23 | FlowControl: 22
-  NewReno: 13 | DatagramQueue: 26 | PRR: 20 | PacketNumDecode: 24
+  NewReno: 13 | DatagramQueue: 26 | PRR: 20 | PacketNumDecode: 24 | Cubic: 26
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox). Document failure each run.
-- FVSquad.lean imports all 9 modules
+- FVSquad.lean imports all 10 modules
 
-## Next Priorities (all 9 targets fully proved — new targets needed)
-1. **CUBIC congestion** — `cubic.rs` key functions: `cubic_k`, `w_cubic`
-   - Model cube-root as rational; verify w_cubic(0) = β·W_max, congestion halving
-   - `congestion_event` halves window by BETA_CUBIC (0.7) exactly
-2. **RangeSet semantic completeness** — capacity-bounded version of `insert_covers_union`
+## Next Priorities (all 10 targets fully proved — new targets needed)
+1. **RangeSet semantic completeness** — `flatten(insert(rs,r)) = set_union`
+2. **CUBIC W_est / TCP-friendliness** — prove w_est tracks Reno growth correctly;
+   the switch between CUBIC and Reno modes (w_cubic(t) < w_est) is not yet modelled
 3. **Stream receive buffer** — `quiche/src/stream/recv_buf.rs`
-   - BTreeMap-based out-of-order reassembly; key: no data lost, no duplicates, off monotone
+   BTreeMap-based out-of-order reassembly; key: no data lost, no duplicates, off monotone
 4. **NewReno AIMD growth rate** — multi-callback accumulation theorem
 5. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
