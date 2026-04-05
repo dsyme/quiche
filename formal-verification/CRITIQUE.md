@@ -178,10 +178,11 @@ Prioritised by impact:
    varint limit.  This closes the one known gap between the Lean model and the
    Rust u64 arithmetic.
 
-4. **Congestion window** (high): `quiche/src/recovery/congestion/` contains
-   the CUBIC and New Reno implementations.  Key properties: window only grows
-   after ACK; window halves on loss; window ≥ minimum congestion window.  This
-   is an important new target.
+4. **Congestion window** (medium): `NewReno`, `PRR`, and `CUBIC` are now all
+   formally specified. The remaining gap is **CUBIC's dynamic w_cubic function**:
+   theorems about `w_cubic(t)` growth relative to the Reno estimate (`w_est`) and
+   the transition point where CUBIC switches from friendly (Reno-mode) to pure
+   cubic growth are not yet verified.
 
 5. **Stream-level flow control** (medium): `quiche/src/stream/` uses similar
    window arithmetic to `flowcontrol.rs` but with per-stream state.  The
@@ -195,7 +196,7 @@ Prioritised by impact:
 
 ## Concerns
 
-- **Nat vs u64**: all five files model Rust `u64` values as Lean `Nat` (unbounded).
+- **Nat vs u64**: all ten files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
   Overflow is the primary unverified risk; see CORRESPONDENCE.md for per-file
   documentation.  The varint file partially mitigates this by bounding inputs to
   `MAX_VAR_INT = 2^62 − 1`.
