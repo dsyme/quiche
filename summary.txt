@@ -1,6 +1,6 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-04-04 (run 38)
+Last updated: 2026-04-05 (run 40)
 
 ## Theorem Count
 - Varint.lean: 10 theorems, 0 sorry ✅
@@ -11,9 +11,11 @@ Last updated: 2026-04-04 (run 38)
 - NewReno.lean: 13 theorems, 0 sorry ✅
 - DatagramQueue.lean: 26 theorems, 0 sorry ✅
 - PRR.lean: 20 theorems, 0 sorry ✅
-- PacketNumDecode.lean: 22 theorems, 1 sorry 🔄
-- **Total: 187 theorems, 1 sorry**
+- PacketNumDecode.lean: 24 theorems, 0 sorry ✅
+- **Total: 190 theorems, 0 sorry**
 
-## Status Issue: #4 (open), updated run 38
+## Status Issue: #4 (open), updated run 40
 ## Open PRs
-- Branch lean-squad-run38-23979686182-pktnum-decode: PacketNumDecode.lean (pending merge)
+- PR #33: PacketNumDecode proof complete (run 39, pending merge)
+- PR #34: PacketNumDecode proof duplicate (run 39, pending merge)
+- PR #35: correspondence+critique docs update (run 40)

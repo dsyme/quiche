@@ -11,7 +11,6 @@
 - **File**: `quiche/src/octets.rs` (also `quiche/src/h3/mod.rs`)
 - **Lean file**: `FVSquad/Varint.lean`
 - **Phase**: 5 — COMPLETE (10 theorems, 0 sorry)
-- **Key theorem**: `varint_round_trip` — decode(encode(v)) = v
 - **PR**: #5 (merged)
 
 ### 2. RangeSet sorted-interval data structure
@@ -19,6 +18,7 @@
 - **Lean file**: `FVSquad/RangeSet.lean`
 - **Phase**: 5 — COMPLETE (16 theorems, 0 sorry)
 - **PR**: #22 (merged)
+- **Note**: CRITIQUE.md had phantom theorem names (run 40 fixed them)
 
 ### 3. WindowedMinimum running-minimum algorithm
 - **File**: `quiche/src/minmax.rs`
@@ -31,6 +31,7 @@
 - **Phase**: 5 — COMPLETE (23 theorems, 0 sorry)
 - **Lean file**: `FVSquad/RttStats.lean`
 - **PR**: #23 (merged)
+- **Note**: CRITIQUE.md had incorrect theorem names (run 40 fixed them)
 
 ### 5. Flow control window arithmetic
 - **File**: `quiche/src/flowcontrol.rs`
@@ -62,15 +63,17 @@
 - **Lean file**: `FVSquad/PacketNumDecode.lean`
 - **Informal spec**: `specs/packet_num_decode_informal.md`
 - **Key theorems**:
-  - `decode_mod_win_exact`: lower bits preserved (core RFC 9000 §17.1)
+  - `decode_mod_win_exact`: RFC 9000 §17.1 congruence (FULLY PROVED)
   - `decode_pktnum_correct`: FULLY PROVED (run 39) — 3-way window-quotient case split
   - `mul_uniq_in_range`: helper for unique-multiple-in-interval argument
   - 7 concrete test vectors aligned with quiche test suite
-- **PR**: branch `lean-squad-run39-23983513602-pktnum-prove` (run 39, pending)
-- **FINDING**: Original hprox2 was too weak (≤ should be <). Corrected + added hoverflow + hwin_le.
+- **PR**: branch lean-squad-run39-23983513602-pktnum-prove-53fdae0a25e124ea (#33, pending)
+- **FINDING**: Original hprox2 was non-strict (≤); corrected to strict (<) + hoverflow + hwin_le
 
 ## Open PRs / Branches
-- Branch `lean-squad-run39-23983513602-pktnum-prove` — PacketNumDecode.lean (run 39, pending)
+- PR #33: branch lean-squad-run39-23983513602-pktnum-prove-53fdae0a25e124ea (run 39, pending)
+- PR #34: branch lean-squad-run39-23983513602-pktnum-prove-115496a2624eb7b8 (run 39, duplicate, pending)
+- PR #35: lean-squad-run40-23993631568-correspondence-critique (run 40, correspondence+critique docs)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available without Mathlib/Std — use `Nat.lt_or_ge`
@@ -104,10 +107,10 @@
 
 ## TARGETS.md / CORRESPONDENCE.md / CRITIQUE.md
 - TARGETS.md: 9 targets, all at Phase 5 Complete (0 sorry)
-- CORRESPONDENCE.md: updated run 39 (all 9 Lean files documented)
-- CRITIQUE.md: updated run 39 (190 theorems assessed, 0 sorry)
+- CORRESPONDENCE.md: updated run 40 (all 9 Lean files documented, Summary fixed)
+- CRITIQUE.md: updated run 40 (190 theorems, 0 sorry; phantom names fixed; CUBIC as next target)
 
-## Status Issue: #4 (open), needs update for run 39
+## Status Issue: #4 (open), updated run 40
 
 ## Summary
 - **190 total theorems, 0 sorry** across 9 files
@@ -119,8 +122,11 @@
 - FVSquad.lean imports all 9 modules
 
 ## Next Priorities (all 9 targets fully proved — new targets needed)
-1. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
-2. **NewReno AIMD growth rate** — multi-callback accumulation theorem
-3. **Cubic congestion** — `cubic_k` and `w_cubic` (uses f64; model as rational?)
-4. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
-5. **BBRv2 implementation** — gcongestion module (complex, but high value)
+1. **CUBIC congestion** — `cubic.rs` key functions: `cubic_k`, `w_cubic`
+   - Model cube-root as rational; verify w_cubic(0) = β·W_max, congestion halving
+   - `congestion_event` halves window by BETA_CUBIC (0.7) exactly
+2. **RangeSet semantic completeness** — capacity-bounded version of `insert_covers_union`
+3. **Stream receive buffer** — `quiche/src/stream/recv_buf.rs`
+   - BTreeMap-based out-of-order reassembly; key: no data lost, no duplicates, off monotone
+4. **NewReno AIMD growth rate** — multi-callback accumulation theorem
+5. **Packet number uniqueness** — uniqueness of decoded number within pkt_hwin
