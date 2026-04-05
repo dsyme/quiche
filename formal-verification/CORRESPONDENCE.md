@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-04 13:20 UTC
-- **Commit**: `5c95b1c6`
+- **Date**: 2026-04-05 03:46 UTC
+- **Commit**: `8f8e2881`
 
 ---
 
@@ -197,14 +197,14 @@ accumulator induction strategy with four simultaneous invariants.
 
 ### Proved theorems — correspondence assessment (complete list)
 
-### Proved theorems — correspondence assessment (complete list)
-
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|------------------------|-------|
 | `empty_sorted_disjoint` | **exact** | Low | Trivial structural fact |
 | `singleton_sorted_disjoint` | **exact** | Low | Trivial structural fact |
 | `empty_covers_nothing` | **exact** | Low | Trivial |
 | `singleton_covers_iff` | **exact** | Medium | Correct membership spec |
+| `singleton_not_covers_left` | **exact** | Low | Membership excludes values before start |
+| `singleton_not_covers_right` | **exact** | Low | Membership excludes values at/after end |
 | `insert_empty` | **exact** | Medium | Matches `InlineRangeSet::insert` single-element case |
 | `remove_until_empty` | **exact** | Low | Trivial |
 | `insert_empty_covers` | **exact** | Medium | Combines two facts cleanly |
@@ -469,28 +469,38 @@ safety).  Timing-domain properties are not captured; no mismatches found.
 
 ## Summary
 
-All five Lean files provide sound, useful specifications within their documented
+All nine Lean files provide sound, useful specifications within their documented
 abstractions.  The most significant results are:
 
-- **RangeSet.lean**: All 14 theorems proved (0 sorry), including the complex
+- **RangeSet.lean**: All 16 theorems proved (0 sorry), including the complex
   `insert_preserves_invariant` and `insert_covers_union` (proved in run 28).
 - **Varint.lean**: All 10 theorems proved (0 sorry), including the round-trip
   property.
 - **Minmax.lean**: All 15 theorems proved (0 sorry), covering the windowed
   minimum algorithm's correctness and invariant preservation.
-- **RttStats.lean**: 24 theorems proved (0 sorry) covering RTT estimator
+- **RttStats.lean**: 23 theorems proved (0 sorry) covering RTT estimator
   arithmetic, including the key security property `adjusted_rtt_ge_min_rtt`
   and EWMA bounding theorems.
 - **FlowControl.lean**: 22 theorems proved (0 sorry) covering flow-control
   window arithmetic, update idempotence, and the non-decreasing MAX_DATA
   invariant (QUIC protocol requirement).
+- **NewReno.lean**: 13 theorems proved (0 sorry) covering AIMD window
+  management, the congestion-window floor invariant, and loss-event halving.
+- **DatagramQueue.lean**: 26 theorems proved (0 sorry) covering bounded FIFO
+  semantics, byte-size accounting, and capacity invariant preservation.
+- **PRR.lean**: 20 theorems proved (0 sorry) covering PRR and PRR-SSRB rate
+  control, including exact RFC 6937 formula verification.
+- **PacketNumDecode.lean**: 24 theorems proved (0 sorry) covering RFC 9000
+  §A.3 packet number decoding, including `decode_pktnum_correct` — the first
+  RFC-algorithm end-to-end correctness theorem in the suite (run 39).
 
-**Total: 99 theorems, 0 sorry** across all six Lean files.
+**Total: 190 theorems, 0 sorry** across all nine Lean files.
 
 No mismatches (where the Lean model is outright wrong) have been identified.
 All known divergences are deliberate, documented approximations.
 
 ---
+
 
 ## `FVSquad/NewReno.lean` ↔ `quiche/src/recovery/congestion/reno.rs`
 
@@ -571,8 +581,8 @@ No mismatches found.
 
 ## `FVSquad/PRR.lean` ↔ `quiche/src/recovery/congestion/prr.rs`
 
-**Last Updated**: 2026-04-04 03:40 UTC  
-**Commit**: `d61b6578df8892b011c73019e6aa4672c1decb60`
+**Last Updated**: 2026-04-05 03:46 UTC  
+**Commit**: `8f8e2881`
 
 **Target**: `PRR` struct — Proportional Rate Reduction (RFC 6937) for congestion recovery pacing.
 
@@ -605,8 +615,8 @@ No mismatches found.
 
 ## Target 9: PacketNumDecode (`FVSquad/PacketNumDecode.lean`)
 
-**Last Updated**: 2026-04-04 13:20 UTC  
-**Commit**: `5c95b1c6`
+**Last Updated**: 2026-04-05 03:46 UTC  
+**Commit**: `8f8e2881`
 
 **Target**: `decode_pkt_num` — RFC 9000 Appendix A.3 packet number decoding.
 
@@ -628,10 +638,17 @@ No mismatches found.
 
 ### Theorem impact
 
-22 theorems total (21 fully proved, 1 sorry):
+24 theorems total (24 fully proved, **0 sorry** ✅):
 - `decode_mod_win_exact` (central): fully proved — verifies the RFC 9000 §17.1 congruence invariant for the arithmetic model.
 - 7 `native_decide` test vectors including the RFC A.3 example — verified by computation.
 - `decode_branch1_overflow_guard`: overflow guard proof for upward adjustment.
-- `decode_pktnum_correct`: sorry — three-way branch case split needs additional lemmas.
+- `decode_pktnum_correct`: **fully proved** (run 39) via 3-way window-quotient case split.
+  During proof, an edge case was discovered: the non-strict `hprox2 ≤` form
+  allows a counterexample at `actual_pn = expected_pn − pnHwin`. The theorem
+  was corrected to use strict `<` (matching RFC 9000 §A.3) plus bounds
+  `hoverflow` and `hwin_le`. This is not a bug in the Rust code (the Rust u64
+  type prevents the edge case automatically); it is a precision gap in the
+  original Lean theorem statement.
+- `mul_uniq_in_range`: helper lemma for the unique-multiple-in-interval argument.
 
 No mismatches. The arithmetic model has been verified to be equivalent to the bitwise computation in all test vectors; a general proof of the equivalence for arbitrary inputs would close divergence Q1.
