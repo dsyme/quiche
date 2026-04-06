@@ -202,6 +202,116 @@ path); leave window-correctness as a stated-but-unproved theorem.
 
 ---
 
+### Target 13: Stream Send Buffer (`SendBuf`)
+
+**Location**: `quiche/src/stream/send_buf.rs`
+
+**Description**: `SendBuf` is the send-side stream buffer. Unlike `RecvBuf`
+(which handles out-of-order delivery), `SendBuf` maintains a strictly
+sequential append-only byte stream protected by a flow-control limit
+(`max_data`). Key fields:
+- `off`: highest offset buffered (monotone non-decreasing)
+- `emit_off`: highest offset sent to the peer (≤ `off`)
+- `len`: outstanding bytes not yet acked (= `off - ack_off` approximately)
+- `max_data`: flow-control limit from peer (`emit_off ≤ max_data`)
+- `fin_off`: final stream offset, if set (= `off` at time of setting)
+
+Key operations: `write()` (append data), `emit()` (drain into network),
+`ack_and_drop()` (acknowledge and drop delivered data), `retransmit()`
+(re-queue lost data for re-send).
+
+**Benefit**: Formally verifying the send-side flow-control invariants
+(`emit_off ≤ max_data`) and the monotone-offset invariant (`off` only
+increases) provides confidence that the QUIC stream layer cannot:
+- Exceed the peer's receive window (a correctness + reliability issue)
+- Corrupt the byte-stream order (a data integrity issue)
+- Miss retransmission of in-flight data (a reliability issue)
+
+**Specification size**: ~120–180 Lean lines.
+- Model the state as `(off, emit_off, ack_off, max_data, fin_off : Nat)`
+- Key properties are arithmetic inequalities: `ack_off ≤ emit_off ≤ off`
+  and `emit_off ≤ max_data`
+- Abstract over the `VecDeque` byte buffer; model data as offsets only
+
+**Proof tractability**: HIGH for arithmetic invariants.
+- All key invariants are linear arithmetic (omega-provable)
+- `write()` monotonicity: `off_after ≥ off_before` trivial by construction
+- `emit_off ≤ max_data` requires case analysis on `cap()` guard
+- `update_max_data` monotonicity: `new_max_data ≥ old` (uses `cmp::max`)
+- More complex: `retransmit()` position management and `ack_and_drop()`
+  prefix invariant; these can be modelled with sorry guards
+
+**Approximations needed**:
+- Model `VecDeque<RangeBuf>` as a single `(off, len)` interval (ignoring
+  chunking and retransmission cursor `pos`)
+- Ignore `BufFactory` generics (model as plain offsets)
+- Ignore `error` and `shutdown` error-path fields
+- `ack_off()` relies on `ranges::RangeSet`; model as a simple Nat cursor
+
+**Approach**: Three-layer proof:
+1. Abstract model `SendState` with `(off, emit_off, ack_off, max_data)` fields
+2. Prove `write_inv`: off increases, fin_off consistent
+3. Prove `cap_inv`: emit_off ≤ max_data; `update_max_data_mono`
+4. Leave retransmit/ack details with sorry-guarded theorem
+
+**Priority**: ⭐⭐ HIGH — sequential invariants are directly provable;
+flow-control bounds are security-relevant; natural complement to RecvBuf.
+
+---
+
+### Target 14: Connection ID Sequence Management
+
+**Location**: `quiche/src/cid.rs`
+
+**Description**: `ConnectionIdentifiers` manages QUIC connection IDs (CIDs)
+with sequence numbers for both local (source) and remote (destination) sides.
+Key guarantees required by RFC 9000 §5.1:
+- CIDs are not reused (sequence numbers are strictly monotone)
+- The active set is bounded (`active_scid_limit`, `active_dcid_limit`)
+- Retired CIDs are tracked to prevent resurrection
+- At least one usable DCID is always available for sending
+
+Key fields: `scids` (source CIDs, bounded VecDeque), `dcids` (destination
+CIDs, bounded VecDeque), `next_scid_seq` (monotone counter).
+
+**Benefit**: CID management is security-critical: a reused CID would break
+QUIC's connection migration anti-linkability guarantees (RFC 9000 §9.5).
+Formally verifying:
+- `next_scid_seq` is strictly monotone across all `new_scid()` calls
+- No duplicate sequence numbers in `scids` or `dcids`
+- Active set size never exceeds the advertised limit
+would provide strong guarantees against connection-linkage bugs.
+
+**Specification size**: ~100–150 Lean lines.
+- Model as `(next_seq : Nat, active_seqs : Finset Nat, retired_seqs : Finset Nat)`
+- Key property: `∀ s ∈ active_seqs, s < next_seq` (all seq nums are past)
+- And: `active_seqs ∩ retired_seqs = ∅` (no resurrection)
+
+**Proof tractability**: MEDIUM.
+- Sequence monotonicity: provable by omega (counter only increments)
+- Capacity bound: provable if modelled as a list with checked inserts
+- Disjointness invariant: requires set reasoning (Lean `Finset` from Mathlib
+  would help, but `List`-based proofs with `¬ elem ∈ list` are also tractable)
+- The full VecDeque-based bounded sets require significant modelling effort
+
+**Approximations needed**:
+- Model `BoundedNonEmptyConnectionIdVecDeque` as `List Nat` (sequence numbers
+  only; ignore CID bytes and stateless reset tokens)
+- Ignore path-ID linkage (`link_scid_to_path_id`, `link_dcid_to_path_id`)
+- Model `retire_scid` / `retire_dcid` as list removal
+
+**Approach**:
+- Define `CidState` with `(next_seq : Nat, active : List Nat, retired : List Nat)`
+- Prove `new_id_seq_mono`: next_seq strictly increases
+- Prove `active_below_next`: all active seq nums < next_seq
+- Prove `retire_removes`: retired seq nums move from active to retired
+- Leave capacity bounds with sorry guards initially
+
+**Priority**: ⭐ MEDIUM — security-relevant but requires substantial modelling
+effort; the sequence monotonicity subproperty is an easy high-value win.
+
+---
+
 ## Tool Choice Rationale
 
 **Lean 4 + Mathlib** is chosen because:
