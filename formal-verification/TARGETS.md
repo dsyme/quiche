@@ -16,6 +16,10 @@
 | 8 | PRR (Proportional Rate Reduction) | `quiche/src/recovery/congestion/prr.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 20 theorems; RFC 6937 rate bound, SSRB bounds; `FVSquad/PRR.lean` |
 | 9 | Packet number decode (RFC 9000 §A.3) | `quiche/src/packet.rs` | 5 — Proofs | ✅ Complete | **0 sorry** — 24 theorems; `decode_pktnum_correct` fully proved (run 39); `FVSquad/PacketNumDecode.lean` |
 | 10 | CUBIC congestion control | `quiche/src/recovery/congestion/cubic.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 26 theorems; RFC 8312bis constants, ssthresh reduction, W_cubic algebraic properties, fast convergence; `FVSquad/Cubic.lean` |
+| 11 | `RangeBuf` offset arithmetic | `quiche/src/range_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 19 theorems; maxOff invariance under consume, split adjacency, partition; `FVSquad/RangeBuf.lean` |
+| 12 | `RecvBuf` stream reassembly | `quiche/src/stream/recv_buf.rs` | 4 — Implementation | 🔄 In progress | **0 sorry** — 32 theorems; emitN+insertContiguous invariant preservation; `FVSquad/RecvBuf.lean`; informal spec in `specs/stream_recv_buf_informal.md` |
+| 13 | `SendBuf` stream send buffer | `quiche/src/stream/send_buf.rs` | 1 — Research | ⬜ Not started | sequential append invariant, flow-control bounds; see RESEARCH.md |
+| 14 | Connection ID sequence management | `quiche/src/cid.rs` | 1 — Research | ⬜ Not started | seq monotonicity, no-reuse, active-set bound; see RESEARCH.md |
 
 ## Phase Definitions
 
