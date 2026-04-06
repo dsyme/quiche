@@ -20,23 +20,21 @@
 ### 11. RangeBuf offset arithmetic
 - Phase 5 COMPLETE (19 theorems, 0 sorry)
 - Lean file: FVSquad/RangeBuf.lean
-- Key: consume_maxOff, split_adjacent, split_maxOff
 
 ### 12. Stream receive buffer (RecvBuf)
 - Phase 4 — Implementation (32 theorems, 0 sorry)
 - Lean file: FVSquad/RecvBuf.lean
-- Informal spec: specs/stream_recv_buf_informal.md
 - emitN: fully proved (§5-§7, 21 theorems)
-- insertContiguous: fully proved (§9, 11 new theorems, run 44)
-  - insertContiguous_inv: all 5 invariants preserved
-  - insertContiguous_two_highMark: sequential writes advance by c1.len+c2.len
+- insertContiguous: fully proved (§9, 11 theorems, run 44)
 - Next: model general write() with overlap handling (sorry-guarded)
 
-### 13. SendBuf stream send buffer — Phase 1 Research
-- File: quiche/src/stream/send_buf.rs
-- Key invariants: ack_off ≤ emit_off ≤ off; emit_off ≤ max_data
-- Priority: HIGH — linear arithmetic, all provable by omega
-- Approach: SendState model (off, emit_off, ack_off, max_data, fin_off : Nat)
+### 13. SendBuf stream send buffer — Phase 5 COMPLETE (run 45)
+- **43 theorems, 0 sorry** — FVSquad/SendBuf.lean
+- Key invariants: I1 ackOff≤emitOff, I2 emitOff≤off, I3 emitOff≤maxData (security!), I4 FIN consistency
+- Key theorems: emitN_le_maxData, write_preserves_inv, sb_emitN_preserves_inv
+- updateMaxData_preserves_inv, write_after_setFin_isFin_false
+- NAMING NOTE: emitN_finOff → sb_emitN_finOff, emitN_preserves_inv → sb_emitN_preserves_inv
+  (renamed to avoid conflict with RecvBuf.lean names)
 
 ### 14. Connection ID sequence management — Phase 1 Research
 - File: quiche/src/cid.rs
@@ -44,10 +42,9 @@
 - Priority: MEDIUM — seq monotonicity easy; disjointness harder
 
 ## Open PRs / Branches
-- `lean-squad-run44-24027263298-recvbuf-impl-sendbuf-research` (run 44, pending)
-  RecvBuf.lean +11 theorems, RESEARCH.md (targets 13-14), TARGETS.md, CORRESPONDENCE.md
-- `lean-squad-run43-24017867324-rangebuf-recvbuf-spec-a1b2c3d4e5f6-58a179bdb3935c27`
-  (run 43, pending — merged into run 44 branch)
+- PR #38 `lean-squad-run43` — RangeBuf.lean + RecvBuf.lean spec (21 theorems)
+- PR #39 `lean-squad-run44` — RecvBuf.lean +11 insertContiguous, RESEARCH.md
+- PR `lean-squad-run45-24042482889-sendbuf-spec-proofs` — SendBuf.lean (43 theorems)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available — use `Nat.lt_or_ge`
@@ -57,32 +54,37 @@
 - `lemma` keyword NOT available — use `theorem`
 - `bif`, `at` are RESERVED KEYWORDS
 - `conv_rhs`, `set`, `ring`, `linarith`, `nlinarith` NOT available (no Mathlib)
-- omega handles Nat.div; `simp only [...] at *; omega` for goals involving
-  terms that simp can reduce to arithmetic in hypotheses too
-- `cases hrest : e with | cons b bs => subst hrest` pattern for list case
-  analysis (subst substitutes the variable)
-- `chunksOrdered_snoc`: proved via `cases hrest : rest; subst hrest; show ...`
-- `show` tactic changes goal to definitionally equal type (safe for def unfolding)
-- `⟨ha, hb⟩` anonymous constructor works for And goals
-- `Nat.two_pow_pos` for powers of 2 (not `Nat.pos_pow_of_pos`)
-- `simp only [...] at *` to simplify hypotheses for omega
+- omega handles Nat.div and Nat.min/max
+- `simp only [f]` for a @[simp] lemma `f : e = e'` rewrites AND closes goal with assumption
+  → Do NOT put `exact h` or `omega` after simp when simp might already close the goal
+  → Use `show explicit_form; omega` to avoid false "no goals" errors
+- `show t` changes goal to definitionally equal `t` — use to expose concrete arithmetic
+- `cases h : (a == b)` with `| false => rfl | true => simp only [beq_iff_eq] at h; omega`
+  is the pattern for Bool beq equality
+- `subst h` with `h : f = e` (f is local var) works to substitute
+- After `cases hf : s.finOff with | some f => ...`, goal has `s.finOff` replaced by `some f`
+- `simp only [beq_iff_eq] at h` converts `h : (a == b) = true` to `h : a = b`
+- `beq_self_eq_true` closes goals of form `a == a = true`
+- NAME CONFLICTS: global namespace — prefix with `sb_` for SendBuf-specific names
+  that might conflict with RecvBuf (emitN_finOff, emitN_preserves_inv)
+- `write_off_le_maxData_of_cap` needs `hoff : s.off ≤ s.maxData` (not in invariant)
+- `emitN_le_maxData` / `emitN_le_off` need the Inv as hypothesis (nat sub issue)
+- For Nat subtraction `a - b`, omega only handles it correctly when `b ≤ a` is known
 
-## Status Issue: #4 (open), updated run 44
+## Status Issue: #4 (open), updated run 45
 
 ## Summary
-- **266 total theorems, 0 sorry** across 12 files
+- **309 total theorems, 0 sorry** across 13 files
 - Varint:10 | RangeSet:16 | Minmax:15 | RttStats:23 | FlowControl:22
   NewReno:13 | DatagramQueue:26 | PRR:20 | PacketNumDecode:24 | Cubic:26
-  RangeBuf:19 | RecvBuf:32
+  RangeBuf:19 | RecvBuf:32 | SendBuf:43
 
 ## Notes
-- Aeneas: NOT available (no sudo/opam in sandbox — no new privileges flag)
-- FVSquad.lean imports all 12 modules
+- Aeneas: NOT available (no sudo/opam in sandbox — recurring)
+- FVSquad.lean imports all 13 modules
 
 ## Next Priorities
-1. **RecvBuf general write** — add abstract `writeChunk` with highMark
-   monotonicity; use sorry for overlap resolution; prove write_inv via axiom
-2. **SendBuf Lean spec** — target 13, Phase 2→3: define SendState model,
-   prove write_mono (off non-decreasing), cap_inv (emit_off ≤ max_data),
-   update_max_data_mono
-3. **CORRESPONDENCE.md** — update critique for run 44 additions
+1. **RecvBuf general write** — model write() with BTreeMap overlap handling
+   using sorry-guarded abstract axiom; prove highMark monotonicity
+2. **CID sequence management** — Target 14: next_scid_seq strictly monotone
+3. **Correspondence/Critique update** — add SendBuf to CORRESPONDENCE.md + CRITIQUE.md
