@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-05 03:46 UTC
-- **Commit**: `8f8e2881`
+- **Date**: 2026-04-06 09:51 UTC
+- **Commit**: `2c3bbfa6`
 
 ---
 
@@ -724,3 +724,66 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 - `ssthresh_lt_cwnd_pos`: formally verifies the strict window reduction on every fresh loss event. This is a fundamental safety property of CUBIC: the window cannot fail to shrink.
 - `fastConv_wmax_lt_cwnd`: formally verifies fast convergence — when below the prior peak, w_max is reduced to `cwnd * (1+β)/2 < cwnd`, biasing future window growth downward.
 - `wCubicNat_monotone`: formally verifies that the cubic window estimate is non-decreasing in time once past K, confirming the "restore-then-grow" shape of the CUBIC curve.
+
+---
+
+## Target 11: RangeBuf offset arithmetic (`FVSquad/RangeBuf.lean`)
+
+**Rust source**: `quiche/src/range_buf.rs`
+
+| Lean name | Rust name | File+line | Correspondence | Notes |
+|-----------|-----------|-----------|----------------|-------|
+| `RangeBuf.off` | `RangeBuf::off()` | `range_buf.rs:160` | exact | abstract field vs computed from `(data, start, pos)` |
+| `RangeBuf.len` | `RangeBuf::len()` | `range_buf.rs:168` | exact | abstract field vs `data.len() - pos - start` |
+| `RangeBuf.maxOff` | `RangeBuf::max_off()` | `range_buf.rs:173` | exact | `off + len` |
+| `RangeBuf.isFin` | `RangeBuf::fin()` | `range_buf.rs:178` | exact | bool flag |
+| `rbConsume` | `RangeBuf::consume()` | `range_buf.rs:183` | abstraction | Lean uses pure `(off, len)` triple; Rust advances `pos` in shared buffer |
+| `rbSplitOff` | `RangeBuf::split_off()` | `range_buf.rs:190` | abstraction | Rust splits the underlying `Arc<[u8]>`; Lean models only the offset partition |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| R1 | Model ignores byte contents | Rust stores actual bytes | Proofs verify offset/length arithmetic only; correctness of byte copying not captured |
+| R2 | `rbConsume` is a pure function | `consume()` mutates `pos` in place | Functional model correctly captures the offset semantics; mutation not visible from caller's perspective |
+| R3 | No `Arc<[u8]>` reference counting | Rust uses shared buffer with `Arc` | Reference-counting correctness and aliasing not modelled; only the logical partition is verified |
+
+### Theorem impact
+
+19 theorems (0 sorry ✅). Key results:
+- `consume_maxOff`: `consume` preserves `maxOff` — the BTreeMap key used in `RecvBuf` is stable across partial reads.
+- `split_adjacent`: `left.maxOff = right.off` — split produces exactly-adjacent halves with no gap or overlap.
+- `split_maxOff`: `right.maxOff = original.maxOff` — the right half inherits the original high-watermark.
+
+---
+
+## Target 12: RecvBuf stream reassembly (`FVSquad/RecvBuf.lean`)
+
+**Rust source**: `quiche/src/stream/recv_buf.rs`
+
+| Lean name | Rust name | File+line | Correspondence | Notes |
+|-----------|-----------|-----------|----------------|-------|
+| `Chunk` | `RangeBuf` (logical view) | `range_buf.rs` | abstraction | Lean `Chunk = (off, len)` pairs; Rust has byte contents and `Arc` sharing |
+| `RecvBuf.chunks` | `RecvBuf.data : BTreeMap<u64, RangeBuf>` | `recv_buf.rs:55` | abstraction | Lean sorted list; Rust BTreeMap keyed on `max_off` |
+| `RecvBuf.readOff` | `RecvBuf.off` | `recv_buf.rs:59` | exact | read cursor |
+| `RecvBuf.highMark` | `RecvBuf.len` | `recv_buf.rs:62` | exact | highest received offset (note: field named `len` in Rust) |
+| `RecvBuf.finOff` | `RecvBuf.fin_off` | `recv_buf.rs:65` | exact | optional final offset |
+| `RecvBuf.emitN` | `RecvBuf::emit()` | `recv_buf.rs:160` | abstraction | Lean counts bytes emitted; Rust writes into output slice |
+| `RecvBuf.insertContiguous` | `RecvBuf::write()` (in-order case) | `recv_buf.rs:92` | abstraction | Models only the contiguous (no-overlap) write path; overlap splitting not modelled |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| V1 | `insertContiguous` models only the contiguous write path | `write()` handles arbitrary out-of-order and overlapping data | Out-of-order reassembly correctness is not formally verified; invariant preservation for overlapping writes is not proved |
+| V2 | Byte contents not modelled | Rust stores actual bytes in `RangeBuf` | Data integrity of reassembly not captured; only offset/ordering structure is proved |
+| V3 | `drain` mode not modelled | `RecvBuf.drain` flag causes `off := len` advance without buffering | The drain fast-path is not in scope |
+| V4 | Flow-control limits not in model | `RecvBuf::max_data()` enforced in `write()` | `highMark ≤ max_data` invariant is not stated; would require an additional field |
+
+### Theorem impact
+
+32 theorems (0 sorry ✅). Key results:
+- `emitN_preserves_inv`: all 5 invariants preserved by the read-cursor advance operation.
+- `insertContiguous_inv`: all 5 invariants preserved by in-order sequential write.
+- `insertContiguous_highMark_grows`: strictly advances the receive window when len > 0.
+- `insertContiguous_two_highMark`: two sequential writes advance highMark by the sum of lengths — the foundational arithmetic for correct byte accounting.
