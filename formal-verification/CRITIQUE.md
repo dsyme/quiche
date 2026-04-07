@@ -4,31 +4,34 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 03:45 UTC
-- **Commit**: `83264201`
+- **Date**: 2026-04-07 17:45 UTC
+- **Commit**: `ade740b8`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **thirteen modules with
-309 theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Since run 39 the suite has
-grown by four new targets: CUBIC congestion control (26 theorems, run 41),
+The formal verification suite for `quiche` now covers **fourteen modules with
+330 theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Since run 39 the suite has
+grown by five new targets: CUBIC congestion control (26 theorems, run 41),
 RangeBuf offset arithmetic (19 theorems, run 43), the stream receive buffer
-RecvBuf (32 theorems, run 44), and the stream send buffer SendBuf (43 theorems,
-run 45). The most security-relevant new result is `emitN_le_maxData` in
-`SendBuf.lean` — a formal proof that the QUIC sender can never transmit bytes
-beyond the peer's advertised MAX_DATA limit (RFC 9000 §4.1), which is a
-direct, machine-checked statement of the fundamental flow-control safety
-property. Earlier highlights include `decode_pktnum_correct` (RFC 9000 §A.3,
-run 39), `wCubic_epoch_anchor` (RFC 8312bis §5.1, run 41),
-`insertContiguous_inv` (RecvBuf invariant preservation, run 44), and the
-long-running `adjusted_rtt_ge_min_rtt` (ack-delay timing-attack defence, RFC
-9002 §5.3). The entire suite has had zero outstanding `sorry`s since run 39.
-The main cross-cutting limitation remains the Nat-vs-u64 abstraction: no file
-verifies overflow behaviour, so integer-boundary edge cases are not captured.
-The RecvBuf general-case `write()` (out-of-order, overlapping data) is the
-largest remaining unverified component of the stream layer.
+RecvBuf (32 theorems, run 44), the stream send buffer SendBuf (43 theorems,
+run 45), and Connection ID sequence management CidMgmt (21 theorems, run 46).
+The most security-relevant new result is `emitN_le_maxData` in `SendBuf.lean`
+— a formal proof that the QUIC sender can never transmit bytes beyond the
+peer's advertised MAX_DATA limit (RFC 9000 §4.1). `CidMgmt.lean` adds
+`newScid_seq_fresh` and `newScid_preserves_inv`, proving that the
+sequence-number allocator satisfies the QUIC RFC 9000 §5.1.1 uniqueness
+requirement and the five-part well-formedness invariant under both `new_scid`
+and `retire_scid`. Earlier highlights include `decode_pktnum_correct` (RFC
+9000 §A.3, run 39), `wCubic_epoch_anchor` (RFC 8312bis §5.1, run 41),
+`insertContiguous_inv` (RecvBuf invariant preservation, run 44), and
+`adjusted_rtt_ge_min_rtt` (ack-delay timing-attack defence, RFC 9002 §5.3).
+The entire suite has had zero outstanding `sorry`s since run 39. The main
+cross-cutting limitation remains the Nat-vs-u64 abstraction: no file verifies
+overflow behaviour. The RecvBuf general-case `write()` (out-of-order,
+overlapping data) is the largest remaining unverified component of the stream
+layer.
 
 ---
 
@@ -454,3 +457,33 @@ maintains its well-formedness under all modelled operations. **Gaps**:
 (1) retransmission, reset, shutdown, and stop paths not modelled; (2) the ack
 model uses contiguous-prefix only (not the full RangeSet ack); (3) Nat vs u64
 overflow is not captured; (4) `blocked_at` and `error` fields not modelled.
+
+---
+
+### Target 14: Connection ID sequence management (`FVSquad/CidMgmt.lean`) — 21 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `newScid_preserves_inv` | high | **high** | All 5 CID invariants preserved by `newScid` — structural safety of the SCID issuing path (RFC 9000 §5.1.1) |
+| `retireScid_preserves_inv` | high | **high** | All 5 invariants preserved by `retireScid` — the retire path cannot corrupt the sequence state |
+| `newScid_seq_fresh` | high | **high** | Newly issued seq was not previously active — duplicates are formally impossible |
+| `retireScid_removes` | high | **high** | Target seq is absent after retire — the retire contract is honoured |
+| `retireScid_keeps_others` | high | high | Non-target seqs are unaffected — retire has no collateral damage |
+| `activeSeqs_lt_nextSeq` | mid | medium | All active seqs are strictly below `nextSeq` — sequence-number ordering invariant (I3) |
+| `newScid_nextSeq_strict` | mid | medium | `nextSeq` strictly advances — no wrap-around under natural-number model |
+| `newScid_two_distinct` | mid | medium | Two successive `newScid` calls always yield different seqs |
+| `applyNewScid_nextSeq` | mid | medium | After k calls, `nextSeq` = initial + k — exact accounting |
+| `applyNewScid_length` | mid | medium | Active set grows by exactly k — capacity accounting correctness |
+| 11 others | low | low | Accessors, list helpers (`allDistinct_append_fresh`, `filter_length_le`, etc.) |
+
+**Assessment**: The CidMgmt suite captures the security-critical property
+from RFC 9000 §5.1.1: every source Connection ID has a unique sequence number
+that is never reused. `newScid_seq_fresh` is the key result — it proves that
+the allocator never issues a sequence number already present in the active set.
+`newScid_preserves_inv` proves that the five-part well-formedness invariant
+(including the SCID count bound `|active| ≤ 2·limit−1` mandated by RFC 9000
+§5.1.1) is an inductive invariant. **Gaps**: (1) CID byte content (duplicate
+CID detection) is not modelled; (2) the `retire_if_needed` path is not
+modelled; (3) path-binding, reset-token, and `retire_prior_to` semantics are
+entirely out of scope; (4) integer overflow on `u64` sequence numbers is not
+captured (practically irrelevant: 2^64 CID retirements is not feasible).
