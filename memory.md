@@ -19,22 +19,19 @@
 
 ### 14. Connection ID sequence management — Phase 5 COMPLETE (run 46)
 - **21 theorems, 0 sorry** — FVSquad/CidMgmt.lean
+- CORRESPONDENCE.md updated: run 48
+- CRITIQUE.md updated: run 48
 
-### 15. QUIC MAX_STREAMS limit tracking — Phase 5 COMPLETE (run 47)
-- **24 theorems + 11 examples, 0 sorry** — FVSquad/StreamLimits.lean
-- Informal spec: specs/stream_limits_informal.md
-- StreamLimitsInv: 4-part invariant (localMax≤localNext, peerOpened≤localMax,
-  localOpened≤peerMax, initial≤localNext)
-- Key: acceptStream_safety, createStream_safety (RFC 9000 §4.6)
-- shouldUpdate: 3 theorems specifying when MAX_STREAMS frame is needed
-- collect_accumulates: k collects → localNext += k
-- stream ID encoding helpers: isBidiStream, isLocalStream, streamSeq
+### 15. StreamPriorityKey::cmp ordering — Phase 2 (Informal Spec, run 48)
+- Informal spec: specs/stream_priority_key_informal.md
+- TARGETS.md: added as Target 15
+- **Open Question OQ-1**: non-antisymmetry for incremental-incremental case
+  (a.cmp(b) = Greater AND b.cmp(a) = Greater when both incremental,
+  same urgency, different ID) — potential Ord contract violation in Rust
+- Next: write FVSquad/StreamPriorityKey.lean; prove Ord laws; verify OQ-1
 
 ## Open PRs / Branches
-- PR #38 `lean-squad-run43` — RangeBuf.lean + RecvBuf.lean spec
-- PR #39 `lean-squad-run44` — RecvBuf.lean insertContiguous (content in master)
-- PR #41 `lean-squad-run46` — CidMgmt (pending)
-- Branch `lean-squad-run47-24075167284-stream-limits` — StreamLimits (run 47, new)
+- Branch `lean-squad-run48-24095505289-corr-research` — CORRESPONDENCE+CRITIQUE+Target15 (run 48, new)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available — use `Nat.lt_or_ge`
@@ -51,20 +48,22 @@
   (ORDER MATTERS: case 1 is the `≤` branch, NOT the else branch)
 - `native_decide` works on `Bool`/concrete computations but NOT on `Prop` directly
   — for invariant test vectors use `simp [InvDef, initDef]` or `decide`
+- For `Ordering`: use `Ordering.lt`, `Ordering.eq`, `Ordering.gt` (or `.lt` etc. with dot notation)
+- `Ordering.lt.cmp` etc. not available — use `compare` or `decide` on `Ordering` values
 
 ## Status Issue: #4 (open), updated run 46
-## Theorem Count (run 47)
-- 15 files, 313 named theorems + 11 examples, 0 sorry
-- StreamLimits:24 | CidMgmt:21 | Cubic:26 | DatagramQueue:26 | FlowControl:22
+## Theorem Count (run 48)
+- 14 files, 289 named theorems + 12 examples, 0 sorry
+- CidMgmt:21 | Cubic:26 | DatagramQueue:26 | FlowControl:22
   Minmax:15 | NewReno:13 | PRR:20 | PacketNumDecode:23 | RangeBuf:19
   RangeSet:16 | RecvBuf:29 | RttStats:23 | SendBuf:26 | Varint:10
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox — recurring)
-- FVSquad.lean imports all 15 modules
+- FVSquad.lean imports all 14 modules
 
 ## Next Priorities
-1. **RecvBuf general write** — model write() with BTreeMap overlap handling
-2. **Stream priority ordering** — StreamPriorityKey::cmp (urgency/incremental)
-3. **CORRESPONDENCE.md** — add StreamLimits (target 15) entry
-4. **CRITIQUE.md** — add assessment for StreamLimits
+1. **StreamPriorityKey Lean spec** — write FVSquad/StreamPriorityKey.lean;
+   model the 7-case ordering; prove Ord laws; INVESTIGATE OQ-1 non-antisymmetry
+2. **RecvBuf general write** — model write() with BTreeMap overlap handling
+3. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
