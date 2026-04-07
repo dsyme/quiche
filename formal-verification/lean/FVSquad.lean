@@ -11,3 +11,4 @@ import FVSquad.Cubic
 import FVSquad.RangeBuf
 import FVSquad.RecvBuf
 import FVSquad.SendBuf
+import FVSquad.CidMgmt
