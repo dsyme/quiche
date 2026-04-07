@@ -4,42 +4,31 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-05 03:46 UTC
-- **Commit**: `8f8e2881`
+- **Date**: 2026-04-07 03:45 UTC
+- **Commit**: `83264201`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **nine modules with 190
-theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Run 39 completed the last
-outstanding sorry: `decode_pktnum_correct` in `PacketNumDecode.lean` is now
-fully proved via a 3-way window-quotient case split using the new
-`mul_uniq_in_range` helper. During the proof process, an **edge-case bug in
-the original theorem statement** was discovered: the non-strict `hprox2 ≤`
-allowed a counterexample at `actual_pn = expected_pn − pnHwin` where branch
-1 fires erroneously. The corrected theorem uses strict `<` (matching RFC 9000
-§A.3's own invariant) plus two new standard-QUIC bounds. The entire suite now
-has zero sorrys and provides machine-checked confidence in all nine core
-algorithms of the QUIC stack: the varint codec, the RangeSet interval
-algorithms of the QUIC stack.
-
-machine-checked confidence in the QUIC varint codec, the RangeSet interval
-data structure, the Minmax running-minimum filter, the RTT estimator, the
-flow-control window manager, the NewReno congestion controller, the
-DatagramQueue bounded FIFO, the PRR rate-reduction algorithm, and the RFC 9000
-§A.3 packet number decoding algorithm. The most valuable results are the
-`varint_round_trip` property (encode/decode identity), the
-`RangeSet.insert_preserves_invariant` structural invariant, the
-`adjusted_rtt_ge_min_rtt` theorem that prevents an ack-delay-based timing
-attack, the NewReno `cwnd_floor_new_event` property that guarantees the
-minimum congestion window floor after any loss event, and the
-`decode_pktnum_correct` theorem proving RFC 9000 §A.3 proximity correctness.
-The main limitation across all files is that Lean models use unbounded `Nat`
-instead of bounded Rust integers, so overflow/underflow edge cases are not
-verified.
-The main limitation across all files is that Lean models use unbounded `Nat` instead of bounded
-Rust integers, so overflow/underflow edge cases are not verified.
+The formal verification suite for `quiche` now covers **thirteen modules with
+309 theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Since run 39 the suite has
+grown by four new targets: CUBIC congestion control (26 theorems, run 41),
+RangeBuf offset arithmetic (19 theorems, run 43), the stream receive buffer
+RecvBuf (32 theorems, run 44), and the stream send buffer SendBuf (43 theorems,
+run 45). The most security-relevant new result is `emitN_le_maxData` in
+`SendBuf.lean` — a formal proof that the QUIC sender can never transmit bytes
+beyond the peer's advertised MAX_DATA limit (RFC 9000 §4.1), which is a
+direct, machine-checked statement of the fundamental flow-control safety
+property. Earlier highlights include `decode_pktnum_correct` (RFC 9000 §A.3,
+run 39), `wCubic_epoch_anchor` (RFC 8312bis §5.1, run 41),
+`insertContiguous_inv` (RecvBuf invariant preservation, run 44), and the
+long-running `adjusted_rtt_ge_min_rtt` (ack-delay timing-attack defence, RFC
+9002 §5.3). The entire suite has had zero outstanding `sorry`s since run 39.
+The main cross-cutting limitation remains the Nat-vs-u64 abstraction: no file
+verifies overflow behaviour, so integer-boundary edge cases are not captured.
+The RecvBuf general-case `write()` (out-of-order, overlapping data) is the
+largest remaining unverified component of the stream layer.
 
 ---
 
@@ -174,60 +163,52 @@ u64) is not captured.
 
 Prioritised by impact:
 
-1. **Semantic set-union for RangeSet** (high): prove that after inserting range
-   `[a,b)`, the points covered by the result equal the old set ∪ `{a..b-1}`.
-   `insert_covers_union` in `RangeSet.lean` already proves this; the gap is that
-   the theorem is stated for the unbounded model (no capacity eviction).  A
-   stronger version bounded by `len < capacity` would close the abstraction gap.
+1. **RecvBuf general-case write** (high): the `insertContiguous` model covers
+   only the common in-order path.  The full `write()` function handles
+   out-of-order and overlapping data via BTreeMap range-splitting.  Verifying
+   invariant preservation for the general case — particularly the no-gap,
+   no-duplicate postcondition — is the highest-value remaining proof target
+   for the stream layer.
 
-2. **CUBIC congestion control** (high): `quiche/src/recovery/congestion/cubic.rs`
-   implements RFC 8312.  Key pure-function targets are `cubic_k` (the time to
-   reach the last maximum window) and `w_cubic` (the CUBIC window function at
-   time `t`).  Both are arithmetic expressions involving cube roots (modelled via
-   `f64`).  A Lean model could use rational or fixed-point arithmetic.  Properties
-   worth verifying: `w_cubic(0) = β·W_max`, `w_cubic` is convex (window growth
-   accelerates as it approaches `W_max`), and that `congestion_event` reduces
-   `cwnd` by exactly `(1 - β) * cwnd`.  This is the only congestion algorithm
-   in `quiche` that remains without FV coverage.
+2. **Connection ID sequence management** (high): `quiche/src/cid.rs` is
+   security-critical.  `next_scid_seq` strict monotonicity (no CID reuse),
+   disjointness of all active CID sequence numbers, and the active-set size
+   bound (`≤ active_scid_limit`) are all formally statable and tractable.
+   CID reuse would break QUIC anti-linkability guarantees (RFC 9000 §5.1).
 
-3. **RTT lower-bound / decay rate** (medium): add theorems showing `smoothed_rtt`
-   cannot fall *below* some fraction of `min_rtt`.  This would catch an
-   under-smoothing bug that could make the congestion controller too aggressive.
+3. **CUBIC w_cubic dynamic growth** (medium): the convexity and
+   Reno-friendly transition of the CUBIC window curve are not yet proved.
+   `wCubicNat_monotone` establishes non-decrease in time; the stronger
+   property that W_cubic(t) > W_Reno(t) beyond the transition point would
+   confirm correct AIMD–CUBIC mode switching.
 
-4. **Flow control u64 overflow guard** (medium): add a bounded model (e.g.,
-   restrict `consumed + window < 2^62`) and prove no overflow occurs under the
-   varint limit.  This closes the one known gap between the Lean model and the
-   Rust u64 arithmetic.
+4. **RTT lower-bound / decay rate** (medium): add theorems showing
+   `smoothed_rtt` cannot fall below some fraction of `min_rtt`.  This
+   would catch an under-smoothing bug that could make the congestion
+   controller too aggressive.
 
-5. **Varint wire-format tag bits** (medium): add a theorem verifying that the
-4. **Congestion window** (medium): `NewReno`, `PRR`, and `CUBIC` are now all
-   formally specified. The remaining gap is **CUBIC's dynamic w_cubic function**:
-   theorems about `w_cubic(t)` growth relative to the Reno estimate (`w_est`) and
-   the transition point where CUBIC switches from friendly (Reno-mode) to pure
-   cubic growth are not yet verified.
+5. **Flow control u64 overflow guard** (medium): add a bounded model
+   (restrict `consumed + window < 2^62`) and prove no overflow occurs
+   under the varint limit.  This closes the one known gap between the
+   Lean model and the Rust u64 arithmetic.
 
-5. **Stream-level flow control** (medium): `quiche/src/stream/` uses similar
-   window arithmetic to `flowcontrol.rs` but with per-stream state.  The
-   connection-level `FlowControl` proofs could be extended or reused.
+6. **SendBuf retransmission and reset paths** (medium): the current model
+   covers write/emit/ack/updateMaxData but not `retransmit()`, `reset()`,
+   `shutdown()`, or `stop()`.  These control the stream termination state
+   machine and interact non-trivially with flow control.
 
-6. **Varint wire-format tag bits** (medium): add a theorem verifying that the
+7. **Varint wire-format tag bits** (low): add a theorem verifying that the
    2-bit tag in the first byte of an encoded varint matches the length class.
    Current proofs do not cover this aspect.
-
-6. **Stream receive buffer** (medium): `quiche/src/stream/recv_buf.rs` implements
-   a `BTreeMap`-based out-of-order reassembly buffer.  Key properties: no data
-   lost under reordering; no duplicate data returned; `off` monotonically advances.
-   This would be the first FV target touching Rust `BTreeMap` semantics.
 
 ---
 
 ## Concerns
 
-- **Nat vs u64**: all nine files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
-- **Nat vs u64**: all ten files model Rust `u64`/`usize` values as Lean `Nat` (unbounded).
-  Overflow is the primary unverified risk; see CORRESPONDENCE.md for per-file
-  documentation.  The varint file partially mitigates this by bounding inputs to
-  `MAX_VAR_INT = 2^62 − 1`.
+- **Nat vs u64**: all thirteen files model Rust `u64`/`usize` values as Lean
+  `Nat` (unbounded). Overflow is the primary unverified risk; see
+  CORRESPONDENCE.md for per-file documentation.  The varint file partially
+  mitigates this by bounding inputs to `MAX_VAR_INT = 2^62 − 1`.
 
 - **Autotune timing abstraction**: `FlowControl.autotune_window` and the RTT
   minmax filter both rely on `Instant` comparisons that are abstracted away.
@@ -359,3 +340,117 @@ pnWin ≤ 2^62` (both always satisfied in real QUIC usage).
 decode error would result in dropped or misrouted packets. The proof covers
 the complete RFC 9000 §A.3 correctness argument for all three window-shift
 cases (upward adjustment, downward adjustment, no adjustment).
+
+---
+
+### Target 10: CUBIC congestion control (`FVSquad/Cubic.lean`) — 26 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `wCubic_epoch_anchor` | high | **high** | RFC 8312bis §5.1: CUBIC curve passes through the reduction point at epoch start — verifies the fundamental W_max anchor property |
+| `ssthresh_lt_cwnd_pos` | high | **high** | On every fresh loss event, ssthresh < cwnd (strict reduction) — the key CUBIC safety property |
+| `fastConv_wmax_lt_cwnd` | high | **high** | Fast convergence: w_max is reduced below cwnd when below prior peak |
+| `wCubicNat_monotone` | high | medium | W_cubic is non-decreasing in time — confirms the "restore-then-grow" curve shape |
+| `wCubicNat_ge_wmax_of_t_ge_k` | mid | medium | W_cubic ≥ w_max when t ≥ K — curve correctly rises above the prior peak |
+| `congestionEvent_reduces_cwnd` | mid | **high** | cwnd > 0 → new_cwnd < cwnd; strict reduction on congestion |
+| `wCubicNat_at_k_eq_wmax` | mid | medium | W_cubic(K) = w_max — exact epoch-anchor identity (Nat model) |
+| `fastConv_monotone` | mid | low | Monotonicity of fast-convergence w_max function |
+| 18 others | low | low | Concrete test vectors, structural helpers, parameter bounds |
+
+**Assessment**: The epoch-anchor and strict-reduction theorems are high-value.
+`wCubic_epoch_anchor` formally verifies the mathematical property that defines
+CUBIC's recovery behaviour: after a loss, the window starts at the correct
+fractional reduction point and the CUBIC curve is anchored there.
+`ssthresh_lt_cwnd_pos` prevents the pathological case of a loss event that
+fails to reduce the congestion window. **Gap**: (1) the Reno-friendly
+transition theorem (W_cubic vs W_est comparison) is not proved; (2) the f64
+cube root (`libm::cbrt`) is abstracted as a hypothesis — the libm
+implementation is not verified; (3) no multi-loss-event monotonicity theorem
+verifies that repeated losses converge the window correctly.
+
+---
+
+### Target 11: RangeBuf offset arithmetic (`FVSquad/RangeBuf.lean`) — 19 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `consume_maxOff` | high | **high** | `consume` preserves `maxOff` — the BTreeMap key in `RecvBuf` is stable across partial reads. A violation would corrupt the BTreeMap ordering |
+| `split_adjacent` | high | **high** | `left.maxOff = right.off` — no gap, no overlap between split halves. A violation would create a data hole or duplicate region |
+| `split_maxOff` | mid | **high** | `right.maxOff = original.maxOff` — split preserves the right-side boundary |
+| `consume_split_maxOff` | mid | medium | Composing consume then split preserves maxOff |
+| `split_len_partition` | mid | medium | `left.len + right.len = original.len` — partition is complete, no byte loss |
+| `split_left_fin_false` | mid | medium | Left half never carries the FIN bit — only the rightmost split fragment can be terminal |
+| `split_right_fin` | mid | medium | Right half inherits the original FIN flag |
+| `maxOff_identity` | low | low | `maxOff = curOff + curLen` — definitional consistency |
+| 11 others | low | low | Structural helpers, test vectors, monotonicity |
+
+**Assessment**: `consume_maxOff` and `split_adjacent` are the most important
+theorems: both prove properties relied upon by the `RecvBuf` reassembler.
+`RecvBuf` keys its BTreeMap on `max_off`; a `consume` call that changed
+`max_off` would silently corrupt the tree. `split_adjacent` proves the
+partition is exact — a gap would silently drop bytes. These theorems are
+foundational for the RecvBuf proofs. **Gap**: byte contents are abstracted
+away; data integrity through consume and split is not verified.
+
+---
+
+### Target 12: Stream receive buffer (`FVSquad/RecvBuf.lean`) — 32 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `emitN_preserves_inv` | high | **high** | All 5 buffer invariants preserved by `emitN` (read-cursor advance) — structural safety of the reassembler read path |
+| `insertContiguous_inv` | high | **high** | All 5 buffer invariants preserved by in-order sequential write — structural safety of the common write path |
+| `insertContiguous_two_highMark` | high | **high** | Two sequential writes advance `highMark` by `c1.len + c2.len` — byte-count accounting correctness |
+| `insertContiguous_highMark_grows` | mid | **high** | Non-empty write strictly advances `highMark` — monotone progress |
+| `emitN_readOff_nondecreasing` | mid | **high** | Read cursor never moves backward — stream delivery ordering |
+| `isFin_readOff_eq_highMark` | mid | medium | When FIN is set and stream is drained, `readOff = highMark` |
+| `chunksAbove_mono` | low | low | Ordering helper |
+| `chunksAbove_of_ordered` | low | low | Structural helper |
+| 24 others | low | low | Invariant sub-properties, accessor identities, test vectors |
+
+**Assessment**: The invariant-preservation theorems are high-value for the
+most complex data structure in the stream layer. The RecvBuf reassembler is
+the code path for all QUIC stream data delivery; a bug corrupting chunk
+ordering or byte accounting would silently produce garbled application data.
+`insertContiguous_inv` is the key result — it proves the well-formedness
+invariant is an inductive invariant of the common write path. **Gaps**:
+(1) `insertContiguous` models only the contiguous (in-order) path; the
+general overlapping-write case is not proved; (2) flow-control limit
+enforcement (`highMark ≤ max_data`) is not modelled; (3) drain mode and
+reset handling are not covered.
+
+---
+
+### Target 13: Stream send buffer (`FVSquad/SendBuf.lean`) — 43 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `emitN_le_maxData` | high | **high** | **Security property**: `emitOff` can never exceed `maxData` after any emit — the sender cannot exceed the peer's flow-control credit (RFC 9000 §4.1) |
+| `emitN_le_off` | high | **high** | The sender cannot emit beyond bytes that have been written — prevents sending uninitialised data |
+| `write_preserves_inv` | high | **high** | All 4 invariants preserved by write (I1–I4 inductive under append) |
+| `sb_emitN_preserves_inv` | high | **high** | All 4 invariants preserved by emitN — emitting bytes maintains well-formedness |
+| `updateMaxData_preserves_inv` | high | **high** | MAX_DATA increase preserves invariants — flow-control update is safe |
+| `write_possible_after_updateMaxData` | high | **high** | If peer sends MAX_DATA ≥ off + n, there is capacity for n bytes — the unblocking guarantee |
+| `write_after_setFin_isFin_false` | mid | **high** | Writing past FIN invalidates is_fin — prevents data-after-FIN |
+| `ackContiguous_preserves_inv` | mid | medium | ACK processing preserves all invariants |
+| `setFin_preserves_inv` | mid | medium | Setting FIN preserves invariants |
+| `setFin_isFin` | mid | medium | `setFin` correctly sets the FIN flag |
+| `write_compose` | mid | medium | Sequential writes compose correctly: `write(n₁).write(n₂) = write(n₁+n₂)` |
+| `cap_grows_after_updateMaxData` | mid | medium | Capacity strictly increases when MAX_DATA is raised |
+| `cap_exhausted_after_write_cap` | mid | medium | Writing exactly `cap` bytes exhausts capacity |
+| `ackContiguous_mono` | low | medium | ACK offset is non-decreasing |
+| `emitN_emitOff_mono` | low | medium | Emit offset is non-decreasing |
+| `updateMaxData_mono` | low | low | maxData is non-decreasing |
+| 27 others | low | low | Accessor identities, test vectors, structural helpers |
+
+**Assessment**: `emitN_le_maxData` is the most security-relevant theorem in
+the entire suite — it formally proves the QUIC flow-control invariant for the
+send path at the level of individual byte offsets. A violation would allow a
+malicious receiver to withhold MAX_DATA updates and force the sender into
+negative credit, or (more practically) a sender implementation bug could
+exceed the advertised limit and violate the QUIC connection. The four
+invariant-preservation theorems collectively prove that the send buffer
+maintains its well-formedness under all modelled operations. **Gaps**:
+(1) retransmission, reset, shutdown, and stop paths not modelled; (2) the ack
+model uses contiguous-prefix only (not the full RangeSet ack); (3) Nat vs u64
+overflow is not captured; (4) `blocked_at` and `error` fields not modelled.

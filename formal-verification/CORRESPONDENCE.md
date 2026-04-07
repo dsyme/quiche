@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-06 09:51 UTC
-- **Commit**: `2c3bbfa6`
+- **Date**: 2026-04-07 03:50 UTC
+- **Commit**: `83264201`
 
 ---
 
@@ -787,3 +787,43 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 - `insertContiguous_inv`: all 5 invariants preserved by in-order sequential write.
 - `insertContiguous_highMark_grows`: strictly advances the receive window when len > 0.
 - `insertContiguous_two_highMark`: two sequential writes advance highMark by the sum of lengths — the foundational arithmetic for correct byte accounting.
+
+---
+
+## Target 13: SendBuf stream send buffer (`FVSquad/SendBuf.lean`)
+
+**Rust source**: `quiche/src/stream/send_buf.rs`
+
+| Lean name | Rust name | File+line | Correspondence | Notes |
+|-----------|-----------|-----------|----------------|-------|
+| `SendState.off` | `SendBuf::off` | `send_buf.rs:75` | exact | total bytes written (append offset) |
+| `SendState.emitOff` | `SendBuf::emit_off` | `send_buf.rs:78` | exact | bytes sent to network |
+| `SendState.ackOff` | `SendBuf::ack_off()` | `send_buf.rs:320` | abstraction | Lean models the contiguous-prefix case; Rust uses full RangeSet ACKs |
+| `SendState.maxData` | `SendBuf::max_data` | `send_buf.rs:81` | exact | peer flow-control limit |
+| `SendState.finOff` | `SendBuf::fin_off` | `send_buf.rs:86` | exact | optional FIN byte offset |
+| `sbWrite` | `SendBuf::write()` | `send_buf.rs:131` | abstraction | Lean increments `off` by `n`; Rust also enqueues `RangeBuf` data into a `VecDeque` |
+| `sbEmitN` | `SendBuf::emit()` | `send_buf.rs:183` | abstraction | Lean advances `emitOff`; Rust yields `&[u8]` slices from the `VecDeque` |
+| `sbAckContiguous` | `SendBuf::ack()` (contiguous prefix) | `send_buf.rs:250` | abstraction | Lean's `ackContiguous` models only the case `ackOff += len`; Rust full ack uses RangeSet |
+| `sbUpdateMaxData` | `SendBuf::update_max_data()` | `send_buf.rs:315` | exact | `max_data = max(max_data, m)` |
+| `sbSetFin` | `SendBuf::shutdown()` (fin path) | `send_buf.rs:335` | abstraction | Lean's `setFin` sets `finOff := some off`; Rust has additional `shutdown_write/read` variants |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| S1 | `ackOff` is a scalar contiguous-prefix offset | Rust uses a `RangeSet` for sparse ACKs | Out-of-order ACKs (non-contiguous ranges) cannot be modelled; only the simplest ACK pattern is verified |
+| S2 | Byte contents abstracted | Rust stores `VecDeque<RangeBuf>` with actual bytes | Data integrity of the transmit buffer is not captured; only cursor/offset arithmetic is proved |
+| S3 | Retransmission not modelled | `SendBuf::retransmit()` re-queues a `RangeBuf` range for resend | The retransmission path is entirely out of scope; `emitOff` monotonicity holds only for the first-send case |
+| S4 | `reset()`, `stop()`, `shutdown()` not modelled | All three terminate the stream state machine | Stream termination logic is not verified; `finOff` consistency is proved only for the happy path |
+| S5 | `blocked_at` and `error` fields not modelled | Rust tracks flow-control blocking and stream reset errors | Error and blocking state transitions are not captured |
+| S6 | `usize` as `Nat` | Rust uses `u64` / `usize` | Integer overflow not verified; for practical QUIC stream sizes (< 2^62) the arithmetic is equivalent |
+
+### Theorem impact
+
+43 theorems (0 sorry ✅). Key results:
+- `emitN_le_maxData`: the sender's `emitOff` never exceeds `maxData` — the fundamental QUIC flow-control safety theorem (RFC 9000 §4.1), security-relevant.
+- `emitN_le_off`: the sender cannot emit beyond written data — prevents uninitialised data transmission.
+- `write_preserves_inv`: all 4 structural invariants are inductive under `write`.
+- `sb_emitN_preserves_inv`: all 4 structural invariants are inductive under `emitN`.
+- `write_possible_after_updateMaxData`: MAX_DATA update unblocking guarantee — if peer's MAX_DATA ≥ off + n, capacity for n bytes is available.
+- `write_after_setFin_isFin_false`: data written past the FIN offset invalidates the FIN flag, preventing data-after-FIN (RFC 9000 §19.20).

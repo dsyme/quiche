@@ -19,7 +19,7 @@
 | 11 | `RangeBuf` offset arithmetic | `quiche/src/range_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 19 theorems; maxOff invariance under consume, split adjacency, partition; `FVSquad/RangeBuf.lean` |
 | 12 | `RecvBuf` stream reassembly | `quiche/src/stream/recv_buf.rs` | 4 — Implementation | 🔄 In progress | **0 sorry** — 32 theorems; emitN+insertContiguous invariant preservation; `FVSquad/RecvBuf.lean`; informal spec in `specs/stream_recv_buf_informal.md` |
 | 13 | `SendBuf` stream send buffer | `quiche/src/stream/send_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 43 theorems; flow-control safety, invariant preservation, FIN consistency; `FVSquad/SendBuf.lean` |
-| 14 | Connection ID sequence management | `quiche/src/cid.rs` | 1 — Research | ⬜ Not started | seq monotonicity, no-reuse, active-set bound; see RESEARCH.md |
+| 14 | Connection ID sequence management | `quiche/src/cid.rs` | 5 — All Proofs | ✅ Done | 21 theorems, 0 sorry; specs/cid_mgmt_informal.md; FVSquad/CidMgmt.lean |
 
 ## Phase Definitions
 
