@@ -4,31 +4,26 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 03:45 UTC
-- **Commit**: `83264201`
+- **Date**: 2026-04-08 03:45 UTC
+- **Commit**: `117d79c4`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **thirteen modules with
-309 theorems, 0 sorry** (Lean 4.29.0, no Mathlib). Since run 39 the suite has
-grown by four new targets: CUBIC congestion control (26 theorems, run 41),
-RangeBuf offset arithmetic (19 theorems, run 43), the stream receive buffer
-RecvBuf (32 theorems, run 44), and the stream send buffer SendBuf (43 theorems,
-run 45). The most security-relevant new result is `emitN_le_maxData` in
-`SendBuf.lean` — a formal proof that the QUIC sender can never transmit bytes
-beyond the peer's advertised MAX_DATA limit (RFC 9000 §4.1), which is a
-direct, machine-checked statement of the fundamental flow-control safety
-property. Earlier highlights include `decode_pktnum_correct` (RFC 9000 §A.3,
-run 39), `wCubic_epoch_anchor` (RFC 8312bis §5.1, run 41),
-`insertContiguous_inv` (RecvBuf invariant preservation, run 44), and the
-long-running `adjusted_rtt_ge_min_rtt` (ack-delay timing-attack defence, RFC
-9002 §5.3). The entire suite has had zero outstanding `sorry`s since run 39.
-The main cross-cutting limitation remains the Nat-vs-u64 abstraction: no file
-verifies overflow behaviour, so integer-boundary edge cases are not captured.
-The RecvBuf general-case `write()` (out-of-order, overlapping data) is the
-largest remaining unverified component of the stream layer.
+The formal verification suite for `quiche` now covers **fifteen modules with
+333 theorems + 19 examples, 0 sorry** (Lean 4.29.0, no Mathlib). Run 49 adds
+`StreamPriorityKey.lean` (22 theorems + 7 examples): the ordering comparator
+used in HTTP/3 stream scheduling (RFC 9218). The most notable result is a
+**formal proof of an Ord law violation (OQ-1)**: the both-incremental case of
+`StreamPriorityKey::cmp` returns `Ordering::Greater` for **both** `a.cmp(b)`
+and `b.cmp(a)` simultaneously, violating the standard antisymmetry contract.
+This is not necessarily a bug — the intrusive red-black tree may tolerate
+non-antisymmetric comparators — but it is a formally confirmed deviation from
+the Rust `Ord` contract. The prior fourteen modules continue to hold with zero
+outstanding `sorry`s. Key previous results include `emitN_le_maxData`
+(SendBuf, flow-control safety), `decode_pktnum_correct` (PacketNumDecode, RFC
+9000 §A.3 algorithm), and `newScid_seq_fresh` (CidMgmt, CID uniqueness).
 
 ---
 
@@ -159,6 +154,42 @@ u64) is not captured.
 
 ---
 
+### `FVSquad/StreamPriorityKey.lean` — 22 theorems + 7 examples ✅ (added run 49)
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `cmpKey_incr_incr_not_antisymmetric` | high | **high** | **Finding**: proves OQ-1 — both-incremental case returns `.gt` in *both* directions; Ord antisymmetry violated |
+| `cmpKey_trans_urgency` | high | **high** | Transitivity across urgency levels: correctly propagates priority ordering |
+| `cmpKey_trans_nonincr` | high | high | Transitivity for non-incremental streams at same urgency (id order is transitive) |
+| `cmpKey_nonincr_antisymm` | high | high | Non-incremental case satisfies antisymmetry: `a.id < b.id ↔ cmpKey a b = .lt ∧ cmpKey b a = .gt` |
+| `cmpKey_antisymm_urgency_lt` | high | high | Urgency-distinct case: antisymmetry holds in both directions |
+| `cmpKey_both_incr` | mid | **high** | Case 7 correctness: both-incremental always returns `.gt` — the round-robin approximation |
+| `cmpKey_incr_round_robin` | mid | **high** | Round-robin symmetry: neither incremental stream permanently dominates |
+| `cmpKey_lt_urgency` | mid | medium | Case 2: lower urgency returns `.lt` |
+| `cmpKey_gt_urgency` | mid | medium | Case 3: higher urgency returns `.gt` |
+| `cmpKey_both_nonincr` | mid | medium | Case 4: non-incremental reduces to `compare id id` |
+| `cmpKey_incr_vs_nonincr` | mid | medium | Case 5: incremental loses to non-incremental |
+| `cmpKey_nonincr_vs_incr` | mid | medium | Case 6: non-incremental beats incremental |
+| `cmpKey_total` | low | low | Totality: all cases covered, no panic |
+| `cmpKey_refl` | low | low | Reflexivity: same key is always `.eq` |
+| `cmpKey_same_id` | low | low | ID dominance: same stream-ID → Equal regardless of other fields |
+| 7 examples | low | low | Concrete test vectors for all 7 cases |
+
+**Assessment**: The standout result is `cmpKey_incr_incr_not_antisymmetric`
+(OQ-1) — a formally proved deviation from the Rust `Ord` contract. Two
+distinct incremental streams at the same urgency simultaneously compare as
+`Greater` than each other. The intended semantics (round-robin: neither
+dominates) is sound as a scheduling policy, but the Rust `Ord` trait docs
+require antisymmetry for `BTreeMap` etc. The intrusive red-black tree used
+here (`intrusive-collections` crate) accepts custom comparators and may
+tolerate this; nonetheless the deviation is now formally documented.
+**Gaps**: (1) fairness quantification — no theorem bounds how many rounds
+before each incremental stream is served; (2) mixed urgency + incremental
+transitivity is proved only for urgency-distinct case; (3) RBTree structural
+invariants (tree balance under non-antisymmetric comparator) are out of scope.
+
+---
+
 ## Gaps and Recommendations
 
 Prioritised by impact:
@@ -170,34 +201,39 @@ Prioritised by impact:
    no-duplicate postcondition — is the highest-value remaining proof target
    for the stream layer.
 
-2. **Connection ID sequence management** (high): `quiche/src/cid.rs` is
-   security-critical.  `next_scid_seq` strict monotonicity (no CID reuse),
-   disjointness of all active CID sequence numbers, and the active-set size
-   bound (`≤ active_scid_limit`) are all formally statable and tractable.
-   CID reuse would break QUIC anti-linkability guarantees (RFC 9000 §5.1).
+2. **StreamPriorityKey OQ-1 resolution** (high): follow up with maintainers
+   on whether the `intrusive-collections` RBTree tolerates non-antisymmetric
+   comparators (OQ-1). If it does not, the incremental round-robin is
+   UB-adjacent. A theorem bounding the scheduling round-trip count would
+   quantify the fairness guarantee.
 
-3. **CUBIC w_cubic dynamic growth** (medium): the convexity and
+3. **Connection ID sequence management** (medium — partially addressed):
+   CID byte-content uniqueness and the `retire_if_needed` path are still
+   unverified. Disjointness of active CID *values* (not just seqs) is
+   security-critical per RFC 9000 §5.1.
+
+4. **CUBIC w_cubic dynamic growth** (medium): the convexity and
    Reno-friendly transition of the CUBIC window curve are not yet proved.
    `wCubicNat_monotone` establishes non-decrease in time; the stronger
    property that W_cubic(t) > W_Reno(t) beyond the transition point would
    confirm correct AIMD–CUBIC mode switching.
 
-4. **RTT lower-bound / decay rate** (medium): add theorems showing
+5. **RTT lower-bound / decay rate** (medium): add theorems showing
    `smoothed_rtt` cannot fall below some fraction of `min_rtt`.  This
    would catch an under-smoothing bug that could make the congestion
    controller too aggressive.
 
-5. **Flow control u64 overflow guard** (medium): add a bounded model
+6. **Flow control u64 overflow guard** (medium): add a bounded model
    (restrict `consumed + window < 2^62`) and prove no overflow occurs
    under the varint limit.  This closes the one known gap between the
    Lean model and the Rust u64 arithmetic.
 
-6. **SendBuf retransmission and reset paths** (medium): the current model
+7. **SendBuf retransmission and reset paths** (medium): the current model
    covers write/emit/ack/updateMaxData but not `retransmit()`, `reset()`,
    `shutdown()`, or `stop()`.  These control the stream termination state
    machine and interact non-trivially with flow control.
 
-7. **Varint wire-format tag bits** (low): add a theorem verifying that the
+8. **Varint wire-format tag bits** (low): add a theorem verifying that the
    2-bit tag in the first byte of an encoded varint matches the length class.
    Current proofs do not cover this aspect.
 
@@ -205,10 +241,16 @@ Prioritised by impact:
 
 ## Concerns
 
-- **Nat vs u64**: all thirteen files model Rust `u64`/`usize` values as Lean
+- **Nat vs u64**: all fifteen files model Rust `u64`/`usize` values as Lean
   `Nat` (unbounded). Overflow is the primary unverified risk; see
   CORRESPONDENCE.md for per-file documentation.  The varint file partially
   mitigates this by bounding inputs to `MAX_VAR_INT = 2^62 − 1`.
+
+- **StreamPriorityKey OQ-1**: the `cmpKey_incr_incr_not_antisymmetric` theorem
+  proves a violation of the Rust `Ord` contract antisymmetry axiom. Whether
+  `intrusive-collections` RBTree is safe under a non-antisymmetric comparator
+  is currently unknown; until confirmed, the round-robin scheduling proof
+  rests on unverified tree behaviour.
 
 - **Autotune timing abstraction**: `FlowControl.autotune_window` and the RTT
   minmax filter both rely on `Instant` comparisons that are abstracted away.
@@ -238,6 +280,16 @@ Prioritised by impact:
   sorted+disjoint+merged under insertion required substantial case splitting and
   was the most complex proof in the suite.  Its success gives high confidence in
   the ACK-range deduplication logic.
+
+- **`cmpKey_incr_incr_not_antisymmetric`** (StreamPriorityKey.lean, run 49):
+  formal proof that `StreamPriorityKey::cmp` violates Rust `Ord` antisymmetry
+  for the both-incremental same-urgency case (`a.cmp(b) = Greater` AND
+  `b.cmp(a) = Greater` simultaneously). The concrete counterexample
+  `{ id=4, urgency=3, incremental=true }` vs `{ id=7, urgency=3,
+  incremental=true }` is verified by `decide`. This finding confirms that the
+  round-robin scheduling design intentionally deviates from the standard `Ord`
+  contract — the question of whether `intrusive-collections` RBTree is safe
+  under this deviation is OQ-1, now formally stated.
 
 - **`decode_pktnum_correct`** (PacketNumDecode.lean, run 39): the first
   end-to-end algorithm correctness theorem in the suite — proves that RFC 9000
@@ -454,3 +506,33 @@ maintains its well-formedness under all modelled operations. **Gaps**:
 (1) retransmission, reset, shutdown, and stop paths not modelled; (2) the ack
 model uses contiguous-prefix only (not the full RangeSet ack); (3) Nat vs u64
 overflow is not captured; (4) `blocked_at` and `error` fields not modelled.
+
+---
+
+### Target 14: Connection ID sequence management (`FVSquad/CidMgmt.lean`) — 21 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `newScid_preserves_inv` | high | **high** | All 5 CID invariants preserved by `newScid` — structural safety of the SCID issuing path (RFC 9000 §5.1.1) |
+| `retireScid_preserves_inv` | high | **high** | All 5 invariants preserved by `retireScid` — the retire path cannot corrupt the sequence state |
+| `newScid_seq_fresh` | high | **high** | Newly issued seq was not previously active — duplicates are formally impossible |
+| `retireScid_removes` | high | **high** | Target seq is absent after retire — the retire contract is honoured |
+| `retireScid_keeps_others` | high | high | Non-target seqs are unaffected — retire has no collateral damage |
+| `activeSeqs_lt_nextSeq` | mid | medium | All active seqs are strictly below `nextSeq` — sequence-number ordering invariant (I3) |
+| `newScid_nextSeq_strict` | mid | medium | `nextSeq` strictly advances — no wrap-around under natural-number model |
+| `newScid_two_distinct` | mid | medium | Two successive `newScid` calls always yield different seqs |
+| `applyNewScid_nextSeq` | mid | medium | After k calls, `nextSeq` = initial + k — exact accounting |
+| `applyNewScid_length` | mid | medium | Active set grows by exactly k — capacity accounting correctness |
+| 11 others | low | low | Accessors, list helpers (`allDistinct_append_fresh`, `filter_length_le`, etc.) |
+
+**Assessment**: The CidMgmt suite captures the security-critical property
+from RFC 9000 §5.1.1: every source Connection ID has a unique sequence number
+that is never reused. `newScid_seq_fresh` is the key result — it proves that
+the allocator never issues a sequence number already present in the active set.
+`newScid_preserves_inv` proves that the five-part well-formedness invariant
+(including the SCID count bound `|active| ≤ 2·limit−1` mandated by RFC 9000
+§5.1.1) is an inductive invariant. **Gaps**: (1) CID byte content (duplicate
+CID detection) is not modelled; (2) the `retire_if_needed` path is not
+modelled; (3) path-binding, reset-token, and `retire_prior_to` semantics are
+entirely out of scope; (4) integer overflow on `u64` sequence numbers is not
+captured (practically irrelevant: 2^64 CID retirements is not feasible).

@@ -12,3 +12,4 @@ import FVSquad.RangeBuf
 import FVSquad.RecvBuf
 import FVSquad.SendBuf
 import FVSquad.CidMgmt
+import FVSquad.StreamPriorityKey
