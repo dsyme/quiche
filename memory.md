@@ -11,65 +11,46 @@
 ### 11. RangeBuf offset arithmetic — Phase 5 COMPLETE (19 theorems)
 ### 12. Stream receive buffer (RecvBuf) — Phase 4 (35 theorems, 0 sorry)
 - Lean file: FVSquad/RecvBuf.lean
-- emitN: fully proved; insertContiguous: fully proved (in-order path)
-- insertAny: general out-of-order write model — run 50 ✅
-  - noOverlapWith, insertChunkAt, RecvBuf.insertAny
-  - insertAny_inv: full invariant preservation
+- emitN + insertContiguous fully proved; insertAny general model added
 - Next: extend to overlapping chunks (hardest part)
 
 ### 13. SendBuf stream send buffer — Phase 5 COMPLETE (run 45)
-- **26 theorems, 0 sorry** — FVSquad/SendBuf.lean
+- **43 theorems, 0 sorry** — FVSquad/SendBuf.lean
 
 ### 14. Connection ID sequence management — Phase 5 COMPLETE (run 46)
 - **21 theorems, 0 sorry** — FVSquad/CidMgmt.lean
 
 ### 15. StreamPriorityKey::cmp ordering — Phase 5 COMPLETE (run 49)
 - **22 theorems + 7 examples, 0 sorry** — FVSquad/StreamPriorityKey.lean
-- OQ-1 FORMALLY PROVED: cmpKey_incr_incr_not_antisymmetric
-- TARGETS.md updated to phase 5 (run 50)
+- OQ-1 FORMALLY PROVED: cmpKey_incr_incr_not_antisymmetric (Ord violation)
+- PR #44 merged
 
-### 16. OctetsMut byte-buffer read/write — Phase 2 (Informal Spec)
-- Informal spec: specs/octets_informal.md (run 50)
-- Key properties: put-then-get round-trip, cursor arithmetic, big-endian
-- Open questions: OQ-1 rewind safety, OQ-2 put_u24 truncation, OQ-3 unsafe
-- Next: write FVSquad/OctetsMut.lean (phase 3)
+### 16. OctetsMut byte-buffer read/write — Phase 5 COMPLETE (run 51)
+- **18 theorems, 0 sorry** — FVSquad/OctetsMut.lean
+- Round-trip: putU8/U16/U32 write→rewind→read recovers original value
+- Cursor inverses: skip_rewind_inverse, rewind_skip_inverse
+- Invariant: putU8_preserves_inv, cap_plus_off_eq_len
+- Informal spec: specs/octets_informal.md
+- PR: lean-squad-run51-24149866820-octetsmut (pending push — safeoutputs MCP failed)
 
 ## Open PRs / Branches
-- `lean-squad-run50-24129104910-recvbuf-octets-2` — RecvBuf insertAny + OctetsMut (run 50, new)
-- PRs #43 (run 48) and #44 (run 49) still open upstream
+- PR #43 (run 48): merged into master (fast-forward, CRITIQUE.md only)
+- PR #44 (run 49): merged — StreamPriorityKey
+- `lean-squad-run51-24149866820-octetsmut` — OctetsMut (committed, PR creation failed)
 
-## Key Lean 4.29.0 Learnings
-- `le_or_lt` NOT available — use `Nat.lt_or_ge`
-- `split_ifs` NOT available — use `split` or `by_cases`
-- `push_neg` NOT available — use manual `intro` + cases
-- `lemma` keyword NOT available — use `theorem`
-- `bif`, `at` are RESERVED KEYWORDS
-- `conv_rhs`, `set`, `ring`, `linarith`, `nlinarith` NOT available (no Mathlib)
-- `tauto` NOT available — use manual case splits or `simp`
-- `le_refl` → use `Nat.le_refl`
-- `Nat.le_max_of_le_left` NOT available → use `Nat.le_trans hi (Nat.le_max_left _ _)`
-- `Nat.rec` in theorems is tricky — define helper function instead
-- `native_decide` works on Bool/concrete computations but NOT on Prop directly
-- `List.mem_cons_self d rest` NOT available as function call in 4.29.0
-  → use `List.Mem.head rest` for `d ∈ d :: rest`
-  → use `List.Mem.tail d he` for `e ∈ d :: rest` where `he : e ∈ rest`
-- For Ordering: use `Ordering.lt`, `Ordering.eq`, `Ordering.gt`
+## Suite Status (run 51)
+- **16 modules, 351 theorems, 25 examples, 0 sorry**
+- Lean 4.29.0, no Mathlib
 
-## Status Issue: #4 (open), updated run 50
-## Theorem Count (run 50)
-- 15 files, 317 named theorems + 24 examples, 0 sorry
-- CidMgmt:21 | Cubic:26 | DatagramQueue:26 | FlowControl:22
-  Minmax:15 | NewReno:13 | PRR:20 | PacketNumDecode:23 | RangeBuf:19
-  RangeSet:16 | RecvBuf:35+17ex | RttStats:23 | SendBuf:26 | Varint:10
-  StreamPriorityKey:22+7ex
+## Key Technical Notes
+- No Mathlib: use omega, simp, decide, rfl; no ring/linarith/norm_num
+- listGet/listSet: define recursively (no List.get?)
+- Big-endian get: use `256 * b0 + b1` NOT `b0 * 256 + b1` for omega compat
+- u32 arithmetic: break 256*(65536*x+...) via intermediate have steps
+- simp [Nat.div_add_mod] closes match + arithmetic in one shot
+- Match reduction: simp (not congr) evaluates match on some X, some Y
 
-## Notes
-- Aeneas: NOT available (no sudo/opam in sandbox — recurring)
-- FVSquad.lean imports all 15 modules
-
-## Next Priorities
-1. **OctetsMut Lean spec** — write FVSquad/OctetsMut.lean with put_uN/get_uN
-   model and round-trip theorem (put_uN; rewind; get_uN = identity)
-2. **RecvBuf overlap handling** — extend insertAny to trim/split overlapping
-   chunks (full Rust write() path)
-3. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
+## Next Targets
+- RecvBuf overlapping chunks (hardest; phase 4 → 5)
+- OctetsMut: add put_u64 model, add range preconditions (OQ-1)
+- CID byte-content uniqueness (security-critical per RFC 9000 §5.1)
