@@ -1,6 +1,6 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-04-07 (run 48)
+Last updated: 2026-04-08 (run 49)
 
 ## Theorem Count
 - Varint.lean: 10 theorems, 0 sorry ✅
@@ -17,14 +17,15 @@ Last updated: 2026-04-07 (run 48)
 - RecvBuf.lean: 29 theorems, 0 sorry ✅
 - SendBuf.lean: 26 theorems, 0 sorry ✅
 - CidMgmt.lean: 21 theorems, 0 sorry ✅
-- **Total: 289 named theorems + 12 examples, 0 sorry**
+- StreamPriorityKey.lean: 22 theorems + 7 examples, 0 sorry ✅
+- **Total: 311 named theorems + 19 examples, 0 sorry**
 
-## New This Run (48)
-- CORRESPONDENCE.md: CidMgmt (Target 14) section added
-- CRITIQUE.md: CidMgmt assessment added; overall updated to 14 modules/330 theorems
-- TARGETS.md: Target 15 (StreamPriorityKey) added at phase 2
-- specs/stream_priority_key_informal.md: full 7-case ordering spec + OQ-1 finding
+## New This Run (49)
+- FVSquad/StreamPriorityKey.lean: 22 named theorems + 7 examples, 0 sorry
+  - OQ-1 formally proved: cmpKey_incr_incr_not_antisymmetric
+- CRITIQUE.md: StreamPriorityKey section + OQ-1 finding in Positive Findings
+- FVSquad.lean: StreamPriorityKey import added
 
 ## Status Issue: #4 (open)
 ## Open PRs
-- Branch lean-squad-run48-24095505289-corr-research (pending PR)
+- Branch lean-squad-run49-24116453994-streampriority-critique (pending PR)

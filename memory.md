@@ -22,16 +22,17 @@
 - CORRESPONDENCE.md updated: run 48
 - CRITIQUE.md updated: run 48
 
-### 15. StreamPriorityKey::cmp ordering — Phase 2 (Informal Spec, run 48)
-- Informal spec: specs/stream_priority_key_informal.md
-- TARGETS.md: added as Target 15
-- **Open Question OQ-1**: non-antisymmetry for incremental-incremental case
-  (a.cmp(b) = Greater AND b.cmp(a) = Greater when both incremental,
-  same urgency, different ID) — potential Ord contract violation in Rust
-- Next: write FVSquad/StreamPriorityKey.lean; prove Ord laws; verify OQ-1
+### 15. StreamPriorityKey::cmp ordering — Phase 5 COMPLETE (run 49)
+- **22 theorems + 7 examples, 0 sorry** — FVSquad/StreamPriorityKey.lean
+- lake build PASSED (Lean 4.29.0)
+- **OQ-1 FORMALLY PROVED**: cmpKey_incr_incr_not_antisymmetric
+  Both-incremental same-urgency case: a.cmpKey(b) = .gt AND b.cmpKey(a) = .gt
+  simultaneously. Ord antisymmetry violated. Intentional round-robin design
+  but formally a contract deviation.
+- CRITIQUE.md updated: run 49 (StreamPriorityKey section + OQ-1 finding)
 
 ## Open PRs / Branches
-- Branch `lean-squad-run48-24095505289-corr-research` — CORRESPONDENCE+CRITIQUE+Target15 (run 48, new)
+- `lean-squad-run49-24116453994-streampriority-critique` — StreamPriorityKey + CRITIQUE (run 49, new)
 
 ## Key Lean 4.29.0 Learnings
 - `le_or_lt` NOT available — use `Nat.lt_or_ge`
@@ -45,25 +46,27 @@
 - `Nat.le_max_of_le_left` NOT available → use `Nat.le_trans hi (Nat.le_max_left _ _)`
 - `Nat.rec` in theorems is tricky — define helper function instead
 - `split` on `Nat.max_def`: case 1 is `a ≤ b` → max = b; case 2 is `¬(a ≤ b)` → max = a
-  (ORDER MATTERS: case 1 is the `≤` branch, NOT the else branch)
 - `native_decide` works on `Bool`/concrete computations but NOT on `Prop` directly
-  — for invariant test vectors use `simp [InvDef, initDef]` or `decide`
-- For `Ordering`: use `Ordering.lt`, `Ordering.eq`, `Ordering.gt` (or `.lt` etc. with dot notation)
-- `Ordering.lt.cmp` etc. not available — use `compare` or `decide` on `Ordering` values
+- For `Ordering`: use `Ordering.lt`, `Ordering.eq`, `Ordering.gt` (dot notation: `.lt` etc.)
+- `compare m n = .lt ↔ m < n`: prove by `simp [compare, compareOfLessAndEq, h]`
+  — DO NOT write helper lemmas for this; inline the proof using simp
+- For `if a.id == b.id` (beq) with `hid : a.id ≠ b.id`: use `simp [cmpKey, hid]`
+  — simp connects `==` (BEq) with `≠` (Ne) via `beq_iff_eq`
 
-## Status Issue: #4 (open), updated run 46
-## Theorem Count (run 48)
-- 14 files, 289 named theorems + 12 examples, 0 sorry
+## Status Issue: #4 (open), updated run 49
+## Theorem Count (run 49)
+- 15 files, 311 named theorems + 19 examples, 0 sorry
 - CidMgmt:21 | Cubic:26 | DatagramQueue:26 | FlowControl:22
   Minmax:15 | NewReno:13 | PRR:20 | PacketNumDecode:23 | RangeBuf:19
   RangeSet:16 | RecvBuf:29 | RttStats:23 | SendBuf:26 | Varint:10
+  StreamPriorityKey:22+7ex
 
 ## Notes
 - Aeneas: NOT available (no sudo/opam in sandbox — recurring)
-- FVSquad.lean imports all 14 modules
+- FVSquad.lean imports all 15 modules
 
 ## Next Priorities
-1. **StreamPriorityKey Lean spec** — write FVSquad/StreamPriorityKey.lean;
-   model the 7-case ordering; prove Ord laws; INVESTIGATE OQ-1 non-antisymmetry
-2. **RecvBuf general write** — model write() with BTreeMap overlap handling
+1. **RecvBuf general write** — model write() with BTreeMap overlap handling
+2. **OQ-1 maintainer response** — wait for maintainer input on intrusive-collections
+   RBTree safety under non-antisymmetric comparator
 3. **RangeSet semantic completeness** — flatten(insert(rs,r)) = set_union
