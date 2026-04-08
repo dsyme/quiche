@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 03:50 UTC
-- **Commit**: `83264201`
+- **Date**: 2026-04-07 17:45 UTC
+- **Commit**: `ade740b8`
 
 ---
 
@@ -827,3 +827,38 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 - `sb_emitN_preserves_inv`: all 4 structural invariants are inductive under `emitN`.
 - `write_possible_after_updateMaxData`: MAX_DATA update unblocking guarantee — if peer's MAX_DATA ≥ off + n, capacity for n bytes is available.
 - `write_after_setFin_isFin_false`: data written past the FIN offset invalidates the FIN flag, preventing data-after-FIN (RFC 9000 §19.20).
+
+---
+
+## Target 14: Connection ID sequence management (`FVSquad/CidMgmt.lean`)
+
+**Rust source**: `quiche/src/cid.rs`
+
+| Lean name | Rust name | File+line | Correspondence | Notes |
+|-----------|-----------|-----------|----------------|-------|
+| `CidState.nextSeq` | `ConnectionIdentifiers::next_scid_seq` | `cid.rs:227` | exact | next sequence number to issue |
+| `CidState.activeSeqs` | `ConnectionIdentifiers::scids` (VecDeque) | `cid.rs:~220` | abstraction | Lean keeps only the `seq` field as a `List Nat`; CID bytes, reset token, path_id not modelled |
+| `CidState.limit` | `ConnectionIdentifiers::source_conn_id_limit` | `cid.rs:233` | exact | max active SCIDs the peer permits |
+| `CidState.newScid` | `ConnectionIdentifiers::new_scid` | `cid.rs:359` | abstraction | Lean appends `nextSeq` and increments; Rust also allocates a ConnectionIdEntry, checks duplicate CIDs, optionally calls `retire_if_needed` |
+| `CidState.retireScid` | `ConnectionIdentifiers::retire_scid` | `cid.rs:550` | abstraction | Lean filters the list; Rust also queues a RETIRE_CONNECTION_ID frame and updates path associations |
+
+### Known divergences
+
+| ID | Lean | Rust | Impact |
+|----|------|------|--------|
+| C1 | CID byte content not modelled | Rust stores actual 160-bit CIDs | CID collision/duplicate detection is not formally verified; only sequence-number uniqueness is proved |
+| C2 | `retire_if_needed` path not modelled | `new_scid` may internally retire the oldest CID if the limit is reached | The retirement triggered by `new_scid` is out of scope; the Lean model requires `hroom` as an explicit precondition instead |
+| C3 | Reset-token, path_id, reset_token_sent not modelled | Rust tracks all three per entry | Path-binding and stateless-reset correctness are not captured |
+| C4 | `retire_prior_to` field not modelled | Rust uses it for bulk retire-on-migration | The migration fast-retire path is not in scope |
+| C5 | Error returns modelled as preconditions | Rust returns `Err(Error::IdLimit)` when limit exceeded | The error-path semantics are captured only as guards, not as return-value correctness |
+| C6 | `usize`/`u64` as `Nat` | Rust uses mixed `u64`/`usize` | Integer overflow not verified; for practical CID counts (≤ 8) the arithmetic is equivalent |
+
+### Theorem impact
+
+21 theorems (0 sorry ✅). Key results:
+- `newScid_preserves_inv`: all 5 invariants (nextSeq ≥ 1, distinctness, bound, non-empty, size ≤ 2·limit−1) are preserved by `newScid` — the fundamental QUIC §5.1 safety property.
+- `retireScid_preserves_inv`: all 5 invariants preserved by retire — well-formedness is an inductive invariant of the full retire path.
+- `newScid_seq_fresh`: the sequence number assigned by `newScid` was never previously active — prevents duplicate SCIDs (RFC 9000 §5.1.1).
+- `retireScid_removes`: retire always removes the target sequence — the retire operation is correct.
+- `retireScid_keeps_others`: retire does not disturb non-target sequences — no collateral damage.
+- `applyNewScid_nextSeq`: after k calls to `newScid`, `nextSeq` equals `initial + k` — exact accounting of sequence-number consumption.
