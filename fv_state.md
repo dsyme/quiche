@@ -1,8 +1,8 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-04-10 (run 53)
+Last updated: 2026-04-09 (run 54)
 
-## Theorem Count (current master)
+## Theorem Count (including open PRs)
 - Varint.lean: 10 theorems, 0 sorry ✅
 - RangeSet.lean: 16 theorems, 0 sorry ✅
 - Minmax.lean: 15 theorems, 0 sorry ✅
@@ -17,18 +17,19 @@ Last updated: 2026-04-10 (run 53)
 - RecvBuf.lean: 29 theorems, 0 sorry ✅
 - SendBuf.lean: 26 theorems, 0 sorry ✅
 - CidMgmt.lean: 21 theorems, 0 sorry ✅
-- StreamPriorityKey.lean: 21 theorems, 0 sorry ✅
-- OctetsMut.lean: 40 theorems, 0 sorry ✅ (NEW run 53)
+- StreamPriorityKey.lean: 21 theorems + 7 examples, 0 sorry ✅
+- OctetsMut.lean: 40 theorems, 0 sorry ✅ (run 53, PR #47 open)
 - **Total: 350 named theorems + 11 examples, 0 sorry**
 
-## New This Run (53)
-- OctetsMut.lean: Tasks 3+4+5 for Target 16, 40 theorems, 0 sorry
-  - List helpers, state model, skip/rewind, u8/u16/u32 ops, round-trips
-- CORRESPONDENCE.md: Target 16 (OctetsMut) section added
-- TARGETS.md: Target 16 → Phase 5 ✅
-- PR: lean-squad-run53-24183986964-octets-mut-proofs (open)
-- CORRESPONDENCE.md updated: last revision now 2026-04-10
+## New This Run (54)
+- Task 2: specs/octets_ro_informal.md (Target 17 — Octets read-only buffer)
+- Task 6: CRITIQUE.md updated (Targets 15+16 sections, Gaps reordered, 16 modules)
+- CORRESPONDENCE.md: Last Updated refreshed
+- TARGETS.md: Target 17 added (Phase 2), Next Actions updated
+- PR #48: lean-squad-run54-24204649302-octets-ro-spec-critique (open)
 
-## Status Issue: #4 (open)
+## Status Issue: #4 (open, updated run 54)
 ## Open PRs
-- lean-squad-run53-24183986964-octets-mut-proofs (run 53, pending)
+- PR #46 (run 52): CORRESPONDENCE + OctetsMut informal spec (pending)
+- PR #47 (run 53): OctetsMut.lean 40 theorems (pending)
+- PR #48 (run 54): Octets informal spec + CRITIQUE update (pending)
