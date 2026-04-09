@@ -1,6 +1,6 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-04-09 (run 52)
+Last updated: 2026-04-10 (run 53)
 
 ## Theorem Count (current master)
 - Varint.lean: 10 theorems, 0 sorry ✅
@@ -18,14 +18,17 @@ Last updated: 2026-04-09 (run 52)
 - SendBuf.lean: 26 theorems, 0 sorry ✅
 - CidMgmt.lean: 21 theorems, 0 sorry ✅
 - StreamPriorityKey.lean: 21 theorems, 0 sorry ✅
-- **Total: 310 named theorems + 7 examples, 0 sorry**
+- OctetsMut.lean: 40 theorems, 0 sorry ✅ (NEW run 53)
+- **Total: 350 named theorems + 11 examples, 0 sorry**
 
-## New This Run (52)
-- CORRESPONDENCE.md: Target 15 (StreamPriorityKey) section added
-- TARGETS.md: Target 15 fixed → Phase 5 ✅; Target 16 (OctetsMut) added
-- specs/octets_informal.md: OctetsMut informal spec (Target 16, phase 2)
-- PR: lean-squad-run52-24171018643-corr-targets-octetsmut (open)
+## New This Run (53)
+- OctetsMut.lean: Tasks 3+4+5 for Target 16, 40 theorems, 0 sorry
+  - List helpers, state model, skip/rewind, u8/u16/u32 ops, round-trips
+- CORRESPONDENCE.md: Target 16 (OctetsMut) section added
+- TARGETS.md: Target 16 → Phase 5 ✅
+- PR: lean-squad-run53-24183986964-octets-mut-proofs (open)
+- CORRESPONDENCE.md updated: last revision now 2026-04-10
 
 ## Status Issue: #4 (open)
 ## Open PRs
-- Branch lean-squad-run52-24171018643-corr-targets-octetsmut (run 52, pending)
+- lean-squad-run53-24183986964-octets-mut-proofs (run 53, pending)
