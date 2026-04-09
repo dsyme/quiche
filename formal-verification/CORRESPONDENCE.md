@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 17:45 UTC
-- **Commit**: `ade740b8`
+- **Date**: 2026-04-09 03:41 UTC
+- **Commit**: `2fd6f76e`
 
 ---
 
@@ -862,3 +862,71 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 - `retireScid_removes`: retire always removes the target sequence — the retire operation is correct.
 - `retireScid_keeps_others`: retire does not disturb non-target sequences — no collateral damage.
 - `applyNewScid_nextSeq`: after k calls to `newScid`, `nextSeq` equals `initial + k` — exact accounting of sequence-number consumption.
+
+---
+
+## Target 15: Stream priority ordering (`FVSquad/StreamPriorityKey.lean`)
+
+**Rust source**: `quiche/src/stream/mod.rs` (lines 842–910)
+
+### Purpose
+
+Models the `StreamPriorityKey::cmp` method, which drives HTTP/3 stream
+scheduling via RFC 9218 (Extensible Prioritization Scheme for HTTP).  The
+ordering determines which stream is dequeued first from intrusive red-black
+trees (readable, writable, flushable).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file+line | Correspondence |
+|-----------|-----------|-----------|----------------|---------------|
+| `StreamPriorityKey` | structure | `StreamPriorityKey` | `stream/mod.rs:842` | **abstraction** — only `id`, `urgency`, `incremental` fields; RBTree links omitted |
+| `StreamPriorityKey.urgency` | `Nat` | `urgency : u8` | `stream/mod.rs:843` | **approximation** — `Nat` instead of `u8`; valid RFC 9218 range is 0–7, quiche uses full u8 range |
+| `StreamPriorityKey.id` | `Nat` | `id : u64` (inherited from `Stream`) | `stream/mod.rs:~752` | **approximation** — `Nat` instead of `u64`; QUIC stream IDs are < 2^62 in practice |
+| `StreamPriorityKey.incremental` | `Bool` | `incremental : bool` | `stream/mod.rs:844` | **exact** |
+| `cmpKey` | `StreamPriorityKey → StreamPriorityKey → Ordering` | `StreamPriorityKey::cmp` | `stream/mod.rs:880` | **abstraction** — see §Approximations |
+
+### Approximations in StreamPriorityKey.lean
+
+| ID | Lean | Rust | Justification |
+|----|------|------|---------------|
+| SP1 | `urgency : Nat` | `urgency : u8` | No overflow; theorems requiring urgency ordering use `<`/`=` on `Nat`; practically equivalent for u8 range |
+| SP2 | `id : Nat` | stream ID from `u64` | QUIC stream IDs bounded by 2^62 (RFC 9000 §2.1); `Nat` admits no overflow |
+| SP3 | `PartialEq` not modelled | `PartialEq` uses only `id` field; `Eq` derived | Only `Ord` (via `cmpKey`) is modelled; the `id`-only equality is irrelevant to scheduling correctness |
+| SP4 | Intrusive RBTree links omitted | `readable`, `writable`, `flushable : RBTreeAtomicLink` fields | Link management is a structural side-channel; the ordering kernel is entirely captured by `cmpKey` |
+| SP5 | `partial_cmp` wrapper not modelled | `PartialOrd::partial_cmp` delegates to `Ord::cmp` | Trivially equivalent; no separate theorem needed |
+
+### Key divergence: antisymmetry violation (OQ-1)
+
+The most important result of this file is that the Lean model faithfully captures
+the known `Ord`-contract deviation.  For two distinct incremental streams at the
+same urgency:
+
+```
+cmpKey a b = .gt  ∧  cmpKey b a = .gt
+```
+
+This is **not** a Lean approximation — it is the Rust behaviour, formally confirmed.
+Theorem `cmpKey_incr_incr_not_antisymmetric` proves the deviation; `decide` closes
+a concrete counterexample.  It is intentional round-robin design, but the `Ord`
+antisymmetry guarantee (required by Rust's `std::cmp::Ord` contract) is violated.
+
+### Impact on proved theorems
+
+21 theorems (0 sorry ✅).  Key results and their reliance on the model:
+
+| Theorem | Relies on | Risk from approximations |
+|---------|-----------|--------------------------|
+| `cmpKey_same_id` / `cmpKey_refl` | `id` field equality | **None** — independent of type width |
+| `cmpKey_lt_urgency` / `cmpKey_gt_urgency` | urgency ordering | **None** — `Nat` order matches `u8` order for in-range values |
+| `cmpKey_both_nonincr` | `id` comparison | **None** — `Nat` order matches `u64` for non-negative values |
+| `cmpKey_incr_incr_not_antisymmetric` | `cmpKey` case 7 | **None** — directly reads the `else .gt` branch; faithfully mirrors `cmp::Ordering::Greater` |
+| `cmpKey_total` | full case enumeration | **Low** — totality follows from exhaustive `if-else`; Nat vs u8 irrelevant |
+| `cmpKey_trans_urgency` / `cmpKey_trans_nonincr` | urgency transitivity | **Low** — transitivity is an arithmetic property; Nat ≡ u8 for in-range values |
+
+**Overall assessment**: *abstraction* (good).  The integer-width approximations
+(SP1, SP2) do not affect any proved theorem because all proofs are parametric
+over the abstract `Nat` ordering.  The round-robin non-antisymmetry (OQ-1) is
+captured exactly, which is the most security/correctness-relevant property of
+this module.
+

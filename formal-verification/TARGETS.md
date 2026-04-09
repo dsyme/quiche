@@ -20,7 +20,8 @@
 | 12 | `RecvBuf` stream reassembly | `quiche/src/stream/recv_buf.rs` | 4 — Implementation | 🔄 In progress | **0 sorry** — 32 theorems; emitN+insertContiguous invariant preservation; `FVSquad/RecvBuf.lean`; informal spec in `specs/stream_recv_buf_informal.md` |
 | 13 | `SendBuf` stream send buffer | `quiche/src/stream/send_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 43 theorems; flow-control safety, invariant preservation, FIN consistency; `FVSquad/SendBuf.lean` |
 | 14 | Connection ID sequence management | `quiche/src/cid.rs` | 5 — All Proofs | ✅ Done | 21 theorems, 0 sorry; specs/cid_mgmt_informal.md; FVSquad/CidMgmt.lean |
-| 15 | Stream priority ordering (`StreamPriorityKey::cmp`) | `quiche/src/stream/mod.rs` | 2 — Informal Spec | 🔄 In progress | Total order for urgency/incremental scheduling; specs/stream_priority_key_informal.md |
+| 15 | Stream priority ordering (`StreamPriorityKey::cmp`) | `quiche/src/stream/mod.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 21 theorems + 7 examples; OQ-1 `Ord` antisymmetry violation proved; `FVSquad/StreamPriorityKey.lean` |
+| 16 | `OctetsMut` byte-buffer read/write | `octets/src/lib.rs` | 2 — Informal Spec | 🔄 In progress | Cursor-based byte buffer; round-trip, invariant preservation; `specs/octets_informal.md` |
 
 ## Phase Definitions
 
@@ -35,15 +36,17 @@
 
 ## Next Actions
 
-1. **Target 15: StreamPriorityKey** — write Lean spec `FVSquad/StreamPriorityKey.lean`
-   capturing the seven-case ordering; attempt to prove Ord laws; investigate
-   OQ-1 (non-antisymmetry for incremental-incremental case).
-2. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
+1. **Target 16: OctetsMut** — write Lean spec `FVSquad/OctetsMut.lean`
+   capturing put/get round-trip properties, cursor invariant (`off + cap = len`),
+   and `put_u8`/`put_u16`/`put_u32` serialisation correctness.
+2. **RecvBuf overlapping chunks** — extend `RecvBuf.lean` to model
+   `insertAny` with overlapping/duplicate data; hardest remaining target.
+3. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
    `set_union`; see CRITIQUE.md
-3. **NewReno AIMD rate theorem** — prove exact growth rate (one MSS per cwnd
+4. **NewReno AIMD rate theorem** — prove exact growth rate (one MSS per cwnd
    bytes ACKed) across multiple ACK callbacks; currently only per-callback
    growth is verified
-4. **Stream flow control** — per-stream window using same model as FlowControl
+5. **Stream flow control** — per-stream window using same model as FlowControl
 
 ## Archived / Completed Targets
 
