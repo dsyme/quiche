@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 17:45 UTC
-- **Commit**: `ade740b8`
+- **Date**: 2026-04-10 00:00 UTC
+- **Commit**: `b6773c80`
 
 ---
 
@@ -862,3 +862,158 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 - `retireScid_removes`: retire always removes the target sequence — the retire operation is correct.
 - `retireScid_keeps_others`: retire does not disturb non-target sequences — no collateral damage.
 - `applyNewScid_nextSeq`: after k calls to `newScid`, `nextSeq` equals `initial + k` — exact accounting of sequence-number consumption.
+
+---
+
+## Target 15: Stream priority ordering (`FVSquad/StreamPriorityKey.lean`)
+
+**Rust source**: `quiche/src/stream/mod.rs` (lines 842–910)
+
+### Purpose
+
+Models the `StreamPriorityKey::cmp` method, which drives HTTP/3 stream
+scheduling via RFC 9218 (Extensible Prioritization Scheme for HTTP).  The
+ordering determines which stream is dequeued first from intrusive red-black
+trees (readable, writable, flushable).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file+line | Correspondence |
+|-----------|-----------|-----------|----------------|---------------|
+| `StreamPriorityKey` | structure | `StreamPriorityKey` | `stream/mod.rs:842` | **abstraction** — only `id`, `urgency`, `incremental` fields; RBTree links omitted |
+| `StreamPriorityKey.urgency` | `Nat` | `urgency : u8` | `stream/mod.rs:843` | **approximation** — `Nat` instead of `u8`; valid RFC 9218 range is 0–7, quiche uses full u8 range |
+| `StreamPriorityKey.id` | `Nat` | `id : u64` (inherited from `Stream`) | `stream/mod.rs:~752` | **approximation** — `Nat` instead of `u64`; QUIC stream IDs are < 2^62 in practice |
+| `StreamPriorityKey.incremental` | `Bool` | `incremental : bool` | `stream/mod.rs:844` | **exact** |
+| `cmpKey` | `StreamPriorityKey → StreamPriorityKey → Ordering` | `StreamPriorityKey::cmp` | `stream/mod.rs:880` | **abstraction** — see §Approximations |
+
+### Approximations in StreamPriorityKey.lean
+
+| ID | Lean | Rust | Justification |
+|----|------|------|---------------|
+| SP1 | `urgency : Nat` | `urgency : u8` | No overflow; theorems requiring urgency ordering use `<`/`=` on `Nat`; practically equivalent for u8 range |
+| SP2 | `id : Nat` | stream ID from `u64` | QUIC stream IDs bounded by 2^62 (RFC 9000 §2.1); `Nat` admits no overflow |
+| SP3 | `PartialEq` not modelled | `PartialEq` uses only `id` field; `Eq` derived | Only `Ord` (via `cmpKey`) is modelled; the `id`-only equality is irrelevant to scheduling correctness |
+| SP4 | Intrusive RBTree links omitted | `readable`, `writable`, `flushable : RBTreeAtomicLink` fields | Link management is a structural side-channel; the ordering kernel is entirely captured by `cmpKey` |
+| SP5 | `partial_cmp` wrapper not modelled | `PartialOrd::partial_cmp` delegates to `Ord::cmp` | Trivially equivalent; no separate theorem needed |
+
+### Key divergence: antisymmetry violation (OQ-1)
+
+The most important result of this file is that the Lean model faithfully captures
+the known `Ord`-contract deviation.  For two distinct incremental streams at the
+same urgency:
+
+```
+cmpKey a b = .gt  ∧  cmpKey b a = .gt
+```
+
+This is **not** a Lean approximation — it is the Rust behaviour, formally confirmed.
+Theorem `cmpKey_incr_incr_not_antisymmetric` proves the deviation; `decide` closes
+a concrete counterexample.  It is intentional round-robin design, but the `Ord`
+antisymmetry guarantee (required by Rust's `std::cmp::Ord` contract) is violated.
+
+### Impact on proved theorems
+
+21 theorems (0 sorry ✅).  Key results and their reliance on the model:
+
+| Theorem | Relies on | Risk from approximations |
+|---------|-----------|--------------------------|
+| `cmpKey_same_id` / `cmpKey_refl` | `id` field equality | **None** — independent of type width |
+| `cmpKey_lt_urgency` / `cmpKey_gt_urgency` | urgency ordering | **None** — `Nat` order matches `u8` order for in-range values |
+| `cmpKey_both_nonincr` | `id` comparison | **None** — `Nat` order matches `u64` for non-negative values |
+| `cmpKey_incr_incr_not_antisymmetric` | `cmpKey` case 7 | **None** — directly reads the `else .gt` branch; faithfully mirrors `cmp::Ordering::Greater` |
+| `cmpKey_total` | full case enumeration | **Low** — totality follows from exhaustive `if-else`; Nat vs u8 irrelevant |
+| `cmpKey_trans_urgency` / `cmpKey_trans_nonincr` | urgency transitivity | **Low** — transitivity is an arithmetic property; Nat ≡ u8 for in-range values |
+
+**Overall assessment**: *abstraction* (good).  The integer-width approximations
+(SP1, SP2) do not affect any proved theorem because all proofs are parametric
+over the abstract `Nat` ordering.  The round-robin non-antisymmetry (OQ-1) is
+captured exactly, which is the most security/correctness-relevant property of
+this module.
+
+
+---
+
+## `FVSquad/OctetsMut.lean`
+
+**Rust source**: `octets/src/lib.rs` (lines 391–800, `OctetsMut` type)
+
+### Purpose
+
+Models the `OctetsMut` writable byte-buffer type from `octets`.  `OctetsMut`
+wraps a `&mut [u8]` slice with an internal offset cursor that advances as bytes
+are written.  The Lean model captures:
+
+- The buffer contents and cursor position as a pure state.
+- Single-byte and multi-byte big-endian write/read operations.
+- Cursor skip/rewind operations.
+- Round-trip properties: writing then rewinding and reading returns the
+  original value.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust file:line | Correspondence |
+|-----------|-----------|-----------|----------------|---------------|
+| `listGet` | `List Nat → Nat → Nat` | array index | (built-in) | **exact** — zero on OOB, same as default |
+| `listSet` | `List Nat → Nat → Nat → List Nat` | slice mutation | (built-in) | **exact** — no-op on OOB matches Rust absence of error |
+| `OctetsMutState` | `structure` | `OctetsMut` | `octets/src/lib.rs:391` | **abstraction** — see §Approximations |
+| `OctetsMutState.skip` | `OctetsMutState → Nat → Option OctetsMutState` | `OctetsMut::skip` | `octets/src/lib.rs:~471` | **abstraction** |
+| `OctetsMutState.rewind` | `OctetsMutState → Nat → Option OctetsMutState` | `OctetsMut::rewind` | `octets/src/lib.rs:~480` | **abstraction** |
+| `OctetsMutState.putU8` | `OctetsMutState → Nat → Option OctetsMutState` | `OctetsMut::put_u8` | `octets/src/lib.rs:~490` | **abstraction** |
+| `OctetsMutState.getU8` | `OctetsMutState → Option (Nat × OctetsMutState)` | `OctetsMut::get_u8` | `octets/src/lib.rs:~510` | **abstraction** |
+| `OctetsMutState.peekU8` | `OctetsMutState → Option Nat` | `OctetsMut::peek_u8` | `octets/src/lib.rs:~530` | **abstraction** |
+| `OctetsMutState.putU16` | `OctetsMutState → Nat → Option OctetsMutState` | `OctetsMut::put_u16` | `octets/src/lib.rs:~540` | **approximation** — see §Approximations |
+| `OctetsMutState.getU16` | `OctetsMutState → Option (Nat × OctetsMutState)` | `OctetsMut::get_u16` | `octets/src/lib.rs:~555` | **approximation** — see §Approximations |
+| `OctetsMutState.putU32` | `OctetsMutState → Nat → Option OctetsMutState` | `OctetsMut::put_u32` | `octets/src/lib.rs:~570` | **approximation** — see §Approximations |
+| `OctetsMutState.getU32` | `OctetsMutState → Option (Nat × OctetsMutState)` | `OctetsMut::get_u32` | `octets/src/lib.rs:~590` | **approximation** — see §Approximations |
+
+### Approximations in OctetsMut.lean
+
+1. **`&mut [u8]` → `List Nat`**: The Rust `OctetsMut` holds a `&mut [u8]`
+   reference; mutation is in-place.  The Lean model returns a new state on
+   every write.  Aliasing, lifetimes, and zero-copy semantics are entirely
+   absent.
+
+2. **`u8`/`u16`/`u32` → `Nat` with range preconditions**: Rust uses fixed-width
+   integer types with wrapping overflow.  The Lean model uses `Nat` and requires
+   explicit range preconditions (`v < 256`, `v < 65536`, `v < 4294967296`).
+   Within these ranges the arithmetic is identical.
+
+3. **`BufferTooShortError` → `Option.none`**: Rust returns `Result<_, Error>`;
+   the Lean model returns `Option` with `none` for out-of-range access.  Error
+   payloads are not modelled.
+
+4. **`peekU8` / `get_u8` distinction**: Rust has both a peek (no-advance) and
+   a consume (advance) variant; the Lean model captures both as separate
+   definitions.
+
+5. **varint operations omitted**: `put_varint`/`get_varint` are separately
+   verified in `Varint.lean`.
+
+### Theorems and their correspondence
+
+| Theorem | Level | Notes |
+|---------|-------|-------|
+| `cap_identity` | **exact** | `off + cap = len` when `Inv` holds |
+| `skip_advances_off` | **exact** | `off` increases by n after skip |
+| `rewind_retreats_off` | **exact** | `off` decreases by n after rewind |
+| `skip_buf_eq` | **exact** | buffer unchanged by skip |
+| `rewind_buf_eq` | **exact** | buffer unchanged by rewind |
+| `skip_preserves_inv` | **exact** | Inv is a monovariant under skip |
+| `rewind_preserves_inv` | **exact** | Inv is a monovariant under rewind |
+| `skip_rewind_inverse` | **exact** | skip then rewind restores cursor |
+| `putU8_preserves_inv` | **exact** | Inv holds after putU8 |
+| `putU8_getU8_roundtrip` | **abstraction** | models u8 write/read round-trip |
+| `putU8_peekU8_roundtrip` | **abstraction** | models u8 write/peek round-trip |
+| `putU16_getU16_roundtrip` | **approximation** | requires `v < 65536` range guard |
+| `putU32_getU32_roundtrip` | **approximation** | requires `v < 2^32` range guard |
+| `putU8_x2_off` / `_x3_off` | **exact** | offset accumulation across writes |
+| `putU16_putU8_off` / `putU16_x2_off` | **exact** | offset accumulation |
+
+### Coverage gaps
+
+- **Varint round-trips**: covered by `Varint.lean`.
+- **`put_u64` / `get_u64`**: not yet modelled; analogous to u32.
+- **`as_mut` / `as_ref`**: slice projection; pure structural fact, not yet
+  proved.
+- **Negative tests**: theorems stating that writes *fail* when capacity is
+  exhausted are not currently stated.
