@@ -25,12 +25,12 @@
 - OQ-1 FORMALLY PROVED: cmpKey_incr_incr_not_antisymmetric (Ord violation)
 - PR #44 merged; CORRESPONDENCE added in run 52
 
-### 16. OctetsMut byte-buffer read/write — Phase 5 COMPLETE (run 53/55)
+### 16. OctetsMut byte-buffer read/write — Phase 5 COMPLETE (run 56)
 - Informal spec: specs/octets_informal.md
-- Lean file: FVSquad/OctetsMut.lean (40 theorems, 0 sorry)
-- PR #47 open (pending merge)
-- Key properties: off+cap=len invariant, skip/rewind inverse, u8/u16/u32 round-trips
-- Run 55 fix: all split_ifs → by_cases; putU16/putU32 round-trips use Nat.div_add_mod
+- Lean file: FVSquad/OctetsMut.lean (49 theorems, 0 sorry)
+- Run 56: added put_u64/get_u64 (8-byte big-endian) round-trip + successive write theorems
+- Run 56: fixed all run53 bugs: split_ifs→by_cases, hBlen simp [B,...], if_pos hc, Nat.div_add_mod
+- CORRESPONDENCE.md: Target 16 section added
 
 ### 17. Octets read-only byte buffer — Phase 5 COMPLETE (run 55)
 - Informal spec: specs/octets_ro_informal.md (added run 55)
@@ -43,12 +43,12 @@
 
 ## Open PRs / Branches
 - PR #46: lean-squad-run52 (open) — CORRESPONDENCE.md, specs/octets_informal.md
-- PR #47: lean-squad-run53 (open) — OctetsMut.lean
 - PR #48: lean-squad-run54 (open) — CRITIQUE.md update
-- PR run55 (pending): Octets.lean + OctetsMut fixes + octets_ro_informal.md
+- PR run55 (pending): Octets.lean + octets_ro_informal.md
+- PR run56 (pending): OctetsMut.lean (49 theorems) + CORRESPONDENCE.md Target 16 + TARGETS.md
 
-## Suite Status (run 55)
-- **17 modules, ~378 theorems + 19 examples, 0 sorry**
+## Suite Status (run 56)
+- **17 modules, ~388 theorems + 19 examples, 0 sorry**
 - Lean 4.29.0, no Mathlib
 
 ## Key Technical Notes
@@ -59,6 +59,7 @@
 - **split_ifs NOT available** without Mathlib! Use by_cases + if_pos/if_neg
 - if-reduction in simp: use `if_pos hc` as simp lemma, NOT `hc` alone
   (simp only [hc] rewrites condition to True but does NOT reduce the if)
+- let-binding in simp: `let B := expr` requires `simp [B, listSet_length]` not just `simp [listSet_length]`
 - Nat.div_add_mod v k : k * (v/k) + v%k = v (use for byte-round-trip proofs)
 - u32 byte-sum identity: requires 3 Nat.div_add_mod + omega for h4/h5/h6 equalities
 - 5-component conjunction access: A∧B∧C∧D∧E (right-assoc): .1 .2.1 .2.2.1 .2.2.2.1 .2.2.2.2
@@ -67,6 +68,6 @@
 ## Next Targets
 - RecvBuf overlapping chunks (hardest; phase 4 → 5)
 - CID byte-content uniqueness (security-critical per RFC 9000 §5.1)
-- OctetsMut put_u64/get_u64 (analogous to u32; Phase 5 extension)
+- OctetsMut put_u64/get_u64 (DONE in run 56)
 - RangeSet semantic completeness (flatten after insert = set_union)
 - NewReno AIMD rate theorem (rate across multiple ACK callbacks)
