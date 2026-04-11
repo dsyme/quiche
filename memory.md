@@ -24,35 +24,39 @@
 - 21 theorems + 7 examples, 0 sorry -- FVSquad/StreamPriorityKey.lean
 - OQ-1 FORMALLY PROVED: cmpKey_incr_incr_not_antisymmetric (Ord violation)
 
-### 16. OctetsMut byte-buffer read/write -- Phase 5 COMPLETE (run 53)
+### 16. OctetsMut byte-buffer read/write -- Phase 5 COMPLETE (run 58)
 - Informal spec: specs/octets_informal.md (added run 52)
-- Lean file: FVSquad/OctetsMut.lean (33 named theorems + 7 examples, 0 sorry)
-- Merged into run 57 working branch; PR run57 open
-- Key theorems: putU8/U16/U32 round-trips, cap_identity, skip_rewind_inverse
+- Lean file: FVSquad/OctetsMut.lean (41 theorems, 0 sorry)
+- FIXED in run58: was never imported in FVSquad.lean; split_ifs→by_cases
+- Key theorems: putU8/U16/U32 round-trips, bytes4_val helper, skip_rewind_inverse
+- OctetsMut was missing from lake build before run 58 (import omission)
 
-### 17. Octets read-only byte buffer -- Phase 2 (run 57)
-- Informal spec: specs/octets_ro_informal.md (added run 57)
-- Next: write FVSquad/Octets.lean (Phase 3)
-- Open questions: OQ-T17-1 (slice_last ignores cursor), OQ-T17-2 (is_empty)
+### 17. Octets read-only byte buffer -- Phase 5 COMPLETE (run 58)
+- Lean file: FVSquad/Octets.lean (43 theorems + 7 examples, 0 sorry)
+- Key result: is_empty_buf_based (isEmpty tests buf.len(), not cap())
+- skip_rewind_inverse_ro, getU8/U16/U32/U64, getBytes, slice, sliceLast
 
 ## Open PRs
-- lean-squad-run57-24255597145: CRITIQUE OctetsMut + Target 17 informal spec
+- run58 (lean-squad-run58-24273633585-octets-ro-corr-critique): Octets.lean + OctetsMut fix
 
-## Suite Status (run 57)
-- 16 modules, ~373 named theorems + 14 examples, 0 sorry
+## Suite Status (run 58)
+- 17 modules, ~420 theorems + 26 examples, 0 sorry
 - Lean 4.29.0, no Mathlib; lake build: PASSED
 
 ## Key Technical Notes
-- No Mathlib: use omega, simp, decide, rfl
+- No Mathlib: use omega, simp, decide, native_decide, rfl
 - Big-endian get: use 256*b0+b1 NOT b0*256+b1 for omega
-- split_ifs NOT available; use by_cases + if_pos/if_neg
-- if-reduction: use if_pos hc as simp lemma, NOT hc alone
-- let-binding in simp: require explicit let var in simp call
+- split_ifs NOT available; use by_cases + rw [if_pos/if_neg]
+- if-reduction: use if_pos hc in simp set, or rw [if_pos hc]
+- Unpack pattern: simp [Option.some.injEq, Prod.mk.injEq]; obtain ⟨hv,hs'⟩:=h; subst hs'
 - Nat.div_add_mod v k : k*(v/k) + v mod k = v
+- Nat.div_div_eq_div_mul v a b : v/a/b = v/(a*b)
+- bytes4_val: use Nat.div_div_eq_div_mul (not .symm)
+- FVSquad.lean imports all modules; new .lean files MUST be added there
 
 ## Next Targets (priority order)
-1. Octets.lean (Target 17, Phase 3): getU8/U16/U32/U64, skip, rewind, get_bytes
-2. OctetsMut putU64/getU64 (8-byte big-endian round-trip)
-3. RecvBuf overlapping chunks (hardest; phase 4->5)
-4. RangeSet semantic completeness (flatten after insert = set_union)
-5. NewReno AIMD rate theorem
+1. OctetsMut putU64/getU64 (8-byte big-endian round-trip, analogous to putU32)
+2. RecvBuf overlapping chunks (hardest; phase 4->5)
+3. RangeSet semantic completeness (flatten after insert = set_union)
+4. NewReno AIMD rate theorem
+5. Cross-module Octets/OctetsMut round-trip (write then read)
