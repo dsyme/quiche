@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-10 00:00 UTC
-- **Commit**: `b6773c80`
+- **Date**: 2026-05-22 00:00 UTC
+- **Commit**: `b0e11d8c`
 
 ---
 
@@ -769,24 +769,36 @@ No mismatches. The arithmetic model has been verified to be equivalent to the bi
 | `RecvBuf.highMark` | `RecvBuf.len` | `recv_buf.rs:62` | exact | highest received offset (note: field named `len` in Rust) |
 | `RecvBuf.finOff` | `RecvBuf.fin_off` | `recv_buf.rs:65` | exact | optional final offset |
 | `RecvBuf.emitN` | `RecvBuf::emit()` | `recv_buf.rs:160` | abstraction | Lean counts bytes emitted; Rust writes into output slice |
-| `RecvBuf.insertContiguous` | `RecvBuf::write()` (in-order case) | `recv_buf.rs:92` | abstraction | Models only the contiguous (no-overlap) write path; overlap splitting not modelled |
+| `RecvBuf.insertContiguous` | `RecvBuf::write()` (in-order case) | `recv_buf.rs:92` | abstraction | Models only the contiguous (no-overlap) write path |
+| `insertChunkInto` | `RecvBuf::write()` (overlap-handling loop) | `recv_buf.rs:92–140` | abstraction | 6-case algorithm: pure-before, pure-after, left-overhang, left-extend, contained, right-extend. Existing data wins on overlap (same policy as Rust). Byte contents not modelled. |
+| `trimChunk` | implicit byte-trimming in `write()` | `recv_buf.rs:97–101` | abstraction | Trims bytes of new chunk below `off` (the read cursor); models Rust's `start < off` guard |
+| `RecvBuf.insertAny` | `RecvBuf::write()` | `recv_buf.rs:92` | abstraction | Combines `trimChunk` + `insertChunkInto` + `highMark` update; models the full write path excluding byte contents, flow-control, and drain |
 
 ### Known divergences
 
 | ID | Lean | Rust | Impact |
 |----|------|------|--------|
-| V1 | `insertContiguous` models only the contiguous write path | `write()` handles arbitrary out-of-order and overlapping data | Out-of-order reassembly correctness is not formally verified; invariant preservation for overlapping writes is not proved |
+| V1 (partially resolved) | `insertContiguous` models only contiguous writes; `insertAny` now models the full overlap-splitting path | `write()` handles arbitrary out-of-order and overlapping data | Out-of-order reassembly invariant preservation is now formally proved via `insertAny_inv`; data-content correctness still not captured |
 | V2 | Byte contents not modelled | Rust stores actual bytes in `RangeBuf` | Data integrity of reassembly not captured; only offset/ordering structure is proved |
 | V3 | `drain` mode not modelled | `RecvBuf.drain` flag causes `off := len` advance without buffering | The drain fast-path is not in scope |
 | V4 | Flow-control limits not in model | `RecvBuf::max_data()` enforced in `write()` | `highMark ≤ max_data` invariant is not stated; would require an additional field |
 
 ### Theorem impact
 
-32 theorems (0 sorry ✅). Key results:
+59 theorems (0 sorry ✅). Key results (new in this run):
+- `insertChunkInto_above`: inserting a chunk above `off` preserves `chunksAbove off`
+- `insertChunkInto_within`: inserting a chunk within `mark` preserves `chunksWithin mark`
+- `insertChunkInto_ordered`: inserting a chunk preserves `chunksOrdered` (non-overlapping sorted invariant)
+- `trimChunk_off_ge`: after trimming, `off ≥ floor` (when the trimmed chunk is non-empty)
+- `trimChunk_maxOff_le`: trimming can only reduce `maxOff`
+- `insertAny_inv`: full invariant preservation theorem for `RecvBuf.insertAny` (all 5 invariants)
+- 8 test vector examples verified with `native_decide`
+
+Previous key results:
 - `emitN_preserves_inv`: all 5 invariants preserved by the read-cursor advance operation.
 - `insertContiguous_inv`: all 5 invariants preserved by in-order sequential write.
 - `insertContiguous_highMark_grows`: strictly advances the receive window when len > 0.
-- `insertContiguous_two_highMark`: two sequential writes advance highMark by the sum of lengths — the foundational arithmetic for correct byte accounting.
+- `insertContiguous_two_highMark`: two sequential writes advance highMark by the sum of lengths.
 
 ---
 

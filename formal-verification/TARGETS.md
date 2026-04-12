@@ -17,7 +17,7 @@
 | 9 | Packet number decode (RFC 9000 §A.3) | `quiche/src/packet.rs` | 5 — Proofs | ✅ Complete | **0 sorry** — 24 theorems; `decode_pktnum_correct` fully proved (run 39); `FVSquad/PacketNumDecode.lean` |
 | 10 | CUBIC congestion control | `quiche/src/recovery/congestion/cubic.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 26 theorems; RFC 8312bis constants, ssthresh reduction, W_cubic algebraic properties, fast convergence; `FVSquad/Cubic.lean` |
 | 11 | `RangeBuf` offset arithmetic | `quiche/src/range_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 19 theorems; maxOff invariance under consume, split adjacency, partition; `FVSquad/RangeBuf.lean` |
-| 12 | `RecvBuf` stream reassembly | `quiche/src/stream/recv_buf.rs` | 4 — Implementation | 🔄 In progress | **0 sorry** — 32 theorems; emitN+insertContiguous invariant preservation; `FVSquad/RecvBuf.lean`; informal spec in `specs/stream_recv_buf_informal.md` |
+| 12 | `RecvBuf` stream reassembly | `quiche/src/stream/recv_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 59 theorems; emitN+insertContiguous+insertAny invariant preservation; `insertAny_inv` proves full out-of-order write correctness; `FVSquad/RecvBuf.lean`; informal spec in `specs/stream_recv_buf_informal.md` |
 | 13 | `SendBuf` stream send buffer | `quiche/src/stream/send_buf.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 43 theorems; flow-control safety, invariant preservation, FIN consistency; `FVSquad/SendBuf.lean` |
 | 14 | Connection ID sequence management | `quiche/src/cid.rs` | 5 — All Proofs | ✅ Done | 21 theorems, 0 sorry; specs/cid_mgmt_informal.md; FVSquad/CidMgmt.lean |
 | 15 | Stream priority ordering (`StreamPriorityKey::cmp`) | `quiche/src/stream/mod.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 21 theorems + 7 examples; OQ-1 `Ord` antisymmetry violation proved; `FVSquad/StreamPriorityKey.lean` |
@@ -39,8 +39,8 @@
 1. **Target 16: OctetsMut** — write Lean spec `FVSquad/OctetsMut.lean`
    capturing put/get round-trip properties, cursor invariant (`off + cap = len`),
    and `put_u8`/`put_u16`/`put_u32` serialisation correctness.
-2. **RecvBuf overlapping chunks** — extend `RecvBuf.lean` to model
-   `insertAny` with overlapping/duplicate data; hardest remaining target.
+2. ~~**RecvBuf overlapping chunks** — extend `RecvBuf.lean` to model `insertAny`~~
+   ✅ **Done in run 61**: `insertAny_inv` fully proves invariant preservation for out-of-order writes.
 3. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
    `set_union`; see CRITIQUE.md
 4. **NewReno AIMD rate theorem** — prove exact growth rate (one MSS per cwnd
