@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-22 (run 61)
+Last updated: 2026-04-12 (run 62)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -20,36 +20,51 @@ FVSquad.lean: import manifest for all modules
 | 9 | Cubic CC | quiche/src/recovery/congestion/cubic.rs | 5 | ✅ Done |
 | 10 | Min-max filter | quiche/src/minmax.rs | 5 | ✅ Done |
 | 11 | RangeBuf offset arithmetic | quiche/src/range_buf.rs | 5 | ✅ Done |
-| 12 | RecvBuf stream reassembly | quiche/src/stream/recv_buf.rs | 5 | ✅ Done (run61) |
+| 12 | RecvBuf stream reassembly | quiche/src/stream/recv_buf.rs | 5 | ✅ Done (run61: 56 theorems) |
 | 13 | SendBuf stream send buffer | quiche/src/stream/send_buf.rs | 5 | ✅ Done |
 | 14 | Connection ID management | quiche/src/cid.rs | 5 | ✅ Done |
 | 15 | Stream priority key | quiche/src/stream/mod.rs | 5 | ✅ Done |
-| 16 | OctetsMut byte serializer | octets/src/lib.rs | 5 | ✅ Done |
-| 17 | Octets (read-only) | octets/src/lib.rs | 1 | Research only |
+| 16 | OctetsMut byte serializer | octets/src/lib.rs | 5 | ✅ Done (40 theorems) |
+| 17 | Octets read-only cursor | octets/src/lib.rs | 5 | ✅ Done (run62: 48 theorems + 9 examples) |
 
-NOTE: Target 17 (Octets.lean) was claimed done in run60 memory but the
-branch was never pushed and the PR was never created. Memory was stale.
-Target 17 remains at Phase 1.
+## Theorem Totals
 
-## Open Issues / PRs
-- Status issue: #4 (open, maintained by Lean Squad)
-- run61 PR: open (recvbuf insertAny)
+398 named theorems + 16 examples, 0 sorry across 17 Lean files.
 
-## Theorem counts (per module, after run 61)
-Varint:16→10, RangeSet:16, Minmax:15, RttStats:23, FlowControl:22,
-NewReno:13, DatagramQueue:26, PRR:20, PacketNumDecode:23, Cubic:26,
-RangeBuf:19, RecvBuf:59, SendBuf:43, CidMgmt:21, StreamPriorityKey:28,
-OctetsMut:40
-Total: ~424 named theorems, 0 sorry
+## Key Open Questions for Next Run
 
-## Lean 4 Anti-patterns (CRITICAL)
-1. push_neg → NOT available; use plain ¬ with omega
-2. split_ifs → NOT available; use by_cases + rw [if_pos/if_neg]
-3. conv_lhs → NOT available; use rw [show ...]
-4. Nat.not_eq_zero_of_lt → doesn't exist; use Nat.ne_of_gt
-5. simp [Chunk.maxOff] does NOT unfold hypotheses; use simp [...] at * or omega
-6. omega CANNOT case-split on if-then-else; must by_cases first
-7. Nat.min in omega: add Nat.min_le_left/right explicitly before omega
-8. struct {off:=x,len:=y}.len not reduced by omega; use show pattern
-9. chunksOrdered/Above/Within NOT @[simp]; use constructor/exact/trivial
-10. simpa [h] on goal=True fails; just use trivial
+- OctetsMut.lean uses `split_ifs` throughout — broken, never in manifest
+  - MUST rewrite using `by_cases` before adding to FVSquad.lean
+  - Consider: rewrite OctetsMut.lean in a future run (Task 5 clean-up)
+- No Mathlib dependency — keep it that way (smaller build, fewer failures)
+- Next targets: `OctetsMut` cleanup, `StreamMap`, `PacketHeader`
+
+## Anti-Patterns (DO NOT USE without Mathlib)
+
+- `split_ifs` — Mathlib-only tactic; use `by_cases hc : COND` instead
+- `linarith` — Mathlib-only; use `omega` for all Nat arithmetic
+- `native_decide` on `Prop`s that are not `Decidable` (e.g. `s.Inv`)
+  Use `withSlice_inv []` or manual `simp [Inv, ...]` instead
+
+## Key Proof Patterns (no Mathlib)
+
+- Invariant unpack: `simp only [Option.some.injEq, Prod.mk.injEq] at h`
+  then `obtain ⟨_, hs'⟩ := h; subst hs'`
+- Nat.sub with omega: need `b ≤ a` in context for `(a - b) + b = a`
+- Structural goals after subst usually close with `rfl` or `omega`
+- Test vectors: use `native_decide` only for decidable closed examples
+
+## Key Findings
+
+- OQ-1 (run 49): StreamPriorityKey::cmp violates Ord antisymmetry (intentional)
+- decode_pktnum_correct spec refinement (run 39): non-strict bound admitted
+  counterexample; corrected to match RFC 9000 §A.3 strict invariant
+- getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
+
+## Lake Project
+
+No Mathlib dependency (`lake-manifest.json` is empty packages).
+FVSquad.lean imports (in order): Octets, Varint, RangeSet, Minmax,
+  RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
+  Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut*
+(* OctetsMut currently excluded from manifest — needs rewrite)
