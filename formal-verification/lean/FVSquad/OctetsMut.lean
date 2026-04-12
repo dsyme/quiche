@@ -131,16 +131,16 @@ def OctetsMutState.rewind (s : OctetsMutState) (n : Nat) : Option OctetsMutState
 private theorem skip_unpack (s s' : OctetsMutState) (n : Nat) (h : s.skip n = some s') :
     s.off + n ≤ s.buf.length ∧ s'.buf = s.buf ∧ s'.off = s.off + n := by
   simp only [OctetsMutState.skip] at h
-  split_ifs at h with hc
-  · simp only [Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
-  · simp at h
+  by_cases hc : s.off + n ≤ s.buf.length
+  · simp only [if_pos hc, Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
+  · simp [if_neg hc] at h
 
 private theorem rewind_unpack (s s' : OctetsMutState) (n : Nat) (h : s.rewind n = some s') :
     n ≤ s.off ∧ s'.buf = s.buf ∧ s'.off = s.off - n := by
   simp only [OctetsMutState.rewind] at h
-  split_ifs at h with hc
-  · simp only [Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
-  · simp at h
+  by_cases hc : n ≤ s.off
+  · simp only [if_pos hc, Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
+  · simp [if_neg hc] at h
 
 theorem skip_advances_off (s s' : OctetsMutState) (n : Nat)
     (h : s.skip n = some s') : s'.off = s.off + n :=
@@ -199,9 +199,9 @@ def OctetsMutState.peekU8 (s : OctetsMutState) : Option Nat :=
 private theorem putU8_unpack (s s' : OctetsMutState) (v : Nat) (h : s.putU8 v = some s') :
     s.off < s.buf.length ∧ s'.buf = listSet s.buf s.off v ∧ s'.off = s.off + 1 := by
   simp only [OctetsMutState.putU8] at h
-  split_ifs at h with hc
-  · simp only [Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
-  · simp at h
+  by_cases hc : s.off < s.buf.length
+  · simp only [if_pos hc, Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
+  · simp [if_neg hc] at h
 
 theorem putU8_off (s s' : OctetsMutState) (v : Nat) (h : s.putU8 v = some s') :
     s'.off = s.off + 1 := (putU8_unpack s s' v h).2.2
@@ -219,9 +219,9 @@ theorem putU8_preserves_inv (s s' : OctetsMutState) (v : Nat)
 theorem peekU8_reads_off (s : OctetsMutState) (v : Nat)
     (h : s.peekU8 = some v) : v = listGet s.buf s.off := by
   simp only [OctetsMutState.peekU8] at h
-  split_ifs at h with hc
-  · exact ((Option.some.injEq _ _).mp h.symm)
-  · simp at h
+  by_cases hc : s.off < s.buf.length
+  · simp only [if_pos hc, Option.some.injEq] at h; exact h.symm
+  · simp [if_neg hc] at h
 
 /-- put_u8 / get_u8 round-trip: writing v then rewinding 1 and reading
     returns v. -/
@@ -234,7 +234,7 @@ theorem putU8_getU8_roundtrip (s s' s'' : OctetsMutState) (v : Nat)
   -- s''.off = s'.off - 1 = s.off
   have hs''off : s''.off = s.off := by rw [ho'', ho']; omega
   have hs''buf : s''.buf = listSet s.buf s.off v := by rw [hb'', hb']
-  simp only [OctetsMutState.getU8, hs''off, hs''buf, listSet_length, hc]
+  simp only [OctetsMutState.getU8, hs''off, hs''buf, listSet_length, if_pos hc]
   exact ⟨_, by rw [listGet_set_eq s.buf s.off v hc]⟩
 
 /-- put_u8 / peek_u8 round-trip. -/
@@ -245,7 +245,7 @@ theorem putU8_peekU8_roundtrip (s s' s'' : OctetsMutState) (v : Nat)
   obtain ⟨_, hb'', ho''⟩ := rewind_unpack s' s'' 1 hr
   have hs''off : s''.off = s.off := by rw [ho'', ho']; omega
   have hs''buf : s''.buf = listSet s.buf s.off v := by rw [hb'', hb']
-  simp only [OctetsMutState.peekU8, hs''off, hs''buf, listSet_length, hc,
+  simp only [OctetsMutState.peekU8, hs''off, hs''buf, listSet_length, if_pos hc,
              listGet_set_eq s.buf s.off v hc]
 
 -- =============================================================================
@@ -269,9 +269,9 @@ private theorem putU16_unpack (s s' : OctetsMutState) (v : Nat) (h : s.putU16 v 
     s'.buf = listSet (listSet s.buf s.off (v / 256)) (s.off + 1) (v % 256) ∧
     s'.off = s.off + 2 := by
   simp only [OctetsMutState.putU16] at h
-  split_ifs at h with hc
-  · simp only [Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
-  · simp at h
+  by_cases hc : s.off + 1 < s.buf.length
+  · simp only [if_pos hc, Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
+  · simp [if_neg hc] at h
 
 theorem putU16_off (s s' : OctetsMutState) (v : Nat) (h : s.putU16 v = some s') :
     s'.off = s.off + 2 := (putU16_unpack s s' v h).2.2
@@ -290,23 +290,19 @@ theorem putU16_getU16_roundtrip (s s' s'' : OctetsMutState) (v : Nat)
   have hs''off : s''.off = s.off := by rw [ho'', ho']; omega
   have hs''buf : s''.buf = listSet (listSet s.buf s.off (v / 256)) (s.off + 1) (v % 256) :=
     by rw [hb'', hb']
-  -- Byte reads
-  let B := listSet (listSet s.buf s.off (v / 256)) (s.off + 1) (v % 256)
-  have hs''bufB : s''.buf = B := hs''buf
-  have rb0 : listGet B s.off = v / 256 := by
-    simp only [B]
+  have rb0 : listGet s''.buf s.off = v / 256 := by
+    rw [hs''buf]
     rw [listGet_set_ne _ _ _ _ (by omega : s.off + 1 ≠ s.off)]
     exact listGet_set_eq s.buf s.off (v / 256) (by omega)
-  have rb1 : listGet B (s.off + 1) = v % 256 :=
-    listGet_set_eq _ _ _ (by simp only [B, listSet_length]; exact hc)
-  simp only [OctetsMutState.getU16, hs''off, hs''bufB]
-  rw [show B.length = s.buf.length from by simp [B, listSet_length], if_pos hc]
-  rw [rb0, rb1]
-  exact ⟨_, by congr 1; omega⟩
-
--- =============================================================================
--- §7  Four-byte big-endian: put_u32 / get_u32
--- =============================================================================
+  have rb1 : listGet s''.buf (s.off + 1) = v % 256 := by
+    rw [hs''buf]
+    exact listGet_set_eq _ _ _ (by simp only [listSet_length]; exact hc)
+  refine ⟨⟨s''.buf, s.off + 2⟩, ?_⟩
+  simp only [OctetsMutState.getU16, hs''off]
+  have hlen : s''.buf.length = s.buf.length := by rw [hs''buf]; simp [listSet_length]
+  rw [hlen, if_pos hc, rb0, rb1]
+  simp only [Option.some.injEq, Prod.mk.injEq, eq_self_iff_true, and_true]
+  omega
 
 def OctetsMutState.putU32 (s : OctetsMutState) (v : Nat) : Option OctetsMutState :=
   if s.off + 3 < s.buf.length then
@@ -336,9 +332,9 @@ private theorem putU32_unpack (s s' : OctetsMutState) (v : Nat) (h : s.putU32 v 
                 (s.off + 3) (v % 256) ∧
     s'.off = s.off + 4 := by
   simp only [OctetsMutState.putU32] at h
-  split_ifs at h with hc
-  · simp only [Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
-  · simp at h
+  by_cases hc : s.off + 3 < s.buf.length
+  · simp only [if_pos hc, Option.some.injEq] at h; subst h; exact ⟨hc, rfl, rfl⟩
+  · simp [if_neg hc] at h
 
 theorem putU32_off (s s' : OctetsMutState) (v : Nat) (h : s.putU32 v = some s') :
     s'.off = s.off + 4 := (putU32_unpack s s' v h).2.2
@@ -355,24 +351,39 @@ theorem putU32_getU32_roundtrip (s s' s'' : OctetsMutState) (v : Nat)
   obtain ⟨hc, hb', ho'⟩ := putU32_unpack s s' v hp
   obtain ⟨_, hb'', ho''⟩ := rewind_unpack s' s'' 4 hr
   have hs''off : s''.off = s.off := by rw [ho'', ho']; omega
+  -- Buffer after writing 4 bytes then rewinding
   have hs''buf : s''.buf = listSet (listSet (listSet (listSet s.buf
                     s.off       (v / 16777216))
                     (s.off + 1) (v / 65536 % 256))
                     (s.off + 2) (v / 256 % 256))
                     (s.off + 3) (v % 256) := by rw [hb'', hb']
-  let B := listSet (listSet (listSet (listSet s.buf
-              s.off       (v / 16777216))
-              (s.off + 1) (v / 65536 % 256))
-              (s.off + 2) (v / 256 % 256))
-              (s.off + 3) (v % 256)
-  have hs''bufB : s''.buf = B := hs''buf
-  have hBlen : B.length = s.buf.length := by simp [B, listSet_length]
-  obtain ⟨eq0, eq1, eq2, eq3⟩ :=
-    read4 s.buf s.off (v / 16777216) (v / 65536 % 256) (v / 256 % 256) (v % 256)
-      (by omega) (by omega) (by omega) hc
-  simp only [OctetsMutState.getU32, hs''off, hs''bufB, hBlen, if_pos hc]
-  rw [eq0, eq1, eq2, eq3]
-  exact ⟨_, by congr 1; omega⟩
+  -- Prove byte reads directly on the concrete buffer expression
+  have eq0 : listGet s''.buf s.off = v / 16777216 := by
+    rw [hs''buf]
+    have : listGet (listSet s.buf s.off (v / 16777216)) s.off = v / 16777216 :=
+      listGet_set_eq s.buf s.off _ (by omega)
+    simp only [listGet_set_ne _ _ _ _ (by omega : s.off + 3 ≠ s.off),
+               listGet_set_ne _ _ _ _ (by omega : s.off + 2 ≠ s.off),
+               listGet_set_ne _ _ _ _ (by omega : s.off + 1 ≠ s.off)]
+    exact listGet_set_eq s.buf s.off _ (by omega)
+  have eq1 : listGet s''.buf (s.off + 1) = v / 65536 % 256 := by
+    rw [hs''buf]
+    simp only [listGet_set_ne _ _ _ _ (by omega : s.off + 3 ≠ s.off + 1),
+               listGet_set_ne _ _ _ _ (by omega : s.off + 2 ≠ s.off + 1)]
+    exact listGet_set_eq _ _ _ (by simp only [listSet_length]; omega)
+  have eq2 : listGet s''.buf (s.off + 2) = v / 256 % 256 := by
+    rw [hs''buf]
+    simp only [listGet_set_ne _ _ _ _ (by omega : s.off + 3 ≠ s.off + 2)]
+    exact listGet_set_eq _ _ _ (by simp only [listSet_length, listSet_length]; omega)
+  have eq3 : listGet s''.buf (s.off + 3) = v % 256 := by
+    rw [hs''buf]
+    exact listGet_set_eq _ _ _ (by simp only [listSet_length, listSet_length]; omega)
+  refine ⟨⟨s''.buf, s.off + 4⟩, ?_⟩
+  simp only [OctetsMutState.getU32, hs''off]
+  have hlen : s''.buf.length = s.buf.length := by rw [hs''buf]; simp [listSet_length]
+  rw [hlen, if_pos hc, eq0, eq1, eq2, eq3]
+  simp only [Option.some.injEq, Prod.mk.injEq, eq_self_iff_true, and_true]
+  omega
 
 -- =============================================================================
 -- §8  Successive writes: offset accumulation
