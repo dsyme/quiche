@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-13 (run 64)
+Last updated: 2026-04-13 (run 65)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -27,24 +27,26 @@ FVSquad.lean: import manifest for all modules
 | 16 | OctetsMut byte serializer | octets/src/lib.rs | 5 | ✅ Done (run63: fixed split_ifs) |
 | 17 | Octets read-only cursor | octets/src/lib.rs | 5 | ✅ Done (run62: 48 theorems + 9 examples) |
 | 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs + lib.rs | 5 | ✅ Done (run64: 35 theorems) |
+| 19 | Octets↔OctetsMut cross-module | octets/src/lib.rs | 5 | ✅ Done (run65: 20 theorems + 9 examples) |
 
 ## Theorem Totals
 
-429 public theorems + 127 examples + ~49 private helpers, 0 sorry across 18 Lean files.
+449 public theorems + 136 examples + ~51 private helpers, 0 sorry across 19 Lean files.
 
 ## Open PRs (lean-squad label)
 
-- PR run64: StreamId.lean + CRITIQUE update (just created, pending merge)
+- PR #51 run64: StreamId.lean + CRITIQUE update (pending merge)
+- PR run65: OctetsRoundtrip.lean (just created, pending merge)
 
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
-- Next targets: PacketHeader encode/decode, Octets↔OctetsMut composition,
-  SendBuf retransmission model, stream flow-control limit enforcement
+- Next targets: PacketHeader encode/decode, RangeSet semantic completeness,
+  NewReno AIMD rate theorem, stream flow-control per-stream limits
 - OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
-- CRITIQUE.md: now fully updated through run 64 (18 targets, 429 theorems)
-- CORRESPONDENCE.md: may need updating for StreamId (new target)
+- CORRESPONDENCE.md: needs updates for Targets 18 (StreamId) and 19 (OctetsRoundtrip)
+- CRITIQUE.md: may need Target 19 entry (OctetsRoundtrip)
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -54,6 +56,8 @@ FVSquad.lean: import manifest for all modules
   Use explicit case analysis instead
 - `simp [...] ; omega` — if simp already closes the goal, omega will see
   "No goals to be solved". Use simp only, or omit omega if simp closes it.
+- Private theorems from other modules are not accessible — inline their proofs
+  (e.g., putU16_unpack, putU32_unpack in OctetsMut.lean are private)
 
 ## Key Proof Patterns (no Mathlib)
 
@@ -66,7 +70,10 @@ FVSquad.lean: import manifest for all modules
 - Bool predicates from Prop: `def f : Bool := (expr : Prop)` uses decide wrapper
   → To prove `f (a+k) = f a`, use `have h : expr_in_a+k = expr_in_a := by omega`
      then `simp only [f, h]`
-- `isBidi_add4` pattern: have h : (id + 4) % 4 = id % 4 := by omega; simp only [isBidi, h]
+- Cross-module: private theorems (e.g. putU16_unpack) must be re-proved inline
+  using simp+by_cases+subst patterns
+- listSet_length: used to show (listSet l i v).length = l.length
+  → Needed when proving off < (listSet ...).length after a put
 
 ## Key Findings
 
@@ -76,6 +83,8 @@ FVSquad.lean: import manifest for all modules
 - getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
 - run 63: OctetsMut split_ifs fix — split_ifs is Mathlib-only; use by_cases
 - run 64: streamType_add_mul4 — stream type preserved under all +4k increments
+- run 65: listGet_eq_octListGet — both list-read helpers are definitionally equal;
+  cross-module freeze round-trips prove OctetsMut/Octets consistency
 
 ## Lake Project
 
@@ -83,4 +92,4 @@ No Mathlib dependency (`lake-manifest.json` is empty packages).
 FVSquad.lean imports (in order): Octets, Varint, RangeSet, Minmax,
   RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey,
-  OctetsMut, Octets (dup), StreamId
+  OctetsMut, OctetsRoundtrip, StreamId

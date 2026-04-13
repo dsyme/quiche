@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-13 (run 64, workflow 24325045355)
+Last updated: 2026-04-13 (run 65, workflow 24338233663)
 
 ## Lean File Registry
 
@@ -24,12 +24,14 @@ Last updated: 2026-04-13 (run 64, workflow 24325045355)
 | FVSquad/OctetsMut.lean | 27 | 7 | ✅ (run63: fixed split_ifs) |
 | FVSquad/Octets.lean | 48 | 9 | ✅ run62 |
 | FVSquad/StreamId.lean | 35 | 8 | ✅ run64 |
-| **TOTAL** | **429** | **127** | **✅ 0 sorry** |
+| FVSquad/OctetsRoundtrip.lean | 20 | 9 | ✅ run65 |
+| **TOTAL** | **449** | **136** | **✅ 0 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR run64: StreamId.lean + CRITIQUE update (pending merge)
+- PR #51 run64: StreamId.lean + CRITIQUE update (pending merge)
+- PR run65: OctetsRoundtrip.lean + informal spec (just created)
 
 ## Branch
 
-Current work: lean-squad-run64-24325045355-streamid-critique
+Current work: lean-squad-run65-24338233663-octets-roundtrip
