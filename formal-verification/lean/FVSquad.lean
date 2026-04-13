@@ -1,3 +1,4 @@
+import FVSquad.Octets
 import FVSquad.Varint
 import FVSquad.RangeSet
 import FVSquad.Minmax
@@ -13,3 +14,5 @@ import FVSquad.RecvBuf
 import FVSquad.SendBuf
 import FVSquad.CidMgmt
 import FVSquad.StreamPriorityKey
+import FVSquad.OctetsMut
+import FVSquad.Octets

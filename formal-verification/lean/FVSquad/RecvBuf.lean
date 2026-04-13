@@ -525,3 +525,458 @@ example :
     let c2  := Chunk.mk 10 5
     (rb.insertContiguous c1 |>.insertContiguous c2).highMark = 15 := by
   native_decide
+
+-- =============================================================================
+-- §11  insertChunkInto: merge a chunk into a sorted non-overlapping list
+-- =============================================================================
+--
+-- Models the inner loop of `RecvBuf::write()` in recv_buf.rs (lines ~150–210).
+-- Existing data wins: any bytes of `c` that overlap existing chunks are
+-- silently discarded (matching the Rust `continue 'tmp` / trim-start logic).
+--
+-- The algorithm walks the sorted list left-to-right and handles six cases:
+--   1. c.len = 0 : nothing to insert
+--   2. c ends before e starts (c.maxOff ≤ e.off) : prepend c
+--   3. e ends before c starts (e.maxOff ≤ c.off) : keep e, recurse
+--   4a. c has a left overhang AND fits within e's right end : insert left part
+--   4b. c has a left overhang AND extends past e           : insert left part,
+--       recurse with right remainder [e.maxOff, c.maxOff)
+--   5a. c starts inside e and fits within e                : discard (existing wins)
+--   5b. c starts inside e but extends past e               : recurse with
+--       right remainder [e.maxOff, c.maxOff)
+
+/-- Insert chunk `c` into sorted non-overlapping `cs`. Existing data wins. -/
+def insertChunkInto : List Chunk → Chunk → List Chunk
+  | [], c => if c.len = 0 then [] else [c]
+  | e :: rest, c =>
+    if c.len = 0 then e :: rest
+    else if c.maxOff ≤ e.off then c :: e :: rest           -- case 2
+    else if e.maxOff ≤ c.off then                          -- case 3
+      e :: insertChunkInto rest c
+    else if c.off < e.off then                             -- cases 4a/4b
+      let leftPart := { off := c.off, len := e.off - c.off }
+      if c.maxOff ≤ e.maxOff then leftPart :: e :: rest   -- case 4a
+      else                                                  -- case 4b
+        leftPart :: e ::
+          insertChunkInto rest { off := e.maxOff, len := c.maxOff - e.maxOff }
+    else if c.maxOff ≤ e.maxOff then e :: rest             -- case 5a: discard
+    else                                                    -- case 5b
+      e :: insertChunkInto rest { off := e.maxOff, len := c.maxOff - e.maxOff }
+
+-- Equational lemmas for each branch (used in proof automation)
+private theorem ici_nil_zero (c : Chunk) (h : c.len = 0) :
+    insertChunkInto [] c = [] := by simp [insertChunkInto, h]
+
+private theorem ici_nil_pos (c : Chunk) (h : c.len > 0) :
+    insertChunkInto [] c = [c] := by
+  simp [insertChunkInto, Nat.ne_of_gt h]
+
+private theorem ici_cons_zero (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (h : c.len = 0) :
+    insertChunkInto (e :: rest) c = e :: rest := by
+  simp [insertChunkInto, h]
+
+private theorem ici_cons_before (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h : c.maxOff ≤ e.off) :
+    insertChunkInto (e :: rest) c = c :: e :: rest := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h]
+
+private theorem ici_cons_after (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h1 : ¬(c.maxOff ≤ e.off)) (h2 : e.maxOff ≤ c.off) :
+    insertChunkInto (e :: rest) c = e :: insertChunkInto rest c := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h1, h2]
+
+private theorem ici_cons_leftfit (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h1 : ¬(c.maxOff ≤ e.off)) (h2 : ¬(e.maxOff ≤ c.off))
+    (h3 : c.off < e.off) (h4 : c.maxOff ≤ e.maxOff) :
+    insertChunkInto (e :: rest) c =
+      { off := c.off, len := e.off - c.off } :: e :: rest := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h1, h2, h3, h4]
+
+private theorem ici_cons_leftext (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h1 : ¬(c.maxOff ≤ e.off)) (h2 : ¬(e.maxOff ≤ c.off))
+    (h3 : c.off < e.off) (h4 : ¬(c.maxOff ≤ e.maxOff)) :
+    insertChunkInto (e :: rest) c =
+      { off := c.off, len := e.off - c.off } :: e ::
+        insertChunkInto rest { off := e.maxOff, len := c.maxOff - e.maxOff } := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h1, h2, h3, h4]
+
+private theorem ici_cons_contained (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h1 : ¬(c.maxOff ≤ e.off)) (h2 : ¬(e.maxOff ≤ c.off))
+    (h3 : ¬(c.off < e.off)) (h4 : c.maxOff ≤ e.maxOff) :
+    insertChunkInto (e :: rest) c = e :: rest := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h1, h2, h3, h4]
+
+private theorem ici_cons_rightext (e : Chunk) (rest : List Chunk) (c : Chunk)
+    (hp : c.len > 0) (h1 : ¬(c.maxOff ≤ e.off)) (h2 : ¬(e.maxOff ≤ c.off))
+    (h3 : ¬(c.off < e.off)) (h4 : ¬(c.maxOff ≤ e.maxOff)) :
+    insertChunkInto (e :: rest) c =
+      e :: insertChunkInto rest { off := e.maxOff, len := c.maxOff - e.maxOff } := by
+  simp [insertChunkInto, Nat.ne_of_gt hp, h1, h2, h3, h4]
+
+-- =============================================================================
+-- §12  insertChunkInto: structural invariant preservation
+-- =============================================================================
+
+/-- In a sorted list, all elements after the head have `off ≥ head.maxOff`. -/
+private theorem chunksOrdered_head_above :
+    ∀ (e : Chunk) (cs : List Chunk),
+    chunksOrdered (e :: cs) → chunksAbove e.maxOff cs := by
+  intro e cs
+  induction cs generalizing e with
+  | nil => intro; exact trivial
+  | cons f rest ih =>
+    intro hord
+    -- hord unfolds to: e.maxOff ≤ f.off ∧ chunksOrdered (f :: rest)
+    obtain ⟨h1, h2⟩ := hord
+    refine ⟨h1, ?_⟩
+    -- Need: chunksAbove e.maxOff rest.
+    -- IH gives: chunksAbove f.maxOff rest (from chunksOrdered (f :: rest))
+    -- Since e.maxOff ≤ f.off ≤ f.maxOff, apply monotonicity.
+    have hfm : f.maxOff ≥ e.maxOff := Nat.le_trans h1 (Nat.le_add_right f.off f.len)
+    exact chunksAbove_mono e.maxOff f.maxOff hfm rest (ih f h2)
+
+/-- `insertChunkInto` preserves `chunksAbove`: every element of the result
+    has `off ≥ off'` when the inserted chunk and the input list do too. -/
+theorem insertChunkInto_above (off : Nat) :
+    ∀ (cs : List Chunk) (c : Chunk),
+    chunksAbove off cs → c.off ≥ off → c.len > 0 →
+    chunksAbove off (insertChunkInto cs c) := by
+  intro cs
+  induction cs generalizing off with
+  | nil =>
+    intro c _ hc hp
+    rw [ici_nil_pos c hp]
+    exact ⟨hc, trivial⟩
+  | cons e rest ih =>
+    intro c ha hc hp
+    by_cases h1 : c.len = 0
+    · omega
+    · have hp' : c.len > 0 := Nat.pos_of_ne_zero h1
+      by_cases h2 : c.maxOff ≤ e.off
+      · rw [ici_cons_before e rest c hp' h2]
+        exact ⟨hc, ha⟩
+      · by_cases h3 : e.maxOff ≤ c.off
+        · rw [ici_cons_after e rest c hp' h2 h3]
+          exact ⟨ha.1, ih off c ha.2 hc hp'⟩
+        · by_cases h4 : c.off < e.off
+          · have he_above : e.off ≥ off := ha.1
+            have hem : e.maxOff ≥ off := Nat.le_trans ha.1 (Nat.le_add_right e.off e.len)
+            by_cases h5 : c.maxOff ≤ e.maxOff
+            · rw [ici_cons_leftfit e rest c hp' h2 (by omega) h4 h5]
+              exact ⟨hc, ha⟩
+            · rw [ici_cons_leftext e rest c hp' h2 (by omega) h4 h5]
+              refine ⟨hc, ⟨he_above, ?_⟩⟩
+              exact ih off { off := e.maxOff, len := c.maxOff - e.maxOff }
+                ha.2 hem (show c.maxOff - e.maxOff > 0 from by omega)
+          · have hem : e.maxOff ≥ off := Nat.le_trans ha.1 (Nat.le_add_right e.off e.len)
+            by_cases h5 : c.maxOff ≤ e.maxOff
+            · rw [ici_cons_contained e rest c hp' h2 (by omega) (by omega) h5]
+              exact ha
+            · rw [ici_cons_rightext e rest c hp' h2 (by omega) (by omega) h5]
+              exact ⟨ha.1, ih off { off := e.maxOff, len := c.maxOff - e.maxOff }
+                ha.2 hem (show c.maxOff - e.maxOff > 0 from by omega)⟩
+
+/-- `insertChunkInto` preserves `chunksWithin`: all elements stay within `mark`
+    when the new chunk's maxOff ≤ mark and the existing list is within mark. -/
+theorem insertChunkInto_within (mark : Nat) :
+    ∀ (cs : List Chunk) (c : Chunk),
+    chunksWithin mark cs → c.maxOff ≤ mark → c.len > 0 →
+    chunksWithin mark (insertChunkInto cs c) := by
+  intro cs
+  induction cs generalizing mark with
+  | nil =>
+    intro c _ hm hp
+    rw [ici_nil_pos c hp]
+    exact ⟨hm, trivial⟩
+  | cons e rest ih =>
+    intro c hw hm hp
+    by_cases h1 : c.len = 0; · omega
+    have hp' : c.len > 0 := Nat.pos_of_ne_zero h1
+    by_cases h2 : c.maxOff ≤ e.off
+    · rw [ici_cons_before e rest c hp' h2]
+      exact ⟨hm, hw⟩
+    · by_cases h3 : e.maxOff ≤ c.off
+      · rw [ici_cons_after e rest c hp' h2 h3]
+        exact ⟨hw.1, ih mark c hw.2 hm hp'⟩
+      · by_cases h4 : c.off < e.off
+        · have hlp_max : (Chunk.maxOff { off := c.off, len := e.off - c.off }) ≤ mark := by
+            simp [Chunk.maxOff]; omega
+          by_cases h5 : c.maxOff ≤ e.maxOff
+          · rw [ici_cons_leftfit e rest c hp' h2 (by omega) h4 h5]
+            exact ⟨hlp_max, hw⟩
+          · rw [ici_cons_leftext e rest c hp' h2 (by omega) h4 h5]
+            have hrp_max : (Chunk.maxOff { off := e.maxOff, len := c.maxOff - e.maxOff }) ≤ mark := by
+              simp only [Chunk.maxOff] at *; omega
+            exact ⟨hlp_max, ⟨hw.1, ih mark _ hw.2 hrp_max
+              (show c.maxOff - e.maxOff > 0 from by omega)⟩⟩
+        · by_cases h5 : c.maxOff ≤ e.maxOff
+          · rw [ici_cons_contained e rest c hp' h2 (by omega) (by omega) h5]
+            exact hw
+          · rw [ici_cons_rightext e rest c hp' h2 (by omega) (by omega) h5]
+            have hrp_max : (Chunk.maxOff { off := e.maxOff, len := c.maxOff - e.maxOff }) ≤ mark := by
+              simp only [Chunk.maxOff] at *; omega
+            exact ⟨hw.1, ih mark _ hw.2 hrp_max
+              (show c.maxOff - e.maxOff > 0 from by omega)⟩
+
+/-- `insertChunkInto` preserves sorted non-overlapping order. -/
+theorem insertChunkInto_ordered :
+    ∀ (cs : List Chunk) (c : Chunk),
+    chunksOrdered cs → chunksOrdered (insertChunkInto cs c) := by
+  intro cs
+  induction cs with
+  | nil =>
+    intro c _
+    by_cases h : c.len = 0
+    · rw [ici_nil_zero c h]; trivial
+    · rw [ici_nil_pos c (Nat.pos_of_ne_zero h)]; trivial
+  | cons e rest ih =>
+    intro c hord
+    by_cases h1 : c.len = 0
+    · rw [ici_cons_zero e rest c h1]; exact hord
+    · have hp : c.len > 0 := Nat.pos_of_ne_zero h1
+      by_cases h2 : c.maxOff ≤ e.off
+      · -- case 2: c :: e :: rest
+        rw [ici_cons_before e rest c hp h2]
+        exact ⟨h2, hord⟩
+      · by_cases h3 : e.maxOff ≤ c.off
+        · -- case 3: e :: insertChunkInto rest c
+          rw [ici_cons_after e rest c hp h2 h3]
+          have hrest_ord : chunksOrdered rest := chunksOrdered_tail e rest hord
+          have hins_ord   : chunksOrdered (insertChunkInto rest c) := ih c hrest_ord
+          have hrest_above : chunksAbove e.maxOff rest :=
+            chunksOrdered_head_above e rest hord
+          have hins_above : chunksAbove e.maxOff (insertChunkInto rest c) :=
+            insertChunkInto_above e.maxOff rest c hrest_above h3 hp
+          cases hins : insertChunkInto rest c with
+          | nil => simpa [hins] using hins_ord
+          | cons g gs =>
+            have hg : g.off ≥ e.maxOff := by
+              have := hins ▸ hins_above; exact this.1
+            exact ⟨hg, hins ▸ hins_ord⟩
+        · -- overlap: c.off < e.maxOff
+          by_cases h4 : c.off < e.off
+          · by_cases h5 : c.maxOff ≤ e.maxOff
+            · -- case 4a: leftPart :: e :: rest
+              rw [ici_cons_leftfit e rest c hp h2 (by omega) h4 h5]
+              constructor
+              · simp [Chunk.maxOff]; omega
+              · exact hord
+            · -- case 4b: leftPart :: e :: insertChunkInto rest rp
+              rw [ici_cons_leftext e rest c hp h2 (by omega) h4 h5]
+              have hrp_len : (0 : Nat) < c.maxOff - e.maxOff := by omega
+              have hrest_ord : chunksOrdered rest := chunksOrdered_tail e rest hord
+              have hrest_above : chunksAbove e.maxOff rest :=
+                chunksOrdered_head_above e rest hord
+              have hins_ord : chunksOrdered (insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩) :=
+                ih ⟨e.maxOff, c.maxOff - e.maxOff⟩ hrest_ord
+              have hins_above : chunksAbove e.maxOff
+                  (insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩) :=
+                insertChunkInto_above e.maxOff rest ⟨e.maxOff, c.maxOff - e.maxOff⟩
+                  hrest_above (Nat.le_refl _) hrp_len
+              refine ⟨by simp only [Chunk.maxOff] at *; omega, ?_⟩
+              cases hins : insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩ with
+              | nil => trivial
+              | cons g gs =>
+                exact ⟨(hins ▸ hins_above).1, hins ▸ hins_ord⟩
+          · by_cases h5 : c.maxOff ≤ e.maxOff
+            · -- case 5a: discard c
+              rw [ici_cons_contained e rest c hp h2 (by omega) (by omega) h5]
+              exact hord
+            · -- case 5b: e :: insertChunkInto rest rp
+              rw [ici_cons_rightext e rest c hp h2 (by omega) (by omega) h5]
+              have hrp_len : (0 : Nat) < c.maxOff - e.maxOff := by omega
+              have hrest_ord : chunksOrdered rest := chunksOrdered_tail e rest hord
+              have hrest_above : chunksAbove e.maxOff rest :=
+                chunksOrdered_head_above e rest hord
+              have hins_ord : chunksOrdered
+                  (insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩) :=
+                ih ⟨e.maxOff, c.maxOff - e.maxOff⟩ hrest_ord
+              have hins_above : chunksAbove e.maxOff
+                  (insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩) :=
+                insertChunkInto_above e.maxOff rest ⟨e.maxOff, c.maxOff - e.maxOff⟩
+                  hrest_above (Nat.le_refl _) hrp_len
+              cases hins : insertChunkInto rest ⟨e.maxOff, c.maxOff - e.maxOff⟩ with
+              | nil => trivial
+              | cons g gs =>
+                exact ⟨(hins ▸ hins_above).1, hins ▸ hins_ord⟩
+
+-- =============================================================================
+-- §13  insertAny: general write (out-of-order, overlap-safe)
+-- =============================================================================
+--
+-- Models `RecvBuf::write()` in recv_buf.rs.  The preconditions mirror the
+-- Rust invariants upheld by the caller:
+--   • hfin: if the stream is finished, the new chunk does not extend beyond
+--     the known final offset (preventing FinalSize errors).
+--   • Byte contents, flow-control limits, and the `drain` flag are not modelled.
+
+/-- Trim a chunk to start at `floor`, discarding bytes before `floor`. -/
+private def trimChunk (c : Chunk) (floor : Nat) : Chunk :=
+  if floor ≤ c.off then c
+  else
+    let drop := min (floor - c.off) c.len
+    { off := c.off + drop, len := c.len - drop }
+
+private theorem trimChunk_off_ge (c : Chunk) (floor : Nat)
+    (hp : (trimChunk c floor).len > 0) :
+    (trimChunk c floor).off ≥ floor := by
+  by_cases h : floor ≤ c.off
+  · simp only [trimChunk, if_pos h] at *; exact h
+  · simp only [trimChunk, if_neg h] at *
+    have h1 : min (floor - c.off) c.len ≤ floor - c.off := Nat.min_le_left _ _
+    have h2 : min (floor - c.off) c.len ≤ c.len := Nat.min_le_right _ _
+    omega
+
+private theorem trimChunk_maxOff_le (c : Chunk) (floor : Nat) :
+    (trimChunk c floor).maxOff ≤ c.maxOff := by
+  by_cases h : floor ≤ c.off
+  · simp only [trimChunk, if_pos h, Chunk.maxOff]; omega
+  · simp only [trimChunk, if_neg h, Chunk.maxOff]
+    have h1 : min (floor - c.off) c.len ≤ c.len := Nat.min_le_right _ _
+    omega
+
+/-- `insertChunkInto` with a zero-length chunk is the identity. -/
+private theorem insertChunkInto_zero (cs : List Chunk) (c : Chunk) (h : c.len = 0) :
+    insertChunkInto cs c = cs := by
+  cases cs with
+  | nil => simp [ici_nil_zero c h]
+  | cons e rest => simp [ici_cons_zero e rest c h]
+
+/-- General write: insert `c` into the buffer, trimming bytes below `readOff`
+    and discarding any bytes of `c` that overlap existing buffered data. -/
+def RecvBuf.insertAny (rb : RecvBuf) (c : Chunk) : RecvBuf :=
+  let c' := trimChunk c rb.readOff
+  { rb with
+    chunks   := insertChunkInto rb.chunks c'
+    highMark := Nat.max rb.highMark c.maxOff }
+
+theorem insertAny_readOff_unchanged (rb : RecvBuf) (c : Chunk) :
+    (rb.insertAny c).readOff = rb.readOff := rfl
+
+theorem insertAny_finOff_unchanged (rb : RecvBuf) (c : Chunk) :
+    (rb.insertAny c).finOff = rb.finOff := rfl
+
+theorem insertAny_highMark_mono (rb : RecvBuf) (c : Chunk) :
+    (rb.insertAny c).highMark ≥ rb.highMark := Nat.le_max_left _ _
+
+theorem insertAny_highMark_ge_chunk (rb : RecvBuf) (c : Chunk) :
+    (rb.insertAny c).highMark ≥ c.maxOff := Nat.le_max_right _ _
+
+theorem insertAny_highMark_eq (rb : RecvBuf) (c : Chunk) :
+    (rb.insertAny c).highMark = Nat.max rb.highMark c.maxOff := rfl
+
+/-- `insertAny` preserves all buffer invariants when:
+    - the inserted chunk is within flow-control bounds (c.maxOff ≤ new highMark,
+      which is trivially satisfied since highMark := max rb.highMark c.maxOff), and
+    - the finOff invariant is respected: if the stream is already FIN'd, the
+      chunk does not extend beyond the known final offset. -/
+theorem insertAny_inv
+    (rb : RecvBuf) (c : Chunk)
+    (hinv  : rb.Invariant)
+    (hfin  : ∀ f, rb.finOff = some f → c.maxOff ≤ f) :
+    (rb.insertAny c).Invariant := by
+  constructor
+  · -- off_le_mark: readOff ≤ max highMark c.maxOff
+    simp only [insertAny_readOff_unchanged, insertAny_highMark_eq]
+    exact Nat.le_trans hinv.off_le_mark (Nat.le_max_left _ _)
+  · -- above_cursor: chunks above readOff
+    simp only [RecvBuf.insertAny]
+    by_cases hp : (trimChunk c rb.readOff).len > 0
+    · have hc'_off : (trimChunk c rb.readOff).off ≥ rb.readOff :=
+        trimChunk_off_ge c rb.readOff hp
+      exact insertChunkInto_above rb.readOff rb.chunks (trimChunk c rb.readOff)
+        hinv.above_cursor hc'_off hp
+    · simp only [Nat.not_lt, Nat.le_zero] at hp
+      rw [insertChunkInto_zero _ _ hp]
+      exact hinv.above_cursor
+  · -- ordered
+    simp only [RecvBuf.insertAny]
+    by_cases hp : (trimChunk c rb.readOff).len > 0
+    · exact insertChunkInto_ordered rb.chunks (trimChunk c rb.readOff) hinv.ordered
+    · simp only [Nat.not_lt, Nat.le_zero] at hp
+      rw [insertChunkInto_zero _ _ hp]
+      exact hinv.ordered
+  · -- fin_eq_mark: if finOff = some f then f = new highMark
+    intro f hf
+    simp only [insertAny_finOff_unchanged] at hf
+    simp only [insertAny_highMark_eq]
+    -- f = old highMark (by hinv)
+    have hfm : f = rb.highMark := hinv.fin_eq_mark f hf
+    -- c.maxOff ≤ f = old highMark (by precondition hfin)
+    have hcf : c.maxOff ≤ f := hfin f hf
+    -- max rb.highMark c.maxOff = rb.highMark = f
+    subst hfm; simp [Nat.max_eq_left hcf]
+  · -- within_mark: all chunks ≤ new highMark
+    simp only [RecvBuf.insertAny]
+    have hc'_max : (trimChunk c rb.readOff).maxOff ≤ Nat.max rb.highMark c.maxOff := by
+      exact Nat.le_trans (trimChunk_maxOff_le c rb.readOff) (Nat.le_max_right _ _)
+    have hw_mono : chunksWithin (Nat.max rb.highMark c.maxOff) rb.chunks := by
+      exact chunksWithin_mono rb.highMark _ (Nat.le_max_left _ _) _ hinv.within_mark
+    by_cases hp : (trimChunk c rb.readOff).len > 0
+    · exact insertChunkInto_within _ rb.chunks (trimChunk c rb.readOff) hw_mono hc'_max hp
+    · simp only [Nat.not_lt, Nat.le_zero] at hp
+      rw [insertChunkInto_zero _ _ hp]
+      exact hw_mono
+
+-- =============================================================================
+-- §14  insertAny test vectors
+-- =============================================================================
+
+/-- Insert non-overlapping chunk into empty buffer. -/
+example :
+    let rb  := RecvBuf.empty
+    let c   := Chunk.mk 0 10
+    (rb.insertAny c).highMark = 10 ∧
+    (rb.insertAny c).readOff  = 0  ∧
+    (rb.insertAny c).chunks   = [c] := by
+  native_decide
+
+/-- Fully duplicate chunk (covered by existing) is silently dropped. -/
+example :
+    let rb := mkRecv [{ off := 0, len := 10 }] 0 10 none
+    let c  := Chunk.mk 3 5   -- [3,8) ⊆ [0,10)
+    (rb.insertAny c).chunks = [{ off := 0, len := 10 }] ∧
+    (rb.insertAny c).highMark = 10 := by
+  native_decide
+
+/-- Out-of-order chunk before existing data. -/
+example :
+    let rb := mkRecv [{ off := 5, len := 5 }] 0 10 none
+    let c  := Chunk.mk 0 5   -- [0,5) before [5,10)
+    (rb.insertAny c).chunks = [{ off := 0, len := 5 }, { off := 5, len := 5 }] ∧
+    (rb.insertAny c).highMark = 10 := by
+  native_decide
+
+/-- Chunk that extends the buffer beyond existing highMark. -/
+example :
+    let rb := mkRecv [{ off := 0, len := 10 }] 0 10 none
+    let c  := Chunk.mk 10 5  -- [10,15) contiguous
+    (rb.insertAny c).chunks   = [{ off := 0, len := 10 }, { off := 10, len := 5 }] ∧
+    (rb.insertAny c).highMark = 15 := by
+  native_decide
+
+/-- Left-overhang chunk: [0,7) with existing [5,10) → keeps [0,5) only. -/
+example :
+    let rb := mkRecv [{ off := 5, len := 5 }] 0 10 none
+    let c  := Chunk.mk 0 7   -- [0,7) overlaps [5,10) at [5,7)
+    -- left part [0,5) inserted; [5,7) discarded (existing wins); result [0,5),[5,10)
+    (rb.insertAny c).chunks = [{ off := 0, len := 5 }, { off := 5, len := 5 }] ∧
+    (rb.insertAny c).highMark = 10 := by
+  native_decide
+
+/-- Chunk below readOff is trimmed away. -/
+example :
+    let rb := mkRecv [] 5 5 none  -- readOff = 5
+    let c  := Chunk.mk 0 5        -- [0,5) fully below cursor
+    (rb.insertAny c).chunks   = [] ∧
+    (rb.insertAny c).highMark = 5 := by
+  native_decide
+
+/-- Chunk partially below readOff is trimmed to [readOff, c.maxOff). -/
+example :
+    let rb := mkRecv [] 3 3 none  -- readOff = 3
+    let c  := Chunk.mk 0 8        -- [0,8) → trimmed to [3,8)
+    (rb.insertAny c).chunks   = [{ off := 3, len := 5 }] ∧
+    (rb.insertAny c).highMark = 8 := by
+  native_decide
