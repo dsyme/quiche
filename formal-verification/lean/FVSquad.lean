@@ -16,3 +16,4 @@ import FVSquad.CidMgmt
 import FVSquad.StreamPriorityKey
 import FVSquad.OctetsMut
 import FVSquad.Octets
+import FVSquad.StreamId
