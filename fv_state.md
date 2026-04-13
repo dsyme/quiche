@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-12 (run 63, workflow 24311908193)
+Last updated: 2026-04-13 (run 64, workflow 24325045355)
 
 ## Lean File Registry
 
@@ -17,22 +17,19 @@ Last updated: 2026-04-12 (run 63, workflow 24311908193)
 | FVSquad/PacketNumDecode.lean | 23 | 0 | ✅ |
 | FVSquad/Cubic.lean | 26 | 0 | ✅ |
 | FVSquad/RangeBuf.lean | 19 | 5 | ✅ |
-| FVSquad/RecvBuf.lean | 38 | 17 | ✅ (run61+62 insertAny) |
+| FVSquad/RecvBuf.lean | 38 | 17 | ✅ (run61 insertAny) |
 | FVSquad/SendBuf.lean | 26 | 11 | ✅ |
 | FVSquad/CidMgmt.lean | 21 | 13 | ✅ |
 | FVSquad/StreamPriorityKey.lean | 21 | 8 | ✅ |
 | FVSquad/OctetsMut.lean | 27 | 7 | ✅ (run63: fixed split_ifs) |
 | FVSquad/Octets.lean | 48 | 9 | ✅ run62 |
-| **TOTAL** | **394** | **119** | **✅ 0 sorry** |
-
-Note: private/helper theorems add ~49 more checked declarations.
+| FVSquad/StreamId.lean | 35 | 8 | ✅ run64 |
+| **TOTAL** | **429** | **127** | **✅ 0 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR #48: RecvBuf insertAny (run61, open)
-- PR #49: Octets read-only (run62, open)
-- PR run63: OctetsMut fix + REPORT.md (just created)
+- PR run64: StreamId.lean + CRITIQUE update (pending merge)
 
 ## Branch
 
-Current work: lean-squad-run63-24311908193-octets-mut-fix-report
+Current work: lean-squad-run64-24325045355-streamid-critique

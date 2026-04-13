@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-12 (run 63)
+Last updated: 2026-04-13 (run 64)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -20,31 +20,31 @@ FVSquad.lean: import manifest for all modules
 | 9 | Cubic CC | quiche/src/recovery/congestion/cubic.rs | 5 | ✅ Done |
 | 10 | Min-max filter | quiche/src/minmax.rs | 5 | ✅ Done |
 | 11 | RangeBuf offset arithmetic | quiche/src/range_buf.rs | 5 | ✅ Done |
-| 12 | RecvBuf stream reassembly | quiche/src/stream/recv_buf.rs | 5 | ✅ Done (run61: 59 theorems) |
+| 12 | RecvBuf stream reassembly | quiche/src/stream/recv_buf.rs | 5 | ✅ Done (run61: insertAny_inv) |
 | 13 | SendBuf stream send buffer | quiche/src/stream/send_buf.rs | 5 | ✅ Done |
 | 14 | Connection ID management | quiche/src/cid.rs | 5 | ✅ Done |
 | 15 | Stream priority key | quiche/src/stream/mod.rs | 5 | ✅ Done |
-| 16 | OctetsMut byte serializer | octets/src/lib.rs | 5 | ✅ Done (run63: fixed split_ifs, now in manifest) |
+| 16 | OctetsMut byte serializer | octets/src/lib.rs | 5 | ✅ Done (run63: fixed split_ifs) |
 | 17 | Octets read-only cursor | octets/src/lib.rs | 5 | ✅ Done (run62: 48 theorems + 9 examples) |
+| 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs + lib.rs | 5 | ✅ Done (run64: 35 theorems) |
 
 ## Theorem Totals
 
-394 public theorems + 119 examples + 49 private helpers, 0 sorry across 17 Lean files.
+429 public theorems + 127 examples + ~49 private helpers, 0 sorry across 18 Lean files.
 
 ## Open PRs (lean-squad label)
 
-- PR #48: RecvBuf insertAny (run 61, open — pending merge)
-- PR #49: Octets read-only (run 62, open — pending merge)
-- PR #63 (run 63): OctetsMut fix + REPORT.md (just created)
+- PR run64: StreamId.lean + CRITIQUE update (just created, pending merge)
 
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
-- Next targets: StreamMap, PacketHeader, per-stream flow control
-- RecvBuf model: correspondence gap for `fin_off` handling still noted
-- CRITIQUE.md stale (last updated run 49, now 17 files with 394 theorems)
-  → Task 7 would be high-value next run
+- Next targets: PacketHeader encode/decode, Octets↔OctetsMut composition,
+  SendBuf retransmission model, stream flow-control limit enforcement
+- OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
+- CRITIQUE.md: now fully updated through run 64 (18 targets, 429 theorems)
+- CORRESPONDENCE.md: may need updating for StreamId (new target)
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -52,22 +52,21 @@ FVSquad.lean: import manifest for all modules
 - `linarith` — Mathlib-only; use `omega` for all Nat arithmetic
 - `native_decide` on `Prop`s that are not `Decidable`
   Use explicit case analysis instead
+- `simp [...] ; omega` — if simp already closes the goal, omega will see
+  "No goals to be solved". Use simp only, or omit omega if simp closes it.
 
 ## Key Proof Patterns (no Mathlib)
 
 - If-then-else in hypothesis: `by_cases hc : COND`
-  then `· simp only [if_pos hc, ...] at h; ...`
-  and  `· simp [if_neg hc] at h` (closes none=some contradiction)
-- Roundtrip existential: `refine ⟨witness, ?_⟩` then
-  `simp only [..., Option.some.injEq, Prod.mk.injEq, eq_self_iff_true, and_true]; omega`
-- Let-binding in simp: avoid `let B := ...` when using `simp only [eq_about_B]`
-  in a later goal — simp may unfold B, breaking eq matching.
-  Use direct hypotheses `have hb : expr = v` about the expression instead.
-- Invariant unpack: `simp only [Option.some.injEq, Prod.mk.injEq] at h`
-  then `obtain ⟨_, hs'⟩ := h; subst hs'`
+- Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
 - Nat.sub with omega: need `b ≤ a` in context for `(a - b) + b = a`
-- Structural goals after subst usually close with `rfl` or `omega`
-- Test vectors: use `native_decide` only for decidable closed examples
+  → For struct fields: add `have hinv := s.inv` before omega
+- Nat.max with omega: omega does NOT know `max a b ≥ a` or `max a b ≥ b`
+  → Use `have := Nat.le_max_left a b` or `Nat.le_max_right a b` explicitly
+- Bool predicates from Prop: `def f : Bool := (expr : Prop)` uses decide wrapper
+  → To prove `f (a+k) = f a`, use `have h : expr_in_a+k = expr_in_a := by omega`
+     then `simp only [f, h]`
+- `isBidi_add4` pattern: have h : (id + 4) % 4 = id % 4 := by omega; simp only [isBidi, h]
 
 ## Key Findings
 
@@ -76,12 +75,12 @@ FVSquad.lean: import manifest for all modules
   counterexample; corrected to match RFC 9000 §A.3 strict invariant
 - getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
 - run 63: OctetsMut split_ifs fix — split_ifs is Mathlib-only; use by_cases
-  Also: Prod.mk roundtrip proofs need explicit witness + simp pattern
+- run 64: streamType_add_mul4 — stream type preserved under all +4k increments
 
 ## Lake Project
 
 No Mathlib dependency (`lake-manifest.json` is empty packages).
-FVSquad.lean imports (in order): Varint, RangeSet, Minmax,
+FVSquad.lean imports (in order): Octets, Varint, RangeSet, Minmax,
   RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey,
-  OctetsMut (run63: fixed!), Octets
+  OctetsMut, Octets (dup), StreamId
