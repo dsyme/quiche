@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-13 (run 65)
+Last updated: 2026-04-14 (run 66)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -28,25 +28,26 @@ FVSquad.lean: import manifest for all modules
 | 17 | Octets read-only cursor | octets/src/lib.rs | 5 | ✅ Done (run62: 48 theorems + 9 examples) |
 | 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs + lib.rs | 5 | ✅ Done (run64: 35 theorems) |
 | 19 | Octets↔OctetsMut cross-module | octets/src/lib.rs | 5 | ✅ Done (run65: 20 theorems + 9 examples) |
+| 20 | pkt_num_len encoding length | quiche/src/packet.rs ~L569 | 5 | ✅ Done (run66: 20 theorems + 10 examples) |
 
 ## Theorem Totals
 
-449 public theorems + 136 examples + ~51 private helpers, 0 sorry across 19 Lean files.
+469 public theorems + 146 examples + ~53 private helpers, 0 sorry across 20 Lean files.
 
 ## Open PRs (lean-squad label)
 
-- PR #51 run64: StreamId.lean + CRITIQUE update (pending merge)
-- PR run65: OctetsRoundtrip.lean (just created, pending merge)
-
+- PR run65: OctetsRoundtrip.lean (pending merge — PR #52)
+- PR run66: PacketNumLen.lean (just created, pending merge)
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
-- Next targets: PacketHeader encode/decode, RangeSet semantic completeness,
-  NewReno AIMD rate theorem, stream flow-control per-stream limits
+- Next targets: **Target 21** (SendBuf retransmit model — retransmit preserves
+  SendBuf invariant), **Target 22** (RecvBuf highMark ≤ max_data flow-control),
+  RangeSet semantic completeness, NewReno AIMD rate theorem
 - OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
-- CORRESPONDENCE.md: needs updates for Targets 18 (StreamId) and 19 (OctetsRoundtrip)
-- CRITIQUE.md: may need Target 19 entry (OctetsRoundtrip)
+- CORRESPONDENCE.md: needs updates for Targets 18-20 (StreamId, OctetsRoundtrip, PacketNumLen)
+- CRITIQUE.md: may need Target 20 entry (PacketNumLen)
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -83,8 +84,11 @@ FVSquad.lean: import manifest for all modules
 - getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
 - run 63: OctetsMut split_ifs fix — split_ifs is Mathlib-only; use by_cases
 - run 64: streamType_add_mul4 — stream type preserved under all +4k increments
-- run 65: listGet_eq_octListGet — both list-read helpers are definitionally equal;
-  cross-module freeze round-trips prove OctetsMut/Octets consistency
+- run 66: pktNumLen if-then-else: use simp [if_pos c]/simp [if_neg c] for reasoning;
+  `let` bindings in defs prevent simp from unfolding — avoid them for provability;
+  after rw [if_pos/neg] numeric goals need omega; pktNumLen_four_coverage requires
+  QUIC validity hypothesis (numUnacked ≤ 2147483648) since model returns 4 for all
+  large values while Rust errors for n > 2^31-1
 
 ## Lake Project
 
@@ -92,4 +96,4 @@ No Mathlib dependency (`lake-manifest.json` is empty packages).
 FVSquad.lean imports (in order): Octets, Varint, RangeSet, Minmax,
   RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey,
-  OctetsMut, OctetsRoundtrip, StreamId
+  OctetsMut, OctetsRoundtrip, StreamId, PacketNumLen
