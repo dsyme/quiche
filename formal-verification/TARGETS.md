@@ -23,6 +23,9 @@
 | 15 | Stream priority ordering (`StreamPriorityKey::cmp`) | `quiche/src/stream/mod.rs` | 5 — Proofs | ✅ Done | **0 sorry** — 21 theorems + 7 examples; OQ-1 `Ord` antisymmetry violation proved; `FVSquad/StreamPriorityKey.lean` |
 | 16 | `OctetsMut` byte-buffer read/write | `octets/src/lib.rs` | 5 — Proofs ✅ | ✅ Done (run 63) | Cursor-based byte buffer; round-trip, invariant preservation; `FVSquad/OctetsMut.lean` (27 public + 6 private theorems, 0 sorry). Fixed in run 63: Mathlib-only `split_ifs` replaced with `by_cases`; file added to FVSquad.lean manifest. |
 | 17 | `Octets` (read-only) byte-buffer | `octets/src/lib.rs` | 5 — Proofs ✅ | ✅ Done (run 62) | Read-only cursor; invariant, getU8/16/32/64, skip/rewind, big-endian decode; `FVSquad/Octets.lean` (48 theorems + 9 examples, 0 sorry) |
+| 18 | StreamId RFC 9000 §2.1 arithmetic | `quiche/src/stream/mod.rs` + `lib.rs` | 5 — Proofs | ✅ Done (run 64) | 35 theorems + 8 examples, 0 sorry; PR #51 merged |
+| 19 | Octets↔OctetsMut cross-module round-trip | `octets/src/lib.rs` | 5 — Proofs | ✅ Done (run 65) | 20 theorems + 9 examples, 0 sorry; PR #52 merged |
+| 20 | `pkt_num_len` / `encode_pkt_num` length selection | `quiche/src/packet.rs` | 5 — Proofs | ✅ Done (run 66) | 20 theorems + 10 examples, 0 sorry; `FVSquad/PacketNumLen.lean` |
 
 ## Phase Definitions
 
@@ -37,17 +40,20 @@
 
 ## Next Actions
 
-1. **Target 17: Octets (read-only)** — `FVSquad/Octets.lean` written and proved
-   in run 62 (48 theorems, 0 sorry): cursor invariant, `getU8`/`getU16`/`getU32`/
-   `getU64`, `peekU8`, `skip`/`rewind` with full inverse proof, big-endian
-   decoding correctness for 2/4/8-byte values, and `getU16_split` showing
-   `getU16` decomposes exactly into two sequential `getU8` calls.
-2. **Target 16: OctetsMut** — write Lean spec `FVSquad/OctetsMut.lean`
-   capturing put/get round-trip properties, cursor invariant (`off + cap = len`),
-   and `put_u8`/`put_u16`/`put_u32` serialisation correctness.
-2. ~~**RecvBuf overlapping chunks** — extend `RecvBuf.lean` to model `insertAny`~~
-   ✅ **Done in run 61**: `insertAny_inv` fully proves invariant preservation for out-of-order writes.
-3. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
+1. **Target 20: `pkt_num_len` / `encode_pkt_num`** — ✅ Done in run 66.
+   `FVSquad/PacketNumLen.lean` (20 theorems + 10 examples, 0 sorry):
+   `pktNumLen_valid` (always 1–4 bytes), `pktNumLen_eq_{one,two,three,four}_iff`
+   (characterisation), coverage theorems (numUnacked fits in half-window),
+   `pktNumLen_mono` (monotone in gap size), and `pktNumLen_ge_{two,three,four}`
+   (gap threshold bounds).
+2. **Target 21: SendBuf retransmit model** — The `retransmit` function
+   (`quiche/src/stream/send_buf.rs:366`) moves bytes back to the send queue.
+   Properties: `retransmit(off, len)` increases `self.len` by the number of
+   bytes in `[off, off+len)` that had been emitted; the `SendBuf` invariant
+   is preserved; `len` never exceeds the buffer capacity.
+3. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
+   is maintained by `RecvBuf` operations (currently unmodelled).
+4. **RangeSet semantic completeness** — prove `flatten(insert(rs,r))` equals
    `set_union`; see CRITIQUE.md
 4. **NewReno AIMD rate theorem** — prove exact growth rate (one MSS per cwnd
    bytes ACKed) across multiple ACK callbacks; currently only per-callback
