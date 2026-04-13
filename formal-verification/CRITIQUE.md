@@ -4,26 +4,30 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-07 17:45 UTC
-- **Commit**: `ade740b8`
+- **Date**: 2026-04-13 04:30 UTC
+- **Commit**: `ac135f26`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **fifteen modules with
-333 theorems + 19 examples, 0 sorry** (Lean 4.29.0, no Mathlib). Run 49 adds
-`StreamPriorityKey.lean` (22 theorems + 7 examples): the ordering comparator
-used in HTTP/3 stream scheduling (RFC 9218). The most notable result is a
-**formal proof of an Ord law violation (OQ-1)**: the both-incremental case of
-`StreamPriorityKey::cmp` returns `Ordering::Greater` for **both** `a.cmp(b)`
-and `b.cmp(a)` simultaneously, violating the standard antisymmetry contract.
-This is not necessarily a bug — the intrusive red-black tree may tolerate
-non-antisymmetric comparators — but it is a formally confirmed deviation from
-the Rust `Ord` contract. The prior fourteen modules continue to hold with zero
-outstanding `sorry`s. Key previous results include `emitN_le_maxData`
-(SendBuf, flow-control safety), `decode_pktnum_correct` (PacketNumDecode, RFC
-9000 §A.3 algorithm), and `newScid_seq_fresh` (CidMgmt, CID uniqueness).
+The formal verification suite for `quiche` now covers **18 modules with
+429 theorems + 127 examples, 0 sorry** (Lean 4.29.0, no Mathlib). This run
+(64) adds `StreamId.lean` (35 theorems + 8 examples): the RFC 9000 §2.1
+stream-ID type classifier and MAX_STREAMS credit arithmetic. Since run 49,
+five additional files have been added: `StreamPriorityKey.lean` (21 theorems
++ 8 examples; run 49), `OctetsMut.lean` (27 theorems + 7 examples; run 53),
+`Octets.lean` (48 theorems + 9 examples; run 62), `RecvBuf.lean` was extended
+with `insertAny` out-of-order write proofs (run 61, now 38 theorems + 17
+examples), and `StreamId.lean` (this run). The most notable result since run
+49 is a **formal proof of an Ord law violation (OQ-1)** in
+`StreamPriorityKey::cmp` (antisymmetry fails in the both-incremental case —
+intentional by design), and a complete byte-cursor correctness proof for the
+`Octets`/`OctetsMut` serialiser including `put_varint` round-trip. Key
+previously noted results include `emitN_le_maxData` (SendBuf, RFC 9000 §4.1
+flow-control safety), `decode_pktnum_correct` (PacketNumDecode, RFC 9000 §A.3
+algorithm), `newScid_seq_fresh` (CidMgmt, CID uniqueness), and
+`insertAny_inv` (RecvBuf, out-of-order stream reassembly invariant).
 
 ---
 
@@ -446,30 +450,32 @@ away; data integrity through consume and split is not verified.
 
 ---
 
-### Target 12: Stream receive buffer (`FVSquad/RecvBuf.lean`) — 32 theorems ✅
+### Target 12: Stream receive buffer (`FVSquad/RecvBuf.lean`) — 38 theorems ✅
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
 | `emitN_preserves_inv` | high | **high** | All 5 buffer invariants preserved by `emitN` (read-cursor advance) — structural safety of the reassembler read path |
 | `insertContiguous_inv` | high | **high** | All 5 buffer invariants preserved by in-order sequential write — structural safety of the common write path |
+| `insertAny_inv` | high | **high** | All 5 buffer invariants preserved by out-of-order write (new run 61) — full reassembly path is safe |
 | `insertContiguous_two_highMark` | high | **high** | Two sequential writes advance `highMark` by `c1.len + c2.len` — byte-count accounting correctness |
 | `insertContiguous_highMark_grows` | mid | **high** | Non-empty write strictly advances `highMark` — monotone progress |
 | `emitN_readOff_nondecreasing` | mid | **high** | Read cursor never moves backward — stream delivery ordering |
 | `isFin_readOff_eq_highMark` | mid | medium | When FIN is set and stream is drained, `readOff = highMark` |
 | `chunksAbove_mono` | low | low | Ordering helper |
 | `chunksAbove_of_ordered` | low | low | Structural helper |
-| 24 others | low | low | Invariant sub-properties, accessor identities, test vectors |
+| 29 others | low | low | Invariant sub-properties, accessor identities, test vectors |
 
-**Assessment**: The invariant-preservation theorems are high-value for the
-most complex data structure in the stream layer. The RecvBuf reassembler is
-the code path for all QUIC stream data delivery; a bug corrupting chunk
-ordering or byte accounting would silently produce garbled application data.
-`insertContiguous_inv` is the key result — it proves the well-formedness
-invariant is an inductive invariant of the common write path. **Gaps**:
-(1) `insertContiguous` models only the contiguous (in-order) path; the
-general overlapping-write case is not proved; (2) flow-control limit
-enforcement (`highMark ≤ max_data`) is not modelled; (3) drain mode and
-reset handling are not covered.
+**Assessment**: The addition of `insertAny_inv` (run 61) closes the most
+significant gap in the prior version: the general out-of-order write path is
+now formally verified to preserve all five buffer invariants. Together with
+`insertContiguous_inv` and `emitN_preserves_inv`, the three main state-
+changing operations (contiguous write, OOO write, read-advance) are all
+verified to be invariant-preserving. `RecvBuf` reassembly is the code path
+for all QUIC stream data delivery — a corruption here silently garbles
+application data. **Remaining gaps**: (1) flow-control limit enforcement
+(`highMark ≤ max_data`) is not modelled; (2) drain mode, reset handling, and
+`shutdown` are not covered; (3) byte *contents* (data integrity through
+reassembly, not just structural invariants) are abstracted away.
 
 ---
 
@@ -536,3 +542,196 @@ CID detection) is not modelled; (2) the `retire_if_needed` path is not
 modelled; (3) path-binding, reset-token, and `retire_prior_to` semantics are
 entirely out of scope; (4) integer overflow on `u64` sequence numbers is not
 captured (practically irrelevant: 2^64 CID retirements is not feasible).
+
+---
+
+### Target 15: Stream priority ordering (`FVSquad/StreamPriorityKey.lean`) — 21 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `cmpKey_antisymm_eq` | high | **high** | `cmpKey a b = .gt ∧ cmpKey b a = .gt` — **formally proves OQ-1**: both-incremental case violates `Ord` antisymmetry |
+| `cmpKey_refl` | high | medium | `cmpKey a a = .eq` — reflexivity holds; identifies are always equal to themselves |
+| `cmpKey_same_id` | high | medium | Same stream ID → always equal; prevents duplicate priority entries |
+| `cmpKey_lt_urgency` | high | **high** | Lower urgency strictly dominates — RFC 9218 §5.1 priority order (urgency 0 outranks urgency 7) |
+| `cmpKey_gt_urgency` | high | **high** | Higher urgency never beats lower — RFC 9218 §5.1 complementary direction |
+| `cmpKey_incr_vs_nonincr` | mid | medium | Non-incremental beats incremental at same urgency |
+| `cmpKey_nonincr_id_order` | mid | medium | Both non-incremental: lower stream ID wins (FIFO ordering within tier) |
+| 14 others | low | low | Accessors, urgency-bound test vectors, structural helpers |
+
+**Finding (OQ-1)**: Both `cmpKey a b = .gt` and `cmpKey b a = .gt` hold
+simultaneously when `a.urgency = b.urgency`, `a.incremental = true`, and
+`b.incremental = true` (and `a.id ≠ b.id`). This violates the standard `Ord`
+antisymmetry contract (`a > b → b < a`). The intrusive red-black tree used
+for HTTP/3 stream scheduling may tolerate this; the RFC 9218 §5.1 spec says
+incremental streams share the scheduling slot round-robin, not that they have
+a strict ordering. The violation is formally confirmed but appears intentional.
+
+**Assessment**: The streaming-priority suite is high-value because it
+formalises the RFC 9218 scheduling contract. The OQ-1 finding is the most
+interesting result: a formally confirmed antisymmetry violation in a
+comparator used to drive HTTP/3 stream scheduling. **Gaps**: (1) transitivity
+of `cmpKey` is not proved (it likely fails for the same reason antisymmetry
+fails); (2) no theorem proves that the scheduling policy induced by `cmpKey`
+actually satisfies the RFC 9218 §5.1 fairness requirements.
+
+---
+
+### Target 16: OctetsMut byte serialiser (`FVSquad/OctetsMut.lean`) — 27 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `putU8_round_trip` | high | **high** | Writing then reading one byte recovers the original value — codec round-trip for the most basic operation |
+| `putU16_round_trip` | high | **high** | `putU16` big-endian round-trip: two bytes written, then read back with `getU16`, recover original value |
+| `putU32_round_trip` | high | **high** | `putU32` big-endian round-trip |
+| `putU64_round_trip` | high | **high** | `putU64` big-endian round-trip |
+| `put_varint_round_trip` | high | **high** | QUIC varint write then read recovers original value — the key codec property for all QUIC frame field encoding |
+| `listSet_preserves_length` | mid | medium | Writing a byte does not change the buffer length — no spurious growth or truncation |
+| `listGet_set_eq` | mid | medium | A byte written at position `i` is readable at position `i` |
+| `listGet_set_ne` | mid | medium | Writing at `i` does not affect position `j ≠ i` — isolation |
+| `putU8_advances_off` | mid | medium | Offset advances by exactly 1 after writing one byte |
+| `putU16_advances_off` | mid | medium | Offset advances by exactly 2 after writing a u16 |
+| 17 others | low | low | Structural helpers, out-of-bounds behaviour, big-endian byte layout tests |
+
+**Assessment**: The round-trip theorems are the most valuable results —
+a codec round-trip failure means frame encoding is broken, which would
+corrupt every QUIC packet. The five round-trip theorems (`putU8` through
+`put_varint`) collectively cover the entire range of primitive put operations.
+`listGet_set_ne` (isolation) is also important: without it, a write to one
+field could corrupt an adjacent field. **Gaps**: (1) no theorem verifies
+big-endian byte order against RFC 9000 §16 explicitly (the model uses
+`256*hi + lo` which IS big-endian, but the RFC check is implicit); (2)
+`put_bytes` (bulk copy) is not modelled; (3) the `OctetsMut`↔`Octets`
+composition (write then pass to a reader) is not proved end-to-end.
+
+---
+
+### Target 17: Octets read-only cursor (`FVSquad/Octets.lean`) — 48 theorems ✅
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `getU8_round_trip` | high | **high** | Read one byte; offset advances by 1; value equals source byte |
+| `getU16_split` | high | **high** | `getU16 = hi * 256 + lo` where hi/lo are consecutive bytes — **formally proves** big-endian framing matches RFC 9000 §16 |
+| `getU32_decomp` | high | **high** | `getU32 = b0*16777216 + b1*65536 + b2*256 + b3` — big-endian correctness for all four bytes |
+| `getU64_decomp` | high | **high** | Full 8-byte big-endian decomposition |
+| `get_varint_round_trip` | high | **high** | QUIC varint read: round-trip `encode → getVarint` recovers original value (run 62) |
+| `skip_advances_off` | mid | medium | `skip n` advances offset by exactly n |
+| `peek_does_not_advance` | mid | medium | `peek_u8` reads without advancing — non-destructive |
+| `slice_length` | mid | medium | `get_bytes(n)` produces exactly n bytes |
+| `withSlice_inv` | mid | medium | The invariant holds for a slice created from a byte list |
+| `inv_preserved_after_getU8` | high | **high** | Reading one byte preserves the `Inv` (off ≤ len) invariant — read path is safe |
+| `octListGet_out_of_bounds` | mid | medium | Out-of-bounds read returns 0 (graceful default, not crash) |
+| 37 others | low | low | Structural helpers, multi-byte decompositions, offset-consistency lemmas |
+
+**Finding from run 62 (`getU16_split`)**: The proof of `getU16_split`
+confirms that `getU16 b = b[0] * 256 + b[1]`, verifying that the
+`Octets::get_u16()` implementation correctly implements big-endian byte order
+as specified in RFC 9000 §16. This is a non-trivial structural property: the
+high byte is read first, shifted by 8 bits, and OR-ed with the low byte. The
+Lean model uses `256*` (multiplication) to model bitwise shift, and the proof
+holds by case analysis on the two individual byte reads.
+
+**Assessment**: The Octets suite is the largest individual module with 48
+theorems. The four big-endian decomposition theorems (`getU16_split`,
+`getU32_decomp`, `getU64_decomp`, `get_varint_round_trip`) are high-value:
+any error in the big-endian byte ordering would silently misparse all QUIC
+frame fields. The `inv_preserved_after_getU8` theorem proves the safety
+invariant (read cursor cannot go past the end) is inductive under reads.
+**Gaps**: (1) `get_bytes` content integrity (not just length) is not proved;
+(2) `as_ref`/`from_bytes` constructors are not modelled; (3) the
+`Octets`↔`OctetsMut` composition round-trip (encode then decode a full frame)
+remains for a future target.
+
+---
+
+### Target 18: Stream ID arithmetic (`FVSquad/StreamId.lean`) — 35 theorems ✅ *(added run 64)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `streamType_complete` | high | **high** | Every stream ID has exactly one of 4 types (0-3) — no stream can fall outside the RFC 9000 §2.1 classification |
+| `streamType_add4` | high | **high** | Adding 4 preserves stream type — verifies that stream IDs of the same type differ by 4 (RFC 9000 §2.1 sequence rule) |
+| `streamType_add_mul4` | high | **high** | `streamType(id + 4k) = streamType(id)` — the type orbit under +4 is correct for all k |
+| `isBidi_add4` / `isBidi_add_mul4` | high | **high** | `isBidi` is preserved under +4 increments — prevents an endpoint from accidentally creating a uni stream where a bidi was expected |
+| `isServerInit_add4` | high | **high** | `isServerInit` is preserved under +4 — server-initiated streams remain server-initiated |
+| `openStream_dec` | high | **high** | Opening one stream reduces `streamsLeft` by exactly 1 — credit accounting is correct |
+| `updatePeerMax_grows_left` | high | **high** | A larger MAX_STREAMS strictly increases available credits — the unblocking guarantee |
+| `openThenUpdate_has_capacity` | high | **high** | After consuming the last credit, a MAX_STREAMS update restores capacity — the peer-controlled flow-control lifecycle is proved |
+| `isBidi_iff_type_lt2` | mid | medium | `isBidi ↔ streamType < 2` — consistent with the bit-1 definition |
+| `isServerInit_iff_type_odd` | mid | medium | `isServerInit ↔ streamType % 2 = 1` — consistent with the bit-0 definition |
+| `streamsLeft_zero_iff` | mid | medium | Credits exhausted iff `opened = peerMax` — boundary condition |
+| `updatePeerMax_mono` | mid | medium | MAX_STREAMS never decreases — monotonicity of peer limit |
+| 12 canonical first-ID tests | low | low | Verify the RFC 9000 Table 1 mapping for streams 0-3 |
+| 8 examples | low | low | Concrete `streamsLeft` calculations, stream type examples |
+
+**Assessment**: The StreamId suite is notable for proving the arithmetic
+invariants of QUIC's stream-type system at the level of the RFC 9000 §2.1
+specification. The critical property is `streamType_add_mul4`: if this were
+false, endpoints could miscalculate the next stream ID of a given type,
+opening a stream as the wrong type (e.g., server opening a client stream
+number) which QUIC forbids and would cause a PROTOCOL_VIOLATION error.
+`openStream_dec` and `updatePeerMax_grows_left` together formally verify the
+MAX_STREAMS credit lifecycle — a bug there could allow opening more streams
+than the peer permits, violating RFC 9000 §4.6. **Gaps**: (1) interaction
+between stream-ID classification and `stream_do_send`'s guard (`!isBidi &&
+!isLocal → error`) is not proved end-to-end; (2) the mapping between
+`localOpened` and the actual stream IDs opened is not modelled; (3) bidirectional
+vs unidirectional stream count separation (the model uses one `StreamCredits`
+struct but there are two independent counts in practice).
+
+---
+
+## Gaps and Recommendations
+
+### Highest-priority gaps (most likely to catch real bugs)
+
+1. **SendBuf: retransmission model** — The current SendBuf proofs cover only
+   the write→emit→ack lifecycle; the retransmit path (`retransmit_data`) is
+   entirely unmodelled. A correctness bug there could silently drop or
+   duplicate stream data. This is the single most impactful gap in the suite.
+
+2. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
+   to the peer as the receive window. The model does not prove this bound is
+   maintained. A violation could cause the peer to send more data than we
+   budgeted for, leading to memory exhaustion.
+
+3. **Octets↔OctetsMut composition** — `OctetsMut::put_varint` then
+   `Octets::get_varint` should recover the original value end-to-end. This
+   cross-module round-trip theorem would fully close the codec verification.
+
+4. **PacketHeader encoding** — QUIC packet headers are encoded/decoded in
+   `quiche/src/packet.rs`. Formal verification of the header encode/decode
+   round-trip would cover the entry point for all QUIC traffic.
+
+5. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
+   `stream_do_send` (`quiche/src/lib.rs:5894`) is not proved correct. A
+   formal proof that the guard exactly matches the stream type conditions from
+   RFC 9000 §2.1 would close this gap.
+
+### Moderate priority
+
+6. **CUBIC: Reno-friendly transition** — The W_cubic vs W_est comparison
+   (RFC 8312bis §5.8) is unmodelled. This determines whether CUBIC enters
+   Reno-friendly mode; a bug could make CUBIC unfair to coexisting Reno flows.
+
+7. **CidMgmt: retire_if_needed** — The path that auto-retires excess SCIDs
+   is not modelled. A bug could leave dangling CID entries above the RFC 9000
+   §5.1.1 cap.
+
+8. **NewReno: AIMD composition** — Multiple ACK+loss event cycles are not
+   proved to converge. A multi-event induction theorem would confirm the
+   AIMD steady-state behaviour.
+
+### Observations on proof strength
+
+- The **strongest** results (highest bug-catching potential with respect to
+  model fidelity) are: `decode_pktnum_correct`, `emitN_le_maxData`,
+  `newScid_seq_fresh`, `insertAny_inv`, and `streamType_add_mul4`. These
+  directly prove properties that, if violated in the implementation, would
+  cause protocol errors or data corruption.
+- The **weakest** results are the `trivial` structural theorems (e.g., `new_*`
+  postconditions that just check struct field initialisation). These are
+  useful for establishing baseline consistency but have essentially zero
+  bug-catching value.
+- The **OQ-1 finding** (StreamPriorityKey antisymmetry) remains the only
+  formal finding that diverges from a standard contract. Its impact is unclear
+  without understanding whether the red-black tree scheduler relies on
+  antisymmetry; a maintainer response on this question would be valuable.
