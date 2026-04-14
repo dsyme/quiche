@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-14 (run 66)
+Last updated: 2026-04-14 (run 67)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -36,18 +36,18 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs (lean-squad label)
 
-- PR run65: OctetsRoundtrip.lean (pending merge — PR #52)
-- PR run66: PacketNumLen.lean (just created, pending merge)
+- PR run67: CRITIQUE.md update (Targets 19-20) + CI audit (just created)
+
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
 - Next targets: **Target 21** (SendBuf retransmit model — retransmit preserves
   SendBuf invariant), **Target 22** (RecvBuf highMark ≤ max_data flow-control),
-  RangeSet semantic completeness, NewReno AIMD rate theorem
+  **Target 23** (put_varint→get_varint cross-module round-trip — close codec gap),
+  **Target 24** (encode_pkt_num → decode_pkt_num composition)
 - OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
 - CORRESPONDENCE.md: needs updates for Targets 18-20 (StreamId, OctetsRoundtrip, PacketNumLen)
-- CRITIQUE.md: may need Target 20 entry (PacketNumLen)
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -75,6 +75,9 @@ FVSquad.lean: import manifest for all modules
   using simp+by_cases+subst patterns
 - listSet_length: used to show (listSet l i v).length = l.length
   → Needed when proving off < (listSet ...).length after a put
+- pktNumLen if-then-else: use simp [if_pos c]/simp [if_neg c] for reasoning;
+  `let` bindings in defs prevent simp from unfolding — avoid them for provability;
+  after rw [if_pos/neg] numeric goals need omega
 
 ## Key Findings
 
@@ -84,11 +87,17 @@ FVSquad.lean: import manifest for all modules
 - getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
 - run 63: OctetsMut split_ifs fix — split_ifs is Mathlib-only; use by_cases
 - run 64: streamType_add_mul4 — stream type preserved under all +4k increments
-- run 66: pktNumLen if-then-else: use simp [if_pos c]/simp [if_neg c] for reasoning;
-  `let` bindings in defs prevent simp from unfolding — avoid them for provability;
-  after rw [if_pos/neg] numeric goals need omega; pktNumLen_four_coverage requires
-  QUIC validity hypothesis (numUnacked ≤ 2147483648) since model returns 4 for all
-  large values while Rust errors for n > 2^31-1
+- run 66: pktNumLen_four_coverage requires QUIC validity hypothesis
+  (numUnacked ≤ 2147483648) since model returns 4 for all large values while
+  Rust errors for n > 2^31-1
+
+## CI Status (Task 9 audit — run 67)
+
+- lean-ci.yml: ✅ exists, correct triggers (PR + push master/main on formal-verification/lean/**)
+- lake build: ✅ passes with 23 jobs, 0 errors, 0 sorry (verified locally)
+- All 20 FVSquad modules included in FVSquad.lean manifest
+- lean-toolchain: leanprover/lean4:v4.29.0 (no update needed)
+- cache: keyed on lake-manifest.json hash (correct for no-Mathlib setup)
 
 ## Lake Project
 

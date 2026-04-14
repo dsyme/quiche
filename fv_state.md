@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-13 (run 65, workflow 24338233663)
+Last updated: 2026-04-14 (run 67, workflow 24380038533)
 
 ## Lean File Registry
 
@@ -25,13 +25,13 @@ Last updated: 2026-04-13 (run 65, workflow 24338233663)
 | FVSquad/Octets.lean | 48 | 9 | ✅ run62 |
 | FVSquad/StreamId.lean | 35 | 8 | ✅ run64 |
 | FVSquad/OctetsRoundtrip.lean | 20 | 9 | ✅ run65 |
-| **TOTAL** | **449** | **136** | **✅ 0 sorry** |
+| FVSquad/PacketNumLen.lean | 20 | 10 | ✅ run66 |
+| **TOTAL** | **469** | **146** | **✅ 0 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR #51 run64: StreamId.lean + CRITIQUE update (pending merge)
-- PR run65: OctetsRoundtrip.lean + informal spec (just created)
+- PR run67: CRITIQUE.md (Targets 19-20 + CI audit) — just created
 
 ## Branch
 
-Current work: lean-squad-run65-24338233663-octets-roundtrip
+Current work: lean-squad-run67-24380038533-critique-ci-audit
