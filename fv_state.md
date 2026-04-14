@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-14 (run 68, workflow 24392857872)
+Last updated: 2026-04-14 (run 69, workflow 24414246701)
 
 ## Lean File Registry
 
@@ -33,8 +33,9 @@ Last updated: 2026-04-14 (run 68, workflow 24392857872)
 
 - PR #53 (run66): PacketNumLen.lean — open
 - PR #54 (run67): CRITIQUE.md + CI audit — open
-- PR run68: SendBufRetransmit.lean + RESEARCH 21-25 — just created
+- PR #55 (run68): SendBufRetransmit.lean + RESEARCH 21-25 — open
+- PR run69: CORRESPONDENCE Targets 18-21 + RecvBuf FC informal spec — just created
 
 ## Branch
 
-Current work: lean-squad-run68-24392857872-research-sendbuf-retransmit
+Current work: lean-squad-run69-24414246701-correspondence-infspec
