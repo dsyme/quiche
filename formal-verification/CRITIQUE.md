@@ -4,30 +4,29 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-13 04:30 UTC
-- **Commit**: `ac135f26`
+- **Date**: 2026-04-14 03:54 UTC
+- **Commit**: `12d9f1cf`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **18 modules with
-429 theorems + 127 examples, 0 sorry** (Lean 4.29.0, no Mathlib). This run
-(64) adds `StreamId.lean` (35 theorems + 8 examples): the RFC 9000 §2.1
-stream-ID type classifier and MAX_STREAMS credit arithmetic. Since run 49,
-five additional files have been added: `StreamPriorityKey.lean` (21 theorems
-+ 8 examples; run 49), `OctetsMut.lean` (27 theorems + 7 examples; run 53),
-`Octets.lean` (48 theorems + 9 examples; run 62), `RecvBuf.lean` was extended
-with `insertAny` out-of-order write proofs (run 61, now 38 theorems + 17
-examples), and `StreamId.lean` (this run). The most notable result since run
-49 is a **formal proof of an Ord law violation (OQ-1)** in
-`StreamPriorityKey::cmp` (antisymmetry fails in the both-incremental case —
-intentional by design), and a complete byte-cursor correctness proof for the
-`Octets`/`OctetsMut` serialiser including `put_varint` round-trip. Key
-previously noted results include `emitN_le_maxData` (SendBuf, RFC 9000 §4.1
-flow-control safety), `decode_pktnum_correct` (PacketNumDecode, RFC 9000 §A.3
-algorithm), `newScid_seq_fresh` (CidMgmt, CID uniqueness), and
-`insertAny_inv` (RecvBuf, out-of-order stream reassembly invariant).
+The formal verification suite for `quiche` now covers **20 modules with
+469 theorems + 146 examples, 0 sorry** (Lean 4.29.0, no Mathlib). Runs 65–67
+add `OctetsRoundtrip.lean` (20 theorems + 9 examples, run 65: cross-module
+put→freeze→get round-trip proofs for U8/U16/U32) and `PacketNumLen.lean` (20
+theorems + 10 examples, run 66: RFC 9000 §17.1 packet-number encoding-length
+characterisation). The prior run (64) added `StreamId.lean` (35 theorems + 8
+examples). The most notable results are: a **formal proof of an Ord law
+violation (OQ-1)** in `StreamPriorityKey::cmp` (antisymmetry fails in the
+both-incremental case — intentional by design), a complete byte-cursor
+correctness proof for the `Octets`/`OctetsMut` serialiser (including
+round-trips and non-aliasing), the RFC 9000 §17.1 coverage invariant for
+packet-number encoding, and `streamType_add_mul4` (RFC 9000 §2.1 stream-type
+orbit). Key previously noted results include `emitN_le_maxData` (RFC 9000 §4.1
+flow-control safety), `decode_pktnum_correct` (RFC 9000 §A.3 algorithm),
+`newScid_seq_fresh` (CID uniqueness), and `insertAny_inv` (out-of-order stream
+reassembly invariant).
 
 ---
 
@@ -679,6 +678,71 @@ struct but there are two independent counts in practice).
 
 ---
 
+### Target 19: OctetsMut↔Octets cross-module round-trip (`FVSquad/OctetsRoundtrip.lean`) — 20 theorems ✅ *(added run 65)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `putU8_freeze_getU8` | high | **high** | `putU8` then `freeze` then `getU8` recovers the value — core U8 round-trip |
+| `putU16_freeze_getU16` | high | **high** | U16 big-endian encode→freeze→decode round-trip — verifies byte ordering |
+| `putU32_freeze_getU32` | high | **high** | U32 big-endian encode→freeze→decode round-trip |
+| `putU8_octets_independent` | high | **high** | `putU8` at offset `off` does not change any other byte — non-aliasing |
+| `putU8_byte_at_off` | high | **high** | `putU8` places value exactly at `off` — direct write-address correctness |
+| `putU8_bytes_unchanged` | mid | medium | Bytes at `j ≠ off` are unchanged by `putU8` |
+| `putU8_x2_freeze_byte0/1` | mid | medium | Two sequential `putU8` writes are independent — composition safety |
+| `putU16_freeze_byte0/1` | mid | medium | Individual byte layout of U16 big-endian encoding |
+| `putU32_freeze_byte0/1/2/3` | mid | medium | Individual byte layout of U32 big-endian encoding |
+| `freeze_cap_eq` | low | low | `freeze` preserves the buffer capacity (length) |
+| `mut_getU8_eq_octets_getU8` | mid | medium | `OctetsMut.getU8` and `Octets.getU8` agree on the same buffer |
+| `listGet_eq_octListGet` | low | low | Model consistency: list `get?` matches the helper `octListGet` |
+| `octListGet_set_eq/ne` | low | low | Get-set axioms for the shared byte-array model |
+| 9 examples | low | low | Concrete put→freeze→get calculations verified by `decide` |
+
+**Assessment**: OctetsRoundtrip is the cross-module bridge completing the
+serialiser verification. The three round-trip theorems (`putU8/16/32_freeze_get`)
+are high-value: a bug in big-endian byte ordering (e.g., byte-swap) would
+directly violate `putU16_freeze_getU16`. The non-aliasing theorem
+`putU8_octets_independent` rules out a class of buffer-corruption bugs where
+a write at one offset corrupts a neighbouring byte. **Gaps**: (1) the
+`put_varint`→`get_varint` end-to-end composition is not yet proved — the
+varint codec uses a sequence of U8 writes but their round-trip through the
+cross-module interface is not formally established; (2) `get_bytes` content
+integrity (not just length) after a sequence of puts is not modelled.
+
+---
+
+### Target 20: Packet-number encoding length (`FVSquad/PacketNumLen.lean`) — 20 theorems ✅ *(added run 66)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `pktNumLen_eq_one_iff` / `_two_iff` / `_three_iff` / `_four_iff` | high | **high** | Full biconditional characterisation: `pktNumLen = k ↔ numUnacked ∈ [threshold_{k-1}, threshold_k)` |
+| `pktNumLen_one_coverage` / `_two_` / `_three_` / `_four_` | high | **high** | RFC 9000 §17.1 half-window invariant: encoded packet number fits in the chosen byte width |
+| `pktNumLen_mono` | high | **high** | Monotone: larger unacked gap forces a larger (or equal) encoding — no truncation |
+| `pktNumLen_valid` | high | **high** | `pktNumLen` always returns 1–4 (in-range); `encode_pkt_num` never errors for valid inputs |
+| `pktNumLen_ge_two` / `_three` / `_four` | mid | medium | Threshold forcing: at specific `numUnacked` values the encoder is forced to a larger width |
+| `pktNumLen_ge_one` / `_le_four` | mid | medium | Range bounds — encoding is always 1–4 bytes |
+| `numUnacked_pos` / `_ge_one` / `_self` / `_lt` | low | low | Basic arithmetic of the `numUnacked` gap formula |
+| `pktNumLen_self` | low | low | When `pn = largestAcked`, `numUnacked = 1`, encoding is 1 byte |
+| 10 concrete examples | low | low | All threshold boundary values verified by `decide` |
+
+**Assessment**: The coverage theorems are the highest-value results in this
+file. `pktNumLen_k_coverage` proves that the encoding choice always satisfies
+the RFC 9000 §17.1 requirement: the receiver can decode the packet number
+because the encoded bytes represent a value within the half-window. The
+monotonicity theorem (`pktNumLen_mono`) rules out a class of bugs where
+increasing the packet-number gap triggers a smaller encoding (which would
+cause the receiver to reject the packet). The `four_coverage` theorem takes a
+validity hypothesis (`numUnacked ≤ 2^31`) matching the Rust function's
+error-return boundary — values above that are modelled as returning 4, while
+the real implementation returns an error; this is a known modelling
+approximation. **Gaps**: (1) the reverse direction (`decode_pkt_num` after
+`encode_pkt_num` recovers the original `pn`) is not proved end-to-end in this
+file (the existing `PacketNumDecode.lean` proves decode correctness
+independently but the encode-then-decode composition is unmodelled); (2) the
+case where `pn < largestAcked` (e.g. a reordered packet) is not specially
+handled.
+
+---
+
 ## Gaps and Recommendations
 
 ### Highest-priority gaps (most likely to catch real bugs)
@@ -693,30 +757,38 @@ struct but there are two independent counts in practice).
    maintained. A violation could cause the peer to send more data than we
    budgeted for, leading to memory exhaustion.
 
-3. **Octets↔OctetsMut composition** — `OctetsMut::put_varint` then
-   `Octets::get_varint` should recover the original value end-to-end. This
-   cross-module round-trip theorem would fully close the codec verification.
+3. **put_varint→get_varint cross-module round-trip** — `OctetsMut::put_varint`
+   then `Octets::get_varint` should recover the original value end-to-end.
+   `OctetsRoundtrip.lean` proves the U8/U16/U32 round-trips but not the
+   varint codec which uses a sequence of conditional U8 writes. This is the
+   remaining piece to fully close the serialiser verification.
 
-4. **PacketHeader encoding** — QUIC packet headers are encoded/decoded in
+4. **encode_pkt_num → decode_pkt_num composition** — `PacketNumLen.lean`
+   proves the encoding-length selection and `PacketNumDecode.lean` proves
+   the decoding algorithm independently, but the composition theorem
+   (`encode` then `decode` recovers the original packet number) is not
+   formally established. This would close the QUIC packet-number lifecycle.
+
+5. **PacketHeader encoding** — QUIC packet headers are encoded/decoded in
    `quiche/src/packet.rs`. Formal verification of the header encode/decode
    round-trip would cover the entry point for all QUIC traffic.
 
-5. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
+6. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
    `stream_do_send` (`quiche/src/lib.rs:5894`) is not proved correct. A
    formal proof that the guard exactly matches the stream type conditions from
    RFC 9000 §2.1 would close this gap.
 
 ### Moderate priority
 
-6. **CUBIC: Reno-friendly transition** — The W_cubic vs W_est comparison
+7. **CUBIC: Reno-friendly transition** — The W_cubic vs W_est comparison
    (RFC 8312bis §5.8) is unmodelled. This determines whether CUBIC enters
    Reno-friendly mode; a bug could make CUBIC unfair to coexisting Reno flows.
 
-7. **CidMgmt: retire_if_needed** — The path that auto-retires excess SCIDs
+8. **CidMgmt: retire_if_needed** — The path that auto-retires excess SCIDs
    is not modelled. A bug could leave dangling CID entries above the RFC 9000
    §5.1.1 cap.
 
-8. **NewReno: AIMD composition** — Multiple ACK+loss event cycles are not
+9. **NewReno: AIMD composition** — Multiple ACK+loss event cycles are not
    proved to converge. A multi-event induction theorem would confirm the
    AIMD steady-state behaviour.
 
@@ -724,9 +796,10 @@ struct but there are two independent counts in practice).
 
 - The **strongest** results (highest bug-catching potential with respect to
   model fidelity) are: `decode_pktnum_correct`, `emitN_le_maxData`,
-  `newScid_seq_fresh`, `insertAny_inv`, and `streamType_add_mul4`. These
-  directly prove properties that, if violated in the implementation, would
-  cause protocol errors or data corruption.
+  `newScid_seq_fresh`, `insertAny_inv`, `streamType_add_mul4`,
+  `putU16_freeze_getU16`/`putU32_freeze_getU32`, and `pktNumLen_k_coverage`.
+  These directly prove properties that, if violated in the implementation,
+  would cause protocol errors or data corruption.
 - The **weakest** results are the `trivial` structural theorems (e.g., `new_*`
   postconditions that just check struct field initialisation). These are
   useful for establishing baseline consistency but have essentially zero
