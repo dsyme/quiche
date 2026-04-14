@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-14 (run 67, workflow 24380038533)
+Last updated: 2026-04-14 (run 68, workflow 24392857872)
 
 ## Lean File Registry
 
@@ -26,12 +26,15 @@ Last updated: 2026-04-14 (run 67, workflow 24380038533)
 | FVSquad/StreamId.lean | 35 | 8 | ✅ run64 |
 | FVSquad/OctetsRoundtrip.lean | 20 | 9 | ✅ run65 |
 | FVSquad/PacketNumLen.lean | 20 | 10 | ✅ run66 |
-| **TOTAL** | **469** | **146** | **✅ 0 sorry** |
+| FVSquad/SendBufRetransmit.lean | 17 | 10 | ✅ run68 |
+| **TOTAL** | **486** | **156** | **✅ 0 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR run67: CRITIQUE.md (Targets 19-20 + CI audit) — just created
+- PR #53 (run66): PacketNumLen.lean — open
+- PR #54 (run67): CRITIQUE.md + CI audit — open
+- PR run68: SendBufRetransmit.lean + RESEARCH 21-25 — just created
 
 ## Branch
 
-Current work: lean-squad-run67-24380038533-critique-ci-audit
+Current work: lean-squad-run68-24392857872-research-sendbuf-retransmit

@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-14 (run 67)
+Last updated: 2026-04-14 (run 68)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -29,75 +29,74 @@ FVSquad.lean: import manifest for all modules
 | 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs + lib.rs | 5 | ✅ Done (run64: 35 theorems) |
 | 19 | Octets↔OctetsMut cross-module | octets/src/lib.rs | 5 | ✅ Done (run65: 20 theorems + 9 examples) |
 | 20 | pkt_num_len encoding length | quiche/src/packet.rs ~L569 | 5 | ✅ Done (run66: 20 theorems + 10 examples) |
+| 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs:366 | 5 | ✅ Done (run68: 17 theorems + 10 examples) |
+| 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs:93 | 0 | ⬜ Identified |
+| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 0 | ⬜ Identified |
+| 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 0 | ⬜ Identified |
+| 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs:5894 | 0 | ⬜ Identified |
 
 ## Theorem Totals
 
-469 public theorems + 146 examples + ~53 private helpers, 0 sorry across 20 Lean files.
+486 public theorems + 156 examples + ~53 private helpers, 0 sorry across 21 Lean files.
+(Previous: 469 + 146 examples; added run68: 17 theorems + 10 examples)
 
 ## Open PRs (lean-squad label)
 
-- PR run67: CRITIQUE.md update (Targets 19-20) + CI audit (just created)
+- PR #53 (run66): PacketNumLen.lean — open
+- PR #54 (run67): CRITIQUE.md update (Targets 19-20) + CI audit — open
+- PR run68: SendBufRetransmit.lean + RESEARCH Targets 21-25 — just created
 
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
-- Next targets: **Target 21** (SendBuf retransmit model — retransmit preserves
-  SendBuf invariant), **Target 22** (RecvBuf highMark ≤ max_data flow-control),
-  **Target 23** (put_varint→get_varint cross-module round-trip — close codec gap),
-  **Target 24** (encode_pkt_num → decode_pkt_num composition)
+- Next targets: **Target 22** (RecvBuf flow-control), **Target 23** (varint roundtrip),
+  **Target 24** (encode→decode composition), **Target 25** (StreamId guard)
 - OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
-- CORRESPONDENCE.md: needs updates for Targets 18-20 (StreamId, OctetsRoundtrip, PacketNumLen)
+- OQ-RT-1 (zero-length retransmit edge case): awaiting maintainer response
+- CORRESPONDENCE.md: needs updates for Targets 18-21
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
 - `split_ifs` — Mathlib-only tactic; use `by_cases hc : COND` instead
 - `linarith` — Mathlib-only; use `omega` for all Nat arithmetic
-- `native_decide` on `Prop`s that are not `Decidable`
-  Use explicit case analysis instead
-- `simp [...] ; omega` — if simp already closes the goal, omega will see
+- `native_decide` on struct equality — SendState lacks DecidableEq; use
+  field-level `decide` instead (test .emitOff, .off, etc. individually)
+- `|>` operator before `=` in examples — parenthesise: `(expr).field = val`
+- `simp [h]; omega` — if simp already closes the goal, omega will see
   "No goals to be solved". Use simp only, or omit omega if simp closes it.
-- Private theorems from other modules are not accessible — inline their proofs
-  (e.g., putU16_unpack, putU32_unpack in OctetsMut.lean are private)
 
 ## Key Proof Patterns (no Mathlib)
 
 - If-then-else in hypothesis: `by_cases hc : COND`
+- min/max idempotence: `min (min a b) b = min a b` via `Nat.min_eq_left (Nat.min_le_right a b)`
+- Struct equality when only one field differs: use `congr 1` then prove the field equality
+- calc chains for transitivity: avoid simp after emitN (simp unfolds emitN_emitOff)
 - Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
 - Nat.sub with omega: need `b ≤ a` in context for `(a - b) + b = a`
-  → For struct fields: add `have hinv := s.inv` before omega
-- Nat.max with omega: omega does NOT know `max a b ≥ a` or `max a b ≥ b`
+- Nat.max with omega: omega does NOT know `max a b ≥ a`
   → Use `have := Nat.le_max_left a b` or `Nat.le_max_right a b` explicitly
-- Bool predicates from Prop: `def f : Bool := (expr : Prop)` uses decide wrapper
-  → To prove `f (a+k) = f a`, use `have h : expr_in_a+k = expr_in_a := by omega`
-     then `simp only [f, h]`
-- Cross-module: private theorems (e.g. putU16_unpack) must be re-proved inline
-  using simp+by_cases+subst patterns
-- listSet_length: used to show (listSet l i v).length = l.length
-  → Needed when proving off < (listSet ...).length after a put
-- pktNumLen if-then-else: use simp [if_pos c]/simp [if_neg c] for reasoning;
-  `let` bindings in defs prevent simp from unfolding — avoid them for provability;
-  after rw [if_pos/neg] numeric goals need omega
+- Cross-module: private theorems must be re-proved inline
+- pktNumLen if-then-else: use simp [if_pos c]/simp [if_neg c] for reasoning
 
 ## Key Findings
 
 - OQ-1 (run 49): StreamPriorityKey::cmp violates Ord antisymmetry (intentional)
 - decode_pktnum_correct spec refinement (run 39): non-strict bound admitted
   counterexample; corrected to match RFC 9000 §A.3 strict invariant
-- getU16_split (run 62): getU16 = two sequential getU8 (big-endian framing)
 - run 63: OctetsMut split_ifs fix — split_ifs is Mathlib-only; use by_cases
 - run 64: streamType_add_mul4 — stream type preserved under all +4k increments
 - run 66: pktNumLen_four_coverage requires QUIC validity hypothesis
-  (numUnacked ≤ 2147483648) since model returns 4 for all large values while
-  Rust errors for n > 2^31-1
+  (numUnacked ≤ 2147483648) since model returns 4 for all large values
+- run 68: OQ-RT-1 — zero-length retransmit with off > ackOff may not be a no-op
+  (the Lean model sets emitOff to off even for len=0); needs maintainer clarification
 
 ## CI Status (Task 9 audit — run 67)
 
 - lean-ci.yml: ✅ exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- lake build: ✅ passes with 23 jobs, 0 errors, 0 sorry (verified locally)
-- All 20 FVSquad modules included in FVSquad.lean manifest
+- lake build: ✅ passes with 24 jobs (run68), 0 errors, 0 sorry
+- All 21 FVSquad modules included in FVSquad.lean manifest
 - lean-toolchain: leanprover/lean4:v4.29.0 (no update needed)
-- cache: keyed on lake-manifest.json hash (correct for no-Mathlib setup)
 
 ## Lake Project
 
@@ -105,4 +104,4 @@ No Mathlib dependency (`lake-manifest.json` is empty packages).
 FVSquad.lean imports (in order): Octets, Varint, RangeSet, Minmax,
   RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey,
-  OctetsMut, OctetsRoundtrip, StreamId, PacketNumLen
+  OctetsMut, OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit
