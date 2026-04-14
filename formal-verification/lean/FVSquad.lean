@@ -17,3 +17,4 @@ import FVSquad.StreamPriorityKey
 import FVSquad.OctetsMut
 import FVSquad.OctetsRoundtrip
 import FVSquad.StreamId
+import FVSquad.PacketNumLen
