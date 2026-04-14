@@ -312,6 +312,155 @@ effort; the sequence monotonicity subproperty is an easy high-value win.
 
 ---
 
+## Targets 21–25: Next Research Wave (run 68)
+
+This section documents research for the five highest-priority gaps identified
+in CRITIQUE.md (run 67), using the critique's gap analysis to guide selection.
+
+### Target 21: `SendBuf::retransmit` — retransmit model ✅ Done (run 68)
+
+**Location**: `quiche/src/stream/send_buf.rs:366`  
+**Lean file**: `FVSquad/SendBufRetransmit.lean`
+
+**Description**: `retransmit(off, len)` marks bytes in `[off, off+len)` as
+needing retransmission, lowering the `emit_off` cursor to
+`min(emit_off, max(ack_off, off))`.
+
+**Benefit**: The retransmission path was the single most impactful unmodelled
+gap in the suite. A bug in `retransmit` could silently drop or duplicate stream
+data — among the most serious correctness bugs in a streaming protocol.
+
+**Result**: 17 theorems + 10 examples, 0 sorry.  Key results:
+- `retransmit_inv`: invariant (I1–I4) preserved by retransmit.
+- `retransmit_idempotent`: retransmit twice = retransmit once.
+- `retransmit_send_backlog_le`: send backlog grows after retransmit.
+- `retransmit_emitN_inv`: invariant preserved through retransmit + emitN.
+
+**Approximations**:
+- Byte contents abstracted; only the scalar emitOff cursor is modelled.
+- split_off operations (VecDeque shape changes) not modelled.
+
+---
+
+### Target 22: `RecvBuf` flow-control bound
+
+**Location**: `quiche/src/stream/recv_buf.rs`, `RecvBuf::write` (line 93)
+
+**Description**: The `RecvBuf::write` function enforces
+`buf.max_off() ≤ max_data()` — the incoming data must fit within the
+advertised receive window (RFC 9000 §4.1).  This is the receive-side
+counterpart to `emitN_le_maxData` (flow-control safety on the send side).
+
+**Benefit**: HIGH — if this invariant fails, a misbehaving peer can cause the
+receiver to allocate unbounded memory.  Formally proving that `write` rejects
+data that violates the window bound is a critical memory-safety property.
+
+**Specification size**: ~60–80 Lean lines.
+- Model `RecvBufState` as `(highMark : Nat, maxData : Nat, finOff : Option Nat)`.
+- Key invariant: `highMark ≤ maxData`.
+- Key theorem: `write_enforces_window`:
+  `buf.max_off > maxData → write returns FlowControl error` (modelled as `none`).
+
+**Proof tractability**: LOW — omega should close all goals once the model is
+set up; the Rust code is a simple `if buf.max_off() > self.max_data()` guard.
+
+**Approximations needed**:
+- `RecvBuf` byte contents → only highMark and maxData scalar cursors.
+- `FlowControl` struct (`flow_control.rs`) → inline as single `maxData` field.
+- Fragmentation, fin-off tracking → minimal modelling needed for this property.
+
+**Approach**: Define `RecvBufState` with invariant; prove `write_flowcontrol`
+rejects out-of-window data; prove `update_max_data` is monotone.
+
+**Priority**: ⭐⭐ HIGH — security/memory-safety invariant, tractable proof.
+
+---
+
+### Target 23: `put_varint` → `get_varint` cross-module round-trip
+
+**Location**: `octets/src/lib.rs`, `OctetsMut::put_varint` (line 499) and
+`Octets::get_varint` (line 187 + 473)
+
+**Description**: Writing a QUIC varint value with `put_varint` then reading it
+back with `get_varint` (after `freeze`) should recover the original value for
+all values in `[0, 2^62)`.  `OctetsRoundtrip.lean` already proves the U8/U16/U32
+round-trips; varint uses a conditional multi-byte write (1, 2, 4, or 8 bytes
+depending on the value range).
+
+**Benefit**: HIGH — closes the last gap in the serialiser verification.  A
+varint encode/decode bug could cause all QUIC frame parsing to silently
+misinterpret data.
+
+**Specification size**: ~80–120 Lean lines.
+- Reuse varint definitions from `Varint.lean` (already proved).
+- State `put_varint_freeze_get_varint`:
+  `∀ v < 2^62, put_varint buf v = some buf' → get_varint (freeze buf') = some (v, ...)`.
+
+**Proof tractability**: MEDIUM — the varint encoding is a case split on 4 ranges;
+each case is straightforward arithmetic.  The challenge is tracking the buffer
+state through multiple `put_u8` calls; `OctetsMut.lean` already has those.
+
+**Approximations needed**:
+- Buffer initialisation: assume sufficient capacity.
+- Offset: proof at offset 0; generalise by induction if needed.
+
+**Priority**: ⭐⭐ HIGH — closes codec verification gap.
+
+---
+
+### Target 24: `encode_pkt_num` → `decode_pkt_num` composition
+
+**Location**: `quiche/src/packet.rs`
+
+**Description**: Encoding a packet number with `encode_pkt_num` and then
+decoding it with `decode_pkt_num` (given the correct `largest_pn`) should
+recover the original packet number.  `PacketNumLen.lean` proves encoding-length
+selection; `PacketNumDecode.lean` proves decoding correctness.  This target
+proves the composition.
+
+**Benefit**: MEDIUM-HIGH — closes the QUIC packet-number lifecycle.  A bug
+in the encode→decode path would cause the receiver to misidentify packets,
+triggering spurious loss or incorrect ACKs.
+
+**Specification size**: ~60–80 Lean lines.
+- Import both `PacketNumLen.lean` and `PacketNumDecode.lean`.
+- State `encode_decode_roundtrip`:
+  `∀ pn largestAcked : Nat, decode(encode(pn, largestAcked), largestAcked) = pn`
+  under the valid QUIC window constraint.
+
+**Proof tractability**: MEDIUM — requires combining the two existing proofs
+with a bridge lemma showing the encoded value satisfies the decode precondition.
+
+**Priority**: ⭐ MEDIUM — important but builds on two already-proved modules.
+
+---
+
+### Target 25: `StreamId`↔`stream_do_send` guard
+
+**Location**: `quiche/src/lib.rs:5894` (`stream_do_send`),
+`quiche/src/stream/mod.rs` (`StreamId` type)
+
+**Description**: The guard `is_bidi(id) || is_local(id)` in `stream_do_send`
+selects which streams a given endpoint can send on.  RFC 9000 §2.1 specifies:
+clients can send on client-initiated streams (even ID) and bidirectional
+streams; servers can send on server-initiated streams (odd ID) and
+bidirectional streams.  `StreamId.lean` already proves the type structure.
+
+**Benefit**: MEDIUM — correctness of the direction check prevents an endpoint
+from sending on a receive-only stream, which would be a protocol violation
+(RFC 9000 §19.8).
+
+**Specification size**: ~40–60 Lean lines.
+- Extend `StreamId.lean` or create a new file.
+- State `stream_do_send_correct`:
+  `can_send(id, is_server) ↔ is_bidi(id) ∨ is_local(id, is_server)`.
+
+**Proof tractability**: LOW — simple case analysis on the 4 stream type bits.
+
+**Priority**: ⭐ MEDIUM — straightforward extension of existing StreamId work.
+
+---
+
 ## Tool Choice Rationale
 
 **Lean 4 + Mathlib** is chosen because:
