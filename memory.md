@@ -1,7 +1,7 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-14 (run 69)
-Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
+Last updated: 2026-04-15 (run 70)
+Lean toolchain: leanprover/lean4:v4.29.1 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
 
@@ -30,43 +30,39 @@ FVSquad.lean: import manifest for all modules
 | 19 | Octets↔OctetsMut cross-module | octets/src/lib.rs | 5 | ✅ Done (run65: 20 theorems + 9 examples) |
 | 20 | pkt_num_len encoding length | quiche/src/packet.rs ~L569 | 5 | ✅ Done (run66: 20 theorems + 10 examples) |
 | 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs:366 | 5 | ✅ Done (run68: 17 theorems + 10 examples) |
-| 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs:93 | 2 | 🔄 Informal spec written (run69) |
+| 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs:93 | 5 | ✅ Done (run70: 19 theorems + 8 examples) |
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 0 | ⬜ Identified |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 0 | ⬜ Identified |
 | 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs:5894 | 0 | ⬜ Identified |
 
 ## Theorem Totals
 
-486 public theorems + 156 examples + ~53 private helpers, 0 sorry across 21 Lean files.
-(No new theorems in run69 — correspondence review + informal spec only)
+503 public theorems + 164 examples + ~53 private helpers, 0 sorry across 22 Lean files.
+Run70: added RecvBufFc.lean (19 theorems + 8 examples)
 
 ## Open PRs (lean-squad label)
 
-- PR #53 (run66): PacketNumLen.lean — open
-- PR #54 (run67): CRITIQUE.md update (Targets 19-20) + CI audit — open
-- PR #55 (run68): SendBufRetransmit.lean + RESEARCH Targets 21-25 — open
-- PR run69: CORRESPONDENCE Targets 18-21 + RecvBuf FC informal spec — just created
+- PR run69: CORRESPONDENCE Targets 18-21 + RecvBuf FC informal spec — open
+- PR run70: RecvBufFc.lean (19 theorems) + CRITIQUE Target 21+22 — just created
 
 ## Status Issue: #4 (open)
 
 ## Key Open Questions for Next Run
 
-- **Target 22 is ready for Task 3**: informal spec written (run69).
-  Need to write RecvBufFcState combined model + highMarkBound theorem in Lean.
-  Key: combine RecvBuf.lean + FlowControl.lean models.
-  OQ-FC-1 (RESET_STREAM guard) and OQ-FC-2 (consumed vs len) need resolution.
-- Target 23: put_varint→get_varint cross-module roundtrip
-- Target 24: encode→decode composition
-- Target 25: StreamId direction guard
+- Target 23: put_varint→get_varint cross-module roundtrip (highest priority per CRITIQUE)
+- Target 24: encode_pkt_num→decode_pkt_num composition
+- Target 25: StreamId direction guard (lib.rs:5894)
 - OQ-1 (StreamPriorityKey antisymmetry): awaiting maintainer response
 - OQ-RT-1 (zero-length retransmit edge case): awaiting maintainer response
+- OQ-FC-1 (RESET_STREAM guard in RecvBuf): not modelled, noted in CORRESPONDENCE.md
 
-## CORRESPONDENCE.md Status (run 69)
+## CORRESPONDENCE.md Status (run 70)
 
-All 21 Lean files now covered:
+All 22 Lean files now covered:
 - Targets 1-17: covered in prior runs (run 48, run 61)
 - Targets 18-21: added in run 69
-- No mismatches identified across any target
+- Target 22 (RecvBufFc): added in run 70
+- No mismatches identified across any target; OQ-FC-1 noted as gap
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 

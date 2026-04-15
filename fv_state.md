@@ -27,15 +27,14 @@ Last updated: 2026-04-14 (run 69, workflow 24414246701)
 | FVSquad/OctetsRoundtrip.lean | 20 | 9 | ✅ run65 |
 | FVSquad/PacketNumLen.lean | 20 | 10 | ✅ run66 |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | ✅ run68 |
-| **TOTAL** | **486** | **156** | **✅ 0 sorry** |
+| FVSquad/RecvBufFc.lean | 19 | 8 | ✅ run70 |
+| **TOTAL** | **503** | **164** | **✅ 0 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR #53 (run66): PacketNumLen.lean — open
-- PR #54 (run67): CRITIQUE.md + CI audit — open
-- PR #55 (run68): SendBufRetransmit.lean + RESEARCH 21-25 — open
-- PR run69: CORRESPONDENCE Targets 18-21 + RecvBuf FC informal spec — just created
+- PR run69: CORRESPONDENCE Targets 18-21 + RecvBuf FC informal spec — open
+- PR run70: RecvBufFc.lean (19 theorems) + CRITIQUE Target 21+22 — just created
 
 ## Branch
 
-Current work: lean-squad-run69-24414246701-correspondence-infspec
+Current work: lean-squad-run70-24435440063-recvbuf-fc-critique
