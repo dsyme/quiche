@@ -488,3 +488,169 @@ manipulation lemmas useful for the varint domain.
 
 The Nichols min-filter has been analysed informally in BBR literature but
 not formally verified in Lean/Coq to our knowledge.
+
+---
+
+## Run 72 Update — New Targets from CRITIQUE Feedback (2026-04-15)
+
+The following new targets were identified based on CRITIQUE.md gap analysis and
+moderate-priority recommendations from run 67–68 critiques.  All previously
+identified targets (T1–T21) are now Phase 5 complete.  Targets T22–T25 remain
+at Phase 0 (identified); T26–T30 are newly identified this run.
+
+### Target 26: CUBIC W_cubic vs W_est Reno-friendly transition
+
+**Location**: `quiche/src/recovery/congestion/cubic.rs`, function
+`cubic_congestion_window_after_ack` (approximately lines 200–260)
+
+**Description**: RFC 8312bis §5.8 specifies that CUBIC should behave like Reno
+(or slower) when in the "Reno-friendly" region: if the standard Reno window
+`W_est` would be larger than the CUBIC window `W_cubic`, CUBIC uses `W_est`
+instead.  This comparison drives a critical fairness guarantee: CUBIC flows
+coexisting with Reno flows should converge to equal bandwidth sharing.
+
+**Benefit**: A bug in the W_est vs W_cubic comparison could cause CUBIC to be
+systematically unfair to Reno flows on shared links.  The property "CUBIC
+uses max(W_cubic, W_est)" can be stated and verified.
+
+**Specification size**: ~60–80 Lean lines extending `FVSquad/Cubic.lean`.
+
+**Proof tractability**: MEDIUM.
+- `W_est` (AIMD estimate) is a simple arithmetic quantity.
+- `W_cubic` already has a model in `Cubic.lean`; the Reno comparison
+  adds `W_est` and the `max` selection.
+- Key theorem: `cwnd_after_ack_ge_west` — window after ACK is ≥ W_est.
+
+**Approximations needed**: The fractional exponentiation in the CUBIC formula
+is already approximated in `Cubic.lean` as integer arithmetic with fixed-point
+scaling.  The same approximation applies here.
+
+**Priority**: ⭐ MEDIUM — moderate impact; extends existing Cubic.lean work.
+
+---
+
+### Target 27: CidMgmt::retire_if_needed Path
+
+**Location**: `quiche/src/cid.rs`, `retire_if_needed` function (approximately
+lines 200–230)
+
+**Description**: When the active connection ID (CID) count approaches the
+peer-advertised `active_connection_id_limit` (RFC 9000 §5.1.1), the CID
+manager auto-retires excess SCIDs.  The key invariant is that after
+`retire_if_needed`, the number of active CIDs does not exceed the limit.
+
+**Benefit**: A bug could leave dangling CID table entries above the RFC 9000
+limit, which would violate the protocol and could cause the peer to reject
+connection ID updates.  This extends `CidMgmt.lean` (Target 14) which already
+proves `newScid_seq_fresh` (freshness) but does not model the retire path.
+
+**Specification size**: ~50–70 Lean lines extending `FVSquad/CidMgmt.lean`.
+
+**Proof tractability**: LOW-MEDIUM.
+- The invariant `activeCids ≤ limit` is a clean linear constraint.
+- `retire_if_needed` is a straightforward decrement; the proof is likely
+  to close by `omega` after defining the abstract CID state.
+
+**Priority**: ⭐ MEDIUM — extends existing CidMgmt.lean; bounded proof effort.
+
+---
+
+### Target 28: NewReno Multi-Cycle AIMD Convergence
+
+**Location**: `quiche/src/recovery/congestion/reno.rs`
+
+**Description**: The current `NewReno.lean` (Target 6) proves single-event
+properties (single ACK increases cwnd, single loss halves ssthresh) but does
+not prove multi-event behaviour.  A stronger theorem: after N≥2 alternating
+ACK/loss cycles, the cwnd converges to a stable value (Additive Increase /
+Multiplicative Decrease steady state).
+
+**Benefit**: Multi-event proofs can catch off-by-one errors in AIMD accounting
+that are invisible in single-event unit tests.  This is a classic inductive
+safety property.
+
+**Specification size**: ~80–100 Lean lines extending `FVSquad/NewReno.lean`.
+
+**Proof tractability**: MEDIUM-HIGH.
+- Requires induction on the number of cycles.
+- The induction invariant is that after each cycle, cwnd is in the correct
+  AIMD range.  This is straightforward to state but requires careful
+  case-splitting on the ACK and loss events.
+
+**Priority**: ⭐ MEDIUM — high proof value; moderate effort.
+
+---
+
+### Target 29: QUIC Packet-Header Encode/Decode Round-Trip
+
+**Location**: `quiche/src/packet.rs`, functions `Header::to_bytes` (encode)
+and `Header::from_bytes` (decode)
+
+**Description**: All QUIC traffic flows through the packet header
+encode/decode path.  A formal round-trip property (`decode(encode(h)) == h`
+for all valid headers) would cover the entry point for all QUIC traffic and
+is the highest-value gap identified in CRITIQUE.md.
+
+**Benefit**: A subtle byte-order or length-calculation bug in the header codec
+would silently corrupt all QUIC connections.  This is the single most
+security-relevant gap in the current proof suite.
+
+**Specification size**: ~150–200 Lean lines; the header has several fields
+(packet type, version, DCID, SCID, token, packet number) that must all be
+round-tripped.
+
+**Proof tractability**: HIGH effort, HIGH value.
+- The header format is complex (long vs short form, version negotiation).
+- A pragmatic first step: model only the Short Header case and prove
+  `decode(encode(ShortHeader)) == ShortHeader`.
+- The packet-number encoding is already proved in `PacketNumLen.lean` and
+  `PacketNumDecode.lean`; the header round-trip would import those results.
+
+**Approximations needed**: The actual Rust codec uses `OctetsMut` for writing
+and `Octets` for reading; the Lean model should abstract the buffer into a
+`List Nat` (consistent with `OctetsRoundtrip.lean`).
+
+**Priority**: ⭐⭐⭐ HIGH — highest-value unstarted target; closes the
+main security-critical gap.
+
+---
+
+### Target 30: Varint 2-Bit Tag Consistency
+
+**Location**: `octets/src/lib.rs`, `put_varint`/`get_varint` (varint codec)
+
+**Description**: The QUIC varint format (RFC 9000 §16) uses the top 2 bits of
+the first byte as a length tag.  The `Varint.lean` module (Target 1) proves
+the round-trip but does not verify that the 2-bit tag written by `put_varint`
+is correctly read back by `varintParseLen(first_byte)`.  This gap is noted in
+the CRITIQUE.md.
+
+**Benefit**: A bug in the tag-writing code (e.g., tag bits set to wrong value
+or masked incorrectly) would corrupt all downstream parsing without breaking
+the round-trip property (since `get_varint` might interpret the same wrong tag
+consistently).  The tag-consistency theorem would catch this class of bug.
+
+**Specification size**: ~40–60 Lean lines extending `FVSquad/Varint.lean`.
+
+**Proof tractability**: LOW — small case analysis on the 4 varint lengths.
+- Key theorem: for all values v in the varint range, if `first_byte` is the
+  first byte of `encode(v)`, then `varintParseLen(first_byte) = varintLen(v)`.
+
+**Priority**: ⭐⭐ HIGH — low effort; closes the last gap in Varint.lean noted
+by CRITIQUE.  Strong bug-catching value.
+
+---
+
+## Critique Feedback Incorporated (run 72)
+
+The following adjustments reflect CRITIQUE.md findings from runs 67–68:
+
+1. **Gap analysis drove T26–T30 identification**: The CRITIQUE's "Gaps and
+   Recommendations" section (Moderate priority: T26 CUBIC Reno-friendly, T27
+   CidMgmt retire, T28 NewReno AIMD; High priority: T29 packet header,
+   T30 varint tag) directly generated these new targets.
+2. **T23, T24, T25 remain highest priority** per the CRITIQUE's §1–4 gap
+   ranking; T22 (RecvBuf flow-control) was previously addressed in run 70.
+3. **T29 (packet header) is now the highest-value unstarted target** — it
+   covers the entry point for all QUIC traffic and is identified as the single
+   most security-relevant gap in the CRITIQUE.
