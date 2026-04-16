@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-15 (run 72)
+Last updated: 2026-04-16 (run 73)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -34,11 +34,11 @@ FVSquad.lean: import manifest for all modules
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 0 | Identified (HIGH) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 0 | Identified |
 | 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs | 0 | Identified |
-| 26 | CUBIC W_cubic vs W_est | quiche/src/recovery/congestion/cubic.rs | 0 | Identified (MEDIUM) run72 |
-| 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) run72 |
-| 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) run72 |
-| 29 | QUIC packet-header roundtrip | quiche/src/packet.rs | 0 | Identified (HIGHEST) run72 |
-| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 0 | Identified (HIGH) run72 |
+| 26 | CUBIC W_cubic vs W_est | quiche/src/recovery/congestion/cubic.rs | 0 | Identified (MEDIUM) |
+| 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) |
+| 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
+| 29 | QUIC packet-header roundtrip | quiche/src/packet.rs | 2 | Informal Spec (run73) |
+| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 0 | Identified (HIGH) |
 
 ## Lean File Registry
 
@@ -69,7 +69,9 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs
 
-- PR run72 (branch lean-squad-run72-24469336185-research-correspondence): Research T26-30 + Correspondence T16,T18-T21 -- just created
+- PR run73 (branch lean-squad-run73-24491238828-informal-spec-ci-audit):
+  Task 2+9: PacketHeader informal spec (T29) + CI audit -- just created
+- PR #58 run72 (branch lean-squad-run72-...): MERGED into run73 branch
 
 ## Status Issue
 
@@ -81,22 +83,34 @@ Issue #4 (open)
 - OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
 - OQ-FC-1 (run70, not modelled): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found and corrected
+- OQ-T29-1 (run73): Initial token=None encodes as varint 0, decodes as Some([]) — asymmetry
+- OQ-T29-2 (run73): to_bytes does not validate CID lengths (only from_bytes does for QUIC v1)
+- OQ-T29-3 (run73): pkt_num/key_phase not in to_bytes/from_bytes roundtrip (handled by encrypt_hdr/decrypt_hdr)
 
 ## CORRESPONDENCE.md Coverage (run72)
 
-All 21 Lean files now covered in CORRESPONDENCE.md:
-- Targets 1-15, 17: in prior runs
-- Target 16 (OctetsMut): added run72
-- Targets 18-21: added run72
-- No mismatches identified
+All 21 Lean files now covered in CORRESPONDENCE.md. No mismatches identified.
 
 ## Next Priority Targets
 
-1. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines)
-2. T23 put_varint→get_varint cross-module roundtrip
-3. T29 QUIC packet-header encode/decode (HIGHEST security value)
+1. T29 PacketHeader.lean — write Lean spec (Task 3): RT-1..RT-5 theorems
+   - informal spec at specs/packet_header_informal.md
+   - Key challenge: Retry AEAD tag (16 bytes) excluded from token on decode
+2. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines)
+3. T23 put_varint→get_varint cross-module roundtrip
 4. T24 encode_pkt_num→decode_pkt_num composition
 5. T25 StreamId↔stream_do_send guard
+
+## T29 PacketHeader — Key Modelling Notes (for Task 3)
+
+- Buffer: List Nat (byte list), offset as return value
+- Long header types: Initial=0x00, ZeroRTT=0x01, Handshake=0x02, Retry=0x03
+- Wire constants: FORM_BIT=0x80, FIXED_BIT=0x40, TYPE_MASK=0x30
+- pkt_num/key_phase NOT in to_bytes/from_bytes — always 0 in decode output
+- Initial token=None in to_bytes writes varint 0; from_bytes returns Some([])
+- Short header: no scid/version; dcid_len must be supplied by caller
+- Retry AEAD tag (16 bytes) excluded from model
+- VersionNegotiation: only decodeable, not encodeable
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -116,11 +130,12 @@ All 21 Lean files now covered in CORRESPONDENCE.md:
 - Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
 - Cross-module: private theorems must be re-proved inline
 
-## CI Status (run67 audit)
+## CI Status (run73 audit)
 
 - lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- lake build: passes with 24 jobs, 0 errors, 0 sorry
+- lake build: passes with 24 jobs, 0 errors, 0 sorry (last known good: run67-72)
 - lean-toolchain: leanprover/lean4:v4.29.0
+- No issues found in run73 audit
 
 ## Lake Project
 

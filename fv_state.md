@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-15 (run 72, workflow 24469336185)
+Last updated: 2026-04-16 (run 73, workflow 24491238828)
 
 ## Lean File Registry
 
@@ -38,23 +38,23 @@ Last updated: 2026-04-15 (run 72, workflow 24469336185)
 | T23 | put_varint→get_varint roundtrip | 0 | — | HIGH priority |
 | T24 | encode→decode composition | 0 | — | identified |
 | T25 | StreamId↔stream_do_send guard | 0 | — | identified |
-| T26 | CUBIC Reno-friendly transition | 0 | — | run72 MEDIUM |
-| T27 | CidMgmt retire_if_needed | 0 | — | run72 MEDIUM |
-| T28 | NewReno AIMD convergence | 0 | — | run72 MEDIUM |
-| T29 | QUIC packet-header roundtrip | 0 | — | run72 HIGHEST |
-| T30 | Varint 2-bit tag consistency | 0 | — | run72 HIGH/LOW-effort |
+| T26 | CUBIC Reno-friendly transition | 0 | — | MEDIUM |
+| T27 | CidMgmt retire_if_needed | 0 | — | MEDIUM |
+| T28 | NewReno AIMD convergence | 0 | — | MEDIUM |
+| T29 | QUIC packet-header roundtrip | 2 | specs/packet_header_informal.md | run73 informal spec |
+| T30 | Varint 2-bit tag consistency | 0 | — | HIGH/LOW-effort |
 
 ## Open PRs (lean-squad label)
 
-- PR run72 (branch lean-squad-run72-24469336185-research-correspondence): Research T26-30 + Correspondence T16,T18-T21 — just created
+- PR run73 (branch lean-squad-run73-24491238828-informal-spec-ci-audit):
+  Task 2+9 — PacketHeader informal spec (T29) + CI audit — just created
 
 ## Key Findings
 
 - OQ-1: StreamPriorityKey antisymmetry violation (intentional by design)
 - OQ-RT-1: zero-length retransmit with off > ackOff may not be a no-op
+- OQ-T29-1/2/3: Token None asymmetry, CID validation asymmetry, pkt_num partial roundtrip
 
-## CORRESPONDENCE.md Status (run72)
+## CORRESPONDENCE.md Status (run73)
 
-All 21 Lean files now covered.
-Added in run72: T16, T18, T19, T20, T21.
-No mismatches identified.
+All 21 Lean files covered. No mismatches identified.
