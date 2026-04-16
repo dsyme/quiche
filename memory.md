@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-16 (run 73)
+Last updated: 2026-04-16 (run 74)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -31,7 +31,7 @@ FVSquad.lean: import manifest for all modules
 | 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done |
 | 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs | 5 | Done |
 | 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs | 0 | Identified |
-| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 0 | Identified (HIGH) |
+| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 2 | Informal Spec (run74) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 0 | Identified |
 | 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs | 0 | Identified |
 | 26 | CUBIC W_cubic vs W_est | quiche/src/recovery/congestion/cubic.rs | 0 | Identified (MEDIUM) |
@@ -40,38 +40,39 @@ FVSquad.lean: import manifest for all modules
 | 29 | QUIC packet-header roundtrip | quiche/src/packet.rs | 2 | Informal Spec (run73) |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 0 | Identified (HIGH) |
 
-## Lean File Registry
+## Lean File Registry (actual counts from lake build)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
 | FVSquad/Varint.lean | 10 | 25 | Done |
-| FVSquad/RangeSet.lean | 28 | 15 | Done |
-| FVSquad/Minmax.lean | 16 | 6 | Done |
+| FVSquad/RangeSet.lean | 16 | 15 | Done |
+| FVSquad/Minmax.lean | 15 | 6 | Done |
 | FVSquad/RttStats.lean | 23 | 2 | Done |
 | FVSquad/FlowControl.lean | 22 | 1 | Done |
 | FVSquad/NewReno.lean | 13 | 0 | Done |
-| FVSquad/DatagramQueue.lean | 28 | 0 | Done |
+| FVSquad/DatagramQueue.lean | 26 | 0 | Done |
 | FVSquad/PRR.lean | 20 | 0 | Done |
 | FVSquad/PacketNumDecode.lean | 23 | 0 | Done |
 | FVSquad/Cubic.lean | 26 | 0 | Done |
-| FVSquad/RangeBuf.lean | 20 | 5 | Done |
-| FVSquad/RecvBuf.lean | 59 | 17 | Done |
+| FVSquad/RangeBuf.lean | 19 | 5 | Done |
+| FVSquad/RecvBuf.lean | 38 | 17 | Done |
 | FVSquad/SendBuf.lean | 26 | 11 | Done |
 | FVSquad/CidMgmt.lean | 21 | 13 | Done |
 | FVSquad/StreamPriorityKey.lean | 21 | 8 | Done |
-| FVSquad/OctetsMut.lean | 33 | 7 | Done |
-| FVSquad/Octets.lean | 54 | 9 | Done |
-| FVSquad/StreamId.lean | 37 | 8 | Done |
-| FVSquad/OctetsRoundtrip.lean | 22 | 9 | Done |
-| FVSquad/PacketNumLen.lean | 21 | 10 | Done |
+| FVSquad/OctetsMut.lean | 27 | 7 | Done |
+| FVSquad/Octets.lean | 48 | 9 | Done |
+| FVSquad/OctetsRoundtrip.lean | 20 | 9 | Done |
+| FVSquad/StreamId.lean | 35 | 8 | Done |
+| FVSquad/PacketNumLen.lean | 20 | 10 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
-| **TOTAL** | **521** | **156** | **0 sorry** |
+| **TOTAL** | **486** | **156** | **0 sorry** |
 
-## Open PRs
+Note: previous runs overestimated at 521; verified count from grep is 486.
 
-- PR run73 (branch lean-squad-run73-24491238828-informal-spec-ci-audit):
-  Task 2+9: PacketHeader informal spec (T29) + CI audit -- just created
-- PR #58 run72 (branch lean-squad-run72-...): MERGED into run73 branch
+## Open PRs (lean-squad label)
+
+- PR run74 (branch lean-squad-run74-24504131685-varint-roundtrip-report):
+  Task 2+10 — T23 varint roundtrip informal spec + REPORT update
 
 ## Status Issue
 
@@ -86,31 +87,25 @@ Issue #4 (open)
 - OQ-T29-1 (run73): Initial token=None encodes as varint 0, decodes as Some([]) — asymmetry
 - OQ-T29-2 (run73): to_bytes does not validate CID lengths (only from_bytes does for QUIC v1)
 - OQ-T29-3 (run73): pkt_num/key_phase not in to_bytes/from_bytes roundtrip (handled by encrypt_hdr/decrypt_hdr)
+- OQ-T23-1 (run74): over-long encoding tag consistency (put_varint_with_len)
+- OQ-T23-2 (run74): OctetsMut.get_varint ≡ Octets.get_varint equivalence
 
 ## CORRESPONDENCE.md Coverage (run72)
 
-All 21 Lean files now covered in CORRESPONDENCE.md. No mismatches identified.
+All 21 Lean files covered in CORRESPONDENCE.md. No mismatches identified.
 
 ## Next Priority Targets
 
-1. T29 PacketHeader.lean — write Lean spec (Task 3): RT-1..RT-5 theorems
+1. T23 PacketHeader.lean — write Lean spec (Task 3): RT-1..RT-5 theorems
+   (actually this is PacketHeader, T29)
+1. T23 VarInt Roundtrip (cursor model) — write Lean spec (Task 3)
+   - informal spec at specs/varint_roundtrip_informal.md
+   - Bridge Varint.lean pure model to OctetsMutState/OctetsState
+2. T29 PacketHeader.lean — write Lean spec (Task 3)
    - informal spec at specs/packet_header_informal.md
-   - Key challenge: Retry AEAD tag (16 bytes) excluded from token on decode
-2. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines)
-3. T23 put_varint→get_varint cross-module roundtrip
+3. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines)
 4. T24 encode_pkt_num→decode_pkt_num composition
-5. T25 StreamId↔stream_do_send guard
-
-## T29 PacketHeader — Key Modelling Notes (for Task 3)
-
-- Buffer: List Nat (byte list), offset as return value
-- Long header types: Initial=0x00, ZeroRTT=0x01, Handshake=0x02, Retry=0x03
-- Wire constants: FORM_BIT=0x80, FIXED_BIT=0x40, TYPE_MASK=0x30
-- pkt_num/key_phase NOT in to_bytes/from_bytes — always 0 in decode output
-- Initial token=None in to_bytes writes varint 0; from_bytes returns Some([])
-- Short header: no scid/version; dcid_len must be supplied by caller
-- Retry AEAD tag (16 bytes) excluded from model
-- VersionNegotiation: only decodeable, not encodeable
+5. T22 RecvBuf flow-control bound
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -133,7 +128,7 @@ All 21 Lean files now covered in CORRESPONDENCE.md. No mismatches identified.
 ## CI Status (run73 audit)
 
 - lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- lake build: passes with 24 jobs, 0 errors, 0 sorry (last known good: run67-72)
+- lake build: passes with 24 jobs, 0 errors, 0 sorry (last known good: run67-73)
 - lean-toolchain: leanprover/lean4:v4.29.0
 - No issues found in run73 audit
 

@@ -1,41 +1,41 @@
 # FV State Snapshot
 
-Last updated: 2026-04-16 (run 73, workflow 24491238828)
+Last updated: 2026-04-16 (run 74, workflow 24504131685)
 
-## Lean File Registry
+## Lean File Registry (verified by grep)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
 | FVSquad/Varint.lean | 10 | 25 | Done |
-| FVSquad/RangeSet.lean | 28 | 15 | Done |
-| FVSquad/Minmax.lean | 16 | 6 | Done |
+| FVSquad/RangeSet.lean | 16 | 15 | Done |
+| FVSquad/Minmax.lean | 15 | 6 | Done |
 | FVSquad/RttStats.lean | 23 | 2 | Done |
 | FVSquad/FlowControl.lean | 22 | 1 | Done |
 | FVSquad/NewReno.lean | 13 | 0 | Done |
-| FVSquad/DatagramQueue.lean | 28 | 0 | Done |
+| FVSquad/DatagramQueue.lean | 26 | 0 | Done |
 | FVSquad/PRR.lean | 20 | 0 | Done |
 | FVSquad/PacketNumDecode.lean | 23 | 0 | Done |
 | FVSquad/Cubic.lean | 26 | 0 | Done |
-| FVSquad/RangeBuf.lean | 20 | 5 | Done |
-| FVSquad/RecvBuf.lean | 59 | 17 | Done |
+| FVSquad/RangeBuf.lean | 19 | 5 | Done |
+| FVSquad/RecvBuf.lean | 38 | 17 | Done |
 | FVSquad/SendBuf.lean | 26 | 11 | Done |
 | FVSquad/CidMgmt.lean | 21 | 13 | Done |
 | FVSquad/StreamPriorityKey.lean | 21 | 8 | Done |
-| FVSquad/OctetsMut.lean | 33 | 7 | Done |
-| FVSquad/Octets.lean | 54 | 9 | Done |
-| FVSquad/StreamId.lean | 37 | 8 | Done |
-| FVSquad/OctetsRoundtrip.lean | 22 | 9 | Done |
-| FVSquad/PacketNumLen.lean | 21 | 10 | Done |
+| FVSquad/OctetsMut.lean | 27 | 7 | Done |
+| FVSquad/Octets.lean | 48 | 9 | Done |
+| FVSquad/OctetsRoundtrip.lean | 20 | 9 | Done |
+| FVSquad/StreamId.lean | 35 | 8 | Done |
+| FVSquad/PacketNumLen.lean | 20 | 10 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
-| **TOTAL** | **521** | **156** | **0 sorry** |
+| **TOTAL** | **486** | **156** | **0 sorry** |
 
 ## FV Targets
 
 | Target | Description | Phase | File | Notes |
 |--------|-------------|-------|------|-------|
-| T1-T21 | (all complete) | 5 | various | 521 theorems total, 0 sorry |
+| T1-T21 | (all complete) | 5 | various | 486 theorems total, 0 sorry |
 | T22 | RecvBuf flow-control bound | 0 | — | identified |
-| T23 | put_varint→get_varint roundtrip | 0 | — | HIGH priority |
+| T23 | put_varint→get_varint roundtrip | 2 | specs/varint_roundtrip_informal.md | run74 informal spec (HIGH) |
 | T24 | encode→decode composition | 0 | — | identified |
 | T25 | StreamId↔stream_do_send guard | 0 | — | identified |
 | T26 | CUBIC Reno-friendly transition | 0 | — | MEDIUM |
@@ -46,15 +46,5 @@ Last updated: 2026-04-16 (run 73, workflow 24491238828)
 
 ## Open PRs (lean-squad label)
 
-- PR run73 (branch lean-squad-run73-24491238828-informal-spec-ci-audit):
-  Task 2+9 — PacketHeader informal spec (T29) + CI audit — just created
-
-## Key Findings
-
-- OQ-1: StreamPriorityKey antisymmetry violation (intentional by design)
-- OQ-RT-1: zero-length retransmit with off > ackOff may not be a no-op
-- OQ-T29-1/2/3: Token None asymmetry, CID validation asymmetry, pkt_num partial roundtrip
-
-## CORRESPONDENCE.md Status (run73)
-
-All 21 Lean files covered. No mismatches identified.
+- PR run74 (branch lean-squad-run74-24504131685-varint-roundtrip-report):
+  Task 2+10 — T23 informal spec + REPORT update
