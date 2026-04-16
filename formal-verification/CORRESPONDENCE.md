@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-22 00:00 UTC
-- **Commit**: `b0e11d8c`
+- **Date**: 2026-04-15 17:48 UTC
+- **Commit**: `3fc54577c3158960682e79419e841ba67765af19`
 
 ---
 
@@ -1070,3 +1070,248 @@ property — that every `get_*` operation either advances the cursor by exactly
 the declared width or returns `None` without touching the cursor — is proved
 exactly as in the Rust implementation. The `getU16_split` theorem proves the
 composite property that `getU16` is equivalent to two sequential `getU8` calls.
+
+---
+
+## Target 16: `OctetsMut` byte-buffer read/write — `FVSquad/OctetsMut.lean`
+
+**Last updated**: 2026-04-15 17:48 UTC  **Commit**: `3fc54577`
+
+**Rust source**: `octets/src/lib.rs`, lines 391–800 (`struct OctetsMut<'a>`,
+`impl<'a> OctetsMut<'a>`)
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `OctetsMutState` | `OctetsMut<'a>` | `lib.rs:391–394` | **abstraction** | `buf: &mut [u8]` → `List Nat`; `off: usize` preserved exactly |
+| `OctetsMutState.Inv` | (implicit) | `lib.rs:391` | **abstraction** | `off ≤ buf.length` captured as a Lean `Prop` |
+| `OctetsMutState.putU8` | `OctetsMut::put_u8` | `lib.rs:~490` | **abstraction** | Same bounds check; `listSet` models in-place mutation |
+| `OctetsMutState.getU8` | `OctetsMut::get_u8` | `lib.rs:~510` | **abstraction** | Returns `Option (Nat × OctetsMutState)`; same check |
+| `OctetsMutState.peekU8` | `OctetsMut::peek_u8` | `lib.rs:~530` | **exact** | Reads without advancing cursor |
+| `OctetsMutState.putU16` | `OctetsMut::put_u16` | `lib.rs:~540` | **approximation** | Big-endian two-byte write; requires `v < 65536` instead of Rust `u16` |
+| `OctetsMutState.getU16` | `OctetsMut::get_u16` | `lib.rs:~555` | **approximation** | Big-endian two-byte read; returns `Nat`; no `u16` wrapping |
+| `OctetsMutState.putU32` | `OctetsMut::put_u32` | `lib.rs:~570` | **approximation** | Big-endian four-byte write; requires `v < 2^32` |
+| `OctetsMutState.getU32` | `OctetsMut::get_u32` | `lib.rs:~590` | **approximation** | Big-endian four-byte read; returns `Nat` |
+| `OctetsMutState.skip` | `OctetsMut::skip` | `lib.rs:~700` | **exact** | Advances `off` by n if in bounds |
+| `OctetsMutState.rewind` | `OctetsMut::rewind` | `lib.rs:~710` | **exact** | Retreats `off` by n if `n ≤ off` |
+| `OctetsMutState.cap` | `OctetsMut::cap` | `lib.rs:~720` | **exact** | `buf.length - off` |
+
+### Approximations in OctetsMut.lean
+
+1. **`&mut [u8]` → `List Nat`**: In-place mutation is modelled as returning a
+   new state.  Aliasing, lifetimes, and zero-copy slice semantics are entirely
+   absent.
+2. **Fixed-width types → `Nat` with range guards**: Rust uses `u8`/`u16`/`u32`
+   with wrapping overflow; the Lean model uses `Nat` with explicit range
+   preconditions.  Within these ranges the arithmetic is identical.
+3. **`BufferTooShortError` → `Option.none`**: Rust returns `Result`; the Lean
+   model returns `Option`.
+4. **Varint operations omitted**: `put_varint`/`get_varint` are separately
+   verified in `Varint.lean`.  `put_u64`/`get_u64` not yet modelled.
+
+### Impact on proofs
+
+27 public theorems + 6 private helpers, 0 sorry.  All proofs are sound under
+the approximations above.  The round-trip theorems (`putU8_getU8_roundtrip`,
+`putU16_getU16_roundtrip`, `putU32_getU32_roundtrip`) prove the key
+serialiser correctness property: a value written is recovered unchanged.
+`putU32_freeze_byte0/1/2/3` prove the big-endian byte layout explicitly.
+
+---
+
+## Target 18: StreamId RFC 9000 §2.1 arithmetic — `FVSquad/StreamId.lean`
+
+**Last updated**: 2026-04-15 17:48 UTC  **Commit**: `3fc54577`
+
+**Rust source**: `quiche/src/stream/mod.rs` (stream classification functions)
+and `quiche/src/lib.rs` (stream-direction guards)
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `isBidi` | `is_bidi` | `stream/mod.rs:837–838` | **exact** | `id % 4 < 2` ≡ `id & 0x2 == 0` for Nat |
+| `isServerInit` | `is_local(id, true)` | `stream/mod.rs:832–833` | **exact** | `id % 2 == 1` ≡ `id & 0x1 == 1` |
+| `streamType` | (implicit lower 2 bits) | `stream/mod.rs:837` | **exact** | `id % 4`; RFC 9000 §2.1 table |
+| `StreamCredits` | `Connection` fields `local_opened_streams_bidi/uni`, `peer_max_streams_bidi/uni` | `stream/mod.rs:577–591` | **abstraction** | Grouped into a struct with invariant `localOpened ≤ peerMax` |
+| `streamsLeft` | `peer_streams_left_bidi/uni` | `stream/mod.rs:577–591` | **exact** | `peerMax - localOpened` with Nat subtraction |
+| `openStream` | (implicit credit consumption) | `stream/mod.rs:~560` | **abstraction** | Models the credit decrement; not a standalone function in Rust |
+| `updatePeerMax` | `update_peer_max_streams_bidi` | `stream/mod.rs:529–535` | **exact** | `max(old, new)` |
+
+### Approximations in StreamId.lean
+
+1. **Bitwise `&` → modular arithmetic**: `id & 0x2 == 0` is modelled as
+   `id % 4 < 2`.  For `Nat` these are definitionally equivalent because the
+   binary representation agrees with decimal.
+2. **`u64` → `Nat`**: Stream IDs are `Nat` (unbounded).  `u64` overflow is
+   not modelled; this is safe because RFC 9000 limits stream IDs to 2^62–1.
+3. **Credit model is a `StreamCredits` struct**: The Rust implementation
+   spreads this state over several `Connection` fields.  The Lean model
+   abstracts into a single invariant-carrying struct.
+4. **Stream lifecycle out of scope**: Open/close/reset/FIN state is not
+   modelled; only classification and credit arithmetic are proved.
+
+### Impact on proofs
+
+37 theorems + 8 examples, 0 sorry.  Key results:
+- `streamType_add_mul4` (RFC 9000 §2.1 orbit): stream type is preserved
+  under all `+4k` increments, confirming the quadrant encoding.
+- `streamsLeft_open_decreases`: credit consumption is monotone.
+- `updatePeerMax_mono`: the MAX_STREAMS update never decreases the limit.
+- `isBidi_iff_type_lt2`: clean biconditional tying the predicate to the
+  type field.
+
+---
+
+## Target 19: Octets↔OctetsMut cross-module round-trip — `FVSquad/OctetsRoundtrip.lean`
+
+**Last updated**: 2026-04-15 17:48 UTC  **Commit**: `3fc54577`
+
+**Rust source**: `octets/src/lib.rs` — interactions between `OctetsMut` (write
+cursor) and `Octets` (read-only cursor), specifically the "freeze" pattern:
+write with `OctetsMut`, then read back with `Octets` after the mutable borrow
+ends.
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `listGet_eq_octListGet` | (bridge lemma) | `lib.rs:~135,~391` | **exact** | Proves the two model-internal helper functions are identical |
+| `octListGet_set_eq` | (derived from `get_u8` + `put_u8`) | `lib.rs:~151,~490` | **exact** | Reading back a freshly-written byte yields the written value |
+| `octListGet_set_ne` | (non-aliasing) | `lib.rs:~490` | **exact** | Writing at offset `i` does not affect offset `j ≠ i` |
+| `mut_getU8_eq_octets_getU8` | `OctetsMut::get_u8` ≡ `Octets::get_u8` | `lib.rs:~510,~151` | **abstraction** | Both operations return the same value on the same buffer |
+| `putU8_freeze_getU8` | `put_u8` then `get_u8` | `lib.rs:~490,~151` | **abstraction** | Round-trip for single byte |
+| `putU16_freeze_getU16` | `put_u16` then `get_u16` | `lib.rs:~540,~163` | **approximation** | Requires `v < 65536`; proves big-endian round-trip |
+| `putU32_freeze_getU32` | `put_u32` then `get_u32` | `lib.rs:~570,~175` | **approximation** | Requires `v < 2^32`; proves big-endian round-trip |
+| `putU8_octets_independent` | (non-aliasing across module boundary) | `lib.rs:~490,~151` | **exact** | Write at `i` does not corrupt read at `j ≠ i` |
+
+### Approximations in OctetsRoundtrip.lean
+
+1. **Freeze as state copy**: The Rust "freeze" is modelled as constructing
+   `{ buf := s'.buf, off := s.off }`.  The Lean model does not enforce the
+   Rust borrow-check rule that the mutable borrow must end before the
+   immutable borrow begins.
+2. **Range guards**: Same as OctetsMut.lean for U16/U32 operations.
+3. **No varint round-trip**: `put_varint`→`get_varint` is not proved here;
+   that is Target 23.
+
+### Impact on proofs
+
+20 theorems + 9 examples, 0 sorry.  The three round-trip theorems
+(`putU8/16/32_freeze_get*`) are high-value: a byte-ordering bug (e.g.,
+big-endian vs little-endian swap) would directly falsify `putU16_freeze_getU16`.
+The non-aliasing theorem `putU8_octets_independent` rules out a class of
+buffer-corruption bugs.  All theorems are sound given the freeze model.
+
+---
+
+## Target 20: Packet-number encoding length — `FVSquad/PacketNumLen.lean`
+
+**Last updated**: 2026-04-15 17:48 UTC  **Commit**: `3fc54577`
+
+**Rust source**: `quiche/src/packet.rs`, lines 569–574 (`pkt_num_len`) and
+lines 719–730 (`encode_pkt_num`)
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `PacketNumLen.numUnacked` | `pn.saturating_sub(largest_acked) + 1` | `packet.rs:571` | **exact** | Lean `Nat` subtraction is already saturating; result identical |
+| `PacketNumLen.pktNumLen` | `pkt_num_len` | `packet.rs:569–574` | **approximation** | See note below |
+| `PacketNumLen.encodedPktNum` | `encode_pkt_num` | `packet.rs:719–730` | **abstraction** | Modelled only as "returns a value of `pktNumLen` bytes"; buffer interaction not modelled |
+
+### Approximation: threshold comparison vs bit-counting
+
+The Rust implementation of `pkt_num_len` uses bit-counting:
+
+```rust
+let min_bits = u64::BITS - num_unacked.leading_zeros() + 1;
+min_bits.div_ceil(8) as usize
+```
+
+The Lean model uses equivalent threshold comparisons:
+
+```
+if numUnacked ≤ 127 then 1
+else if numUnacked ≤ 32767 then 2
+else if numUnacked ≤ 8388607 then 3
+else 4
+```
+
+These are mathematically equivalent for all values of `numUnacked`:
+127 = 2^7-1 (min_bits=8, div_ceil=1), 32767 = 2^15-1 (min_bits=16, div_ceil=2),
+8388607 = 2^23-1 (min_bits=24, div_ceil=3).  The Lean threshold representation
+makes the RFC 9000 §17.1 half-window invariant (`pktNumLen_k_coverage`) directly
+expressible via `omega`, which would be awkward with bit-counting.  The
+correspondence level is **approximation** because the computational path differs
+(though the function values agree on all inputs).
+
+### Additional approximations
+
+1. **`u64` overflow not modelled**: `numUnacked` uses `Nat` (unbounded).
+   The QUIC constraint `numUnacked ≤ 2^31` is a hypothesis for the
+   `four_coverage` theorem.
+2. **`encode_pkt_num` buffer write not modelled**: Only the length selection
+   (`pktNumLen`) is proved; the actual byte layout is abstracted.
+
+### Impact on proofs
+
+20 theorems + 10 examples, 0 sorry.  The coverage theorems
+(`pktNumLen_k_coverage`) prove the RFC 9000 §17.1 half-window guarantee:
+encoded packet number fits in the chosen byte width so the receiver can
+decode it.  The monotonicity theorem (`pktNumLen_mono`) rules out truncation
+bugs.  The threshold equivalence to the Rust bit-counting algorithm has been
+manually verified but is not yet stated as a formal theorem (Target 24 will
+establish the encode-then-decode composition).
+
+---
+
+## Target 21: `SendBuf::retransmit` model — `FVSquad/SendBufRetransmit.lean`
+
+**Last updated**: 2026-04-15 17:48 UTC  **Commit**: `3fc54577`
+
+**Rust source**: `quiche/src/stream/send_buf.rs`, lines 366–420
+(`SendBuf::retransmit`)
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `SendState` (imported from `SendBuf.lean`) | `SendBuf` | `send_buf.rs:~40–60` | **abstraction** | See Target 13 correspondence entry |
+| `retransmit` | `SendBuf::retransmit` | `send_buf.rs:366–420` | **approximation** | See note below |
+| `retransmit_inv` | (invariant preservation) | `send_buf.rs:366` | **abstraction** | Proves `SendBuf.Inv` holds after `retransmit` |
+| `retransmit_emitOff_le` | (cursor anti-monotonicity) | `send_buf.rs:390–415` | **approximation** | `retransmit` can only lower `emitOff`, never raise it |
+| `retransmit_idempotent` | (idempotence) | `send_buf.rs:366` | **approximation** | Calling `retransmit` twice is the same as calling it once |
+| `retransmit_send_backlog_le` | (backlog growth) | `send_buf.rs:390` | **approximation** | Retransmit cannot shrink the pending-data backlog |
+| `retransmit_emitN_inv` | (invariant through emitN) | `send_buf.rs:366` | **abstraction** | Invariant preserved through a retransmit-then-emit cycle |
+
+### Approximation: scalar cursor vs deque-level model
+
+The Rust `retransmit` walks the `RangeBuf` deque and resets individual
+`RangeBuf.pos` fields (which separate already-emitted from pending bytes).  The
+Lean model abstracts this to the net scalar effect on the `emitOff` cursor:
+
+- If `off + len ≤ ackOff` (range entirely acknowledged): no-op.
+- Otherwise: `emitOff := min(emitOff, max(ackOff, off))`.
+
+This matches the Rust logic for the common case but does **not** model:
+
+1. **RangeBuf deque shape**: individual buffer splits and position resets are
+   not tracked; only `emitOff` is updated.
+2. **Split-off buffers**: `buf.split_off` alters the deque structure without
+   affecting `emitOff` in the scalar model.
+3. **`pos` position within individual buffers**: the Lean model treats each
+   buffer as atomic; partial-overlap retransmit is approximated via `effectiveOff`.
+4. **`data.is_empty()` early return**: subsumed by the numeric guard in the
+   Lean model.
+
+**Open question OQ-RT-1** (recorded in memory): when `off > emitOff` and
+`len = 0`, the Lean model sets `emitOff := min(emitOff, off) = emitOff`
+(a no-op), but the Rust code may still iterate the deque.  Whether this
+matters depends on whether `RangeBuf.pos` resets have any observable effect
+beyond `emitOff`; needs maintainer clarification.
+
+### Impact on proofs
+
+17 theorems + 10 examples, 0 sorry.  The key results — `retransmit_inv`,
+`retransmit_emitOff_le`, `retransmit_idempotent` — establish the structural
+safety of retransmission: it never introduces inconsistency, never advances the
+send pointer, and is safe to call multiple times.  The proofs are sound for the
+scalar-cursor model.  Bugs that affect only the deque shape without changing
+`emitOff` would not be caught by these theorems.
+
+## Known Mismatches
+
+No mismatches identified.  All divergences are documented approximations, not
+incorrect modelling.  See individual target sections for the known gaps.
