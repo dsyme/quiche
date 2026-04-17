@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-15 17:48 UTC
-- **Commit**: `3fc54577c3158960682e79419e841ba67765af19`
+- **Date**: 2026-04-17 03:56 UTC
+- **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
 
 ---
 
@@ -1315,3 +1315,108 @@ scalar-cursor model.  Bugs that affect only the deque shape without changing
 
 No mismatches identified.  All divergences are documented approximations, not
 incorrect modelling.  See individual target sections for the known gaps.
+
+---
+
+## Target 22: `put_varint`→`get_varint` cursor roundtrip — `FVSquad/VarIntRoundtrip.lean`
+
+**Last updated**: 2026-04-17 03:56 UTC  **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
+
+**Rust source**: `octets/src/lib.rs`  — `OctetsMut::put_varint` (line 499),
+`OctetsMut::get_varint` (line 473), `Octets::get_varint` (line 187).
+
+This file extends the existing pure model from `Varint.lean` (which proves the
+abstract `varint_round_trip` on pure numeric types) to the stateful cursor API
+using the "freeze pattern" from `OctetsRoundtrip.lean`.
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `OctetsMutState.putVarint` | `OctetsMut::put_varint` | `octets/src/lib.rs:499–533` | **approximation** | 8-byte case splits into two `putU32` calls; a pending `putU32_bytes_unchanged` lemma blocks the 8-byte roundtrip proof |
+| `OctetsState.getVarint` | `Octets::get_varint` / `OctetsMut::get_varint` | `octets/src/lib.rs:187–243, 473–497` | **approximation** | Both Rust variants share identical logic; Lean models the shared form via `OctetsState` |
+| `putVarint_freeze_getVarint_1byte` | Integration: `put_varint` + `get_varint` | `octets/src/lib.rs:1183–1235` | **abstraction** | Freeze pattern: write with OctetsMut, read back with OctetsState; 1-byte case (v ≤ 63) **proved** |
+| `putVarint_freeze_getVarint_2byte` | Integration | same | **abstraction** | 2-byte case (64 ≤ v ≤ 16383) **proved** |
+| `putVarint_freeze_getVarint_4byte` | Integration | same | **abstraction** | 4-byte case (16384 ≤ v ≤ 1073741823) **proved** |
+| `putVarint_freeze_getVarint_8byte` | Integration | same | **approximation** | 8-byte case — `sorry` pending `putU32_bytes_unchanged` non-interference lemma |
+| `putVarint_off`, `putVarint_len` | `put_varint` post-conditions | `octets/src/lib.rs:499–533` | **exact** | Cursor offset advances by `varint_len_nat v`; buffer length preserved |
+| `putVarint_first_byte_tag` | Tag encoding in `put_varint` | `octets/src/lib.rs:499–533` | **exact** (1/2/4-byte), **approximation** (8-byte sorry) | Top 2 bits of first byte encode the length |
+
+### Approximations and known gaps
+
+1. **8-byte roundtrip**: the 8-byte case of `putVarint_freeze_getVarint_8byte`
+   and `putVarint_first_byte_tag` are guarded by `sorry`.  Both require a
+   non-interference lemma `putU32_bytes_unchanged`: writing a `u32` at buffer
+   offset `k+4` does not modify bytes at positions `k..k+3`.  This lemma is
+   absent from `OctetsMut.lean`; adding it would close the 8-byte gap.
+2. **u64 overflow not modelled**: varint values are `Nat`; the QUIC constraint
+   `v ≤ MAX_VAR_INT = 2^62 - 1` is enforced by explicit range hypotheses.
+3. **Buffer mutation and lifetimes**: the Lean model uses immutable `OctetsMutState`
+   value-passing; Rust's `&mut self` is abstracted away.
+4. **`put_varint_with_len` variant**: the Lean model always uses the canonical
+   length (`varint_len_nat v`); the `put_varint_with_len` override (non-minimal
+   encoding) is not modelled.
+
+### Open question (OQ-T23-1)
+
+Is `put_varint_with_len` for non-canonical lengths used anywhere security-critical?
+If a caller can force a non-minimal encoding (e.g., `put_varint_with_len(37, 2)`),
+the tag bits would differ from `varint_parse_len(first)` and `get_varint` might
+misparse.  The current model does not cover this path.
+
+### Impact on proofs
+
+18+ theorems + 15 examples.  Roundtrip fully proved for 1-, 2-, and 4-byte
+encodings (covering all values up to 2^30 − 1, i.e., the vast majority of
+QUIC packet fields).  The 8-byte case (values ≥ 2^30, up to MAX_VAR_INT)
+awaits the `putU32_bytes_unchanged` lemma in a future run.  The `putVarint_off`
+and `putVarint_len` theorems are independent of the sorry and are fully proved.
+
+---
+
+## Target 23: Packet-number encode→decode composition — `FVSquad/PacketNumEncodeDecode.lean`
+
+**Last updated**: 2026-04-17 03:56 UTC  **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
+
+**Rust source**: `quiche/src/packet.rs` — `pkt_num_len` (~line 569),
+`encode_pkt_num` (~line 719), `decode_pkt_num` (~line 634).
+
+This file bridges two existing Lean modules:
+
+- `PacketNumLen.lean` (Target 20): sender-side `pktNumLen` length selection
+- `PacketNumDecode.lean` (Target 9): receiver-side `decodePktNum` reconstruction
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `pktNumLen` (imported from `PacketNumLen`) | `pkt_num_len` | `packet.rs:~569` | **approximation** | Threshold model; see Target 20 entry |
+| `decodePktNum` (imported from `PacketNumDecode`) | `decode_pkt_num` | `packet.rs:~634` | **abstraction** | Arithmetic model; see Target 9 entry |
+| `pktNumLen_window_sufficient` | invariant: `pnWin ≥ 2 * numUnacked` | `packet.rs:569–631` | **exact** | Bridge lemma; proved for all cases |
+| `pnHwin_ge_numUnacked` | derived proximity bound | `packet.rs:569–631` | **exact** | `pnHwin ≥ numUnacked` as required by RFC 9000 §A.3 |
+| `encode_decode_pktnum` | composition of `pkt_num_len` + `encode_pkt_num` + `decode_pkt_num` | `packet.rs:569–652` | **abstraction** | `encode_pkt_num` I/O abstracted to `pn % pnWin`; receiver `largest_pn = la` assumed |
+| `encode_decode_one_byte` | 1-byte specialisation | `packet.rs:569–652` | **abstraction** | pn and la within 127 of each other |
+
+### Approximations and known gaps
+
+1. **`encode_pkt_num` buffer write not modelled**: the Lean model abstracts
+   the actual byte-level encoding of `encode_pkt_num` to the arithmetic
+   operation `pn % pnWin(pn_len)`.  The buffer write itself is not proved
+   here; that would require a bridge from `PacketNumLen.lean` (which already
+   proves `pktNumLen_valid`) to `OctetsMut.lean`.
+2. **Receiver `largest_pn` assumed equal to `largest_acked`**: QUIC requires
+   the receiver's largest successfully processed PN to approximate the
+   sender's largest ACK'd PN.  The Lean model equates these (`la` is used in
+   both `pktNumLen` and `decodePktNum`).  In practice they may differ by a
+   small amount; the proximity window provides slack for this.
+3. **4-byte case precondition `hfour`**: when `numUnacked pn la > 2^31`, no
+   existing encoding length fits within the 4-byte window.  The precondition
+   `hfour : numUnacked pn la ≤ 2^31` is an explicit QUIC constraint (in-flight
+   PN space cannot exceed 2^31).
+4. **`pn ≥ la` required**: `decodePktNum` is defined for future packet numbers;
+   encoding a PN smaller than `largest_acked` is not supported by the
+   composition theorem (though the Lean functions are still defined).
+
+### Impact on proofs
+
+17+ theorems + 17 examples, 0 sorry.  The main result `encode_decode_pktnum`
+is a fully proved end-to-end composition theorem connecting `PacketNumLen`
+and `PacketNumDecode` for the first time.  Together with the existing proofs in
+those modules, this establishes RFC 9000 §17.1 packet number encoding
+correctness as a chain of mechanically verified lemmas.
