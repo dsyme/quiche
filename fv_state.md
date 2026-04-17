@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-17 (run 76, workflow 24546795657)
+Last updated: 2026-04-17 (run 77, workflow 24559290219)
 
 ## Lean File Registry (verified by grep)
 
@@ -23,13 +23,14 @@ Last updated: 2026-04-17 (run 76, workflow 24546795657)
 | FVSquad/StreamPriorityKey.lean | 21 | 8 | Done |
 | FVSquad/OctetsMut.lean | 27 | 7 | Done |
 | FVSquad/Octets.lean | 48 | 9 | Done |
-| FVSquad/OctetsRoundtrip.lean | 20 | 9 | Done |
+| FVSquad/OctetsRoundtrip.lean | 21 | 9 | Done |
 | FVSquad/StreamId.lean | 35 | 8 | Done |
 | FVSquad/PacketNumLen.lean | 20 | 10 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
-| FVSquad/VarIntRoundtrip.lean | ~18 | 15 | Phase 3 (2 sorry: 8-byte case) |
+| FVSquad/VarIntRoundtrip.lean | 20 | 15 | Phase 5 (0 sorry — run 77 eliminated 8-byte case) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Phase 5 (0 sorry, run 76) |
-| **TOTAL** | **~514** | **~194** | **2 sorry (8-byte roundtrip in VarIntRoundtrip)** |
+| FVSquad/PacketHeader.lean | 12 | 18 | Phase 3 (0 sorry — new in run 77) |
+| **TOTAL** | **~526** | **~212** | **0 sorry** |
 
 ## FV Targets
 
@@ -37,23 +38,25 @@ Last updated: 2026-04-17 (run 76, workflow 24546795657)
 |--------|-------------|-------|------|-------|
 | T1-T21 | (all complete) | 5 | various | 486 theorems total, 0 sorry |
 | T22 | RecvBuf flow-control bound | 0 | — | identified |
-| T23 | put_varint→get_varint roundtrip | 3 | FVSquad/VarIntRoundtrip.lean | run75: 1/2/4-byte proved; 8-byte sorry (need putU32_bytes_unchanged); Correspondence entry added run76 |
-| T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | run76: 10 theorems 0 sorry; bridges T9(PacketNumDecode) + T20(PacketNumLen); Correspondence entry added |
+| T23 | put_varint→get_varint roundtrip | 5 | FVSquad/VarIntRoundtrip.lean | run77: all 4 widths proved, 0 sorry; putU32_bytes_below added to OctetsRoundtrip |
+| T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | run76: 10 theorems 0 sorry |
 | T25 | StreamId↔stream_do_send guard | 0 | — | identified |
 | T26 | CUBIC Reno-friendly transition | 0 | — | MEDIUM |
 | T27 | CidMgmt retire_if_needed | 0 | — | MEDIUM |
 | T28 | NewReno AIMD convergence | 0 | — | MEDIUM |
-| T29 | QUIC packet-header roundtrip | 2 | specs/packet_header_informal.md | run73 informal spec |
+| T29 | QUIC packet-header first-byte encoding | 3 | FVSquad/PacketHeader.lean | run77: 12 theorems 18 examples 0 sorry; encode_decode_type_long roundtrip proved |
 | T30 | Varint 2-bit tag consistency | 0 | — | HIGH/LOW-effort |
 
 ## Open PRs (lean-squad label)
 
-- PR run76 (branch lean-squad-run76-24546795657-t24-pktnum-encode-decode-correspondence):
-  Task 3 — T24 PacketNumEncodeDecode.lean (10 theorems, 0 sorry) + Task 6 — CORRESPONDENCE.md T22/T23 entries
+- PR run77 (branch lean-squad-run77-24559290219-varint-8byte-packet-header):
+  Task 5 — T23 VarInt 8-byte sorry elimination (0 sorry now across all roundtrip widths)
+  Task 3 — T29 PacketHeader.lean (12 theorems, 18 examples, 0 sorry)
+  CORRESPONDENCE.md: updated Last Updated + T29 section added
 
 ## Next Actions
 
-1. T23 phase 4→5: add `putU32_bytes_unchanged` to OctetsMut.lean, then prove 8-byte case
-2. T22 phase 1-3: RecvBuf flow-control bound (identified only — needs informal spec and Lean file)
-3. T29 phase 3: write Lean spec for QUIC packet header roundtrip (informal spec exists)
+1. T22 phase 1-3: RecvBuf flow-control bound (identified only — needs informal spec and Lean file)
+2. T29 phase 3→4: implement Lean model of full first-byte parse from raw byte
+3. T25 phase 1: StreamId↔stream_do_send guard — high-value safety property
 4. T30 phase 1-3: varint 2-bit tag consistency (LOW effort, uses existing Varint.lean)
