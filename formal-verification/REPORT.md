@@ -2,36 +2,37 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 394 named theorems + 119 examples, 0 `sorry`, 17 Lean files
+**Status**: ✅ ACTIVE — 486 named theorems + 156 examples, 0 `sorry`, 21 Lean files
 (Lean 4.29.0, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-12 17:20 UTC
-- **Commit**: `b0b4bd8b`
+- **Date**: 2026-04-16 10:00 UTC
+- **Commit**: `7e1ebb58`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **394 named theorems**
-across 17 Lean 4 files covering all of the QUIC library's core algorithmic
-components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`) through
-congestion control (`NewReno`, `CUBIC`, `PRR`) to stream management
-(`RecvBuf`, `SendBuf`, `CidMgmt`). All proofs are verified by `lake build`
-with **0 sorry** remaining. Highlights include: formal proof of a *real RFC
-9000 §A.3 conformance property* (`decode_pktnum_correct`); formal confirmation
-of an **`Ord` contract violation** in HTTP/3 stream scheduling
-(`StreamPriorityKey`); and big-endian framing soundness
-(`getU16_split`, `Octets`). This run (63) adds `OctetsMut.lean` (27 theorems)
-to the verified manifest after fixing Mathlib-only tactics
-(`split_ifs` → `by_cases`), completing the byte-buffer layer.
+The `quiche` formal verification project has proved **486 named theorems**
+across 21 Lean 4 files covering all of the QUIC library's core algorithmic
+components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
+`OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`) to
+stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire encoding
+(`StreamId`, `PacketNumLen`, `SendBufRetransmit`). All proofs are verified by
+`lake build` with **0 sorry** remaining. Highlights include: formal proof of a
+*real RFC 9000 §A.3 conformance property* (`decode_pktnum_correct`); formal
+confirmation of an **`Ord` contract violation** in HTTP/3 stream scheduling
+(`StreamPriorityKey`); cross-module write-then-read round-trips for all integer
+widths (`OctetsRoundtrip`); and RFC 9000 §2.1 stream-ID classification laws
+(`StreamId`). Runs 64–74 added four new files (92 new theorems) and an
+informal spec for the QUIC packet-header round-trip (T29).
 
 ---
 
 ## Proof Architecture
 
-The 17 files form three logical layers:
+The 21 files form three logical layers, with a cross-module bridge layer:
 
 ```mermaid
 graph TD
@@ -39,6 +40,7 @@ graph TD
         Varint["Varint.lean<br/>10 theorems"]
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
+        OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
     end
     subgraph L2["Layer 2 — Protocol algorithms"]
         RangeSet["RangeSet.lean<br/>16 theorems"]
@@ -50,13 +52,16 @@ graph TD
         PacketNumDecode["PacketNumDecode.lean<br/>23 theorems"]
         CidMgmt["CidMgmt.lean<br/>21 theorems"]
         StreamPriorityKey["StreamPriorityKey.lean<br/>21 theorems"]
+        StreamId["StreamId.lean<br/>35 theorems"]
+        PacketNumLen["PacketNumLen.lean<br/>20 theorems"]
     end
-    subgraph L3["Layer 3 — Congestion control"]
+    subgraph L3["Layer 3 — Congestion control & stream I/O"]
         NewReno["NewReno.lean<br/>13 theorems"]
         Cubic["Cubic.lean<br/>26 theorems"]
         RangeBuf["RangeBuf.lean<br/>19 theorems"]
         RecvBuf["RecvBuf.lean<br/>38 theorems"]
         SendBuf["SendBuf.lean<br/>26 theorems"]
+        SendBufRT["SendBufRetransmit.lean<br/>17 theorems"]
     end
     L1 --> L2
     L2 --> L3
@@ -66,7 +71,7 @@ graph TD
 
 ## What Was Verified
 
-### Layer 1 — Byte Framing Primitives (3 files, ~85 theorems)
+### Layer 1 — Byte Framing Primitives (4 files, ~105 theorems)
 
 The foundational byte-I/O layer used throughout QUIC packet parsing.
 
@@ -75,6 +80,7 @@ graph LR
     V["Varint.lean<br/>10 theorems<br/>varint_round_trip ✅"]
     O["Octets.lean<br/>48 theorems<br/>getU16_split ✅"]
     OM["OctetsMut.lean<br/>27 theorems<br/>putU8_getU8_roundtrip ✅"]
+    ORT["OctetsRoundtrip.lean<br/>20 theorems<br/>putU16_freeze_getU16 ✅"]
 ```
 
 **Key results**:
@@ -88,8 +94,10 @@ graph LR
   inverses in both read and write cursors
 - `putU8/16/32_getU8/16/32_roundtrip`: write-then-read round-trips for all
   widths
+- `putU8/16/32_freeze_getU8/16/32` (OctetsRoundtrip): cross-module write
+  (OctetsMut) then immutable-cursor read (Octets) round-trips
 
-### Layer 2 — Protocol Algorithms (9 files, ~190 theorems)
+### Layer 2 — Protocol Algorithms (11 files, ~230 theorems)
 
 The pure algorithmic components of the QUIC protocol.
 
@@ -104,6 +112,8 @@ graph LR
     PND["PacketNumDecode.lean<br/>23 theorems<br/>decode_pktnum_correct ✅"]
     CID["CidMgmt.lean<br/>21 theorems<br/>newScid_seq_fresh ✅"]
     SPK["StreamPriorityKey.lean<br/>21 theorems<br/>OQ-1 PROVED ⚠️"]
+    SID["StreamId.lean<br/>35 theorems<br/>streamId_is_bidi_client ✅"]
+    PNL["PacketNumLen.lean<br/>20 theorems<br/>encodeLen_le_4 ✅"]
 ```
 
 **Key results**:
@@ -119,8 +129,13 @@ graph LR
 - `cmpKey_incr_incr_not_antisymmetric` (StreamPriorityKey): **formal
   proof of `Ord` antisymmetry violation** for same-urgency incremental
   streams (OQ-1)
+- `streamId_is_bidi_client`, `streamId_is_uni_server`, etc. (StreamId):
+  RFC 9000 §2.1 stream-ID classification laws — all 4 type bits formally
+  characterised
+- `encodeLen_le_4`, `encodeLen_decodeLen_roundtrip` (PacketNumLen): packet
+  number length encoding is 1–4 bytes and round-trips correctly
 
-### Layer 3 — Congestion Control & Stream I/O (5 files, ~120 theorems)
+### Layer 3 — Congestion Control & Stream I/O (6 files, ~139 theorems)
 
 ```mermaid
 graph LR
@@ -129,6 +144,7 @@ graph LR
     RB["RangeBuf.lean<br/>19 theorems<br/>split_adjacency ✅"]
     RC["RecvBuf.lean<br/>38 theorems<br/>insertAny_inv ✅"]
     SB["SendBuf.lean<br/>26 theorems<br/>emitN_le_maxData ✅"]
+    SBR["SendBufRetransmit.lean<br/>17 theorems<br/>retransmit_offset_ge ✅"]
 ```
 
 **Key results**:
@@ -139,6 +155,8 @@ graph LR
   preserved by arbitrary out-of-order writes (the hardest proof in the suite)
 - `emitN_le_maxData` (SendBuf): bytes emitted never exceed flow-control window
   — RFC 9000 §4.1 safety property
+- `retransmit_offset_ge` (SendBufRetransmit): retransmit offset is always ≥
+  the acknowledged offset — no data is retransmitted before its ACK boundary
 
 ---
 
@@ -163,7 +181,11 @@ graph LR
 | `StreamPriorityKey.lean` | 21 | 8 | ✅ | `cmpKey_incr_incr_not_antisymmetric` |
 | `OctetsMut.lean` | 27 | 7 | ✅ | `putU32_getU32_roundtrip` |
 | `Octets.lean` | 48 | 9 | ✅ | `getU16_split` |
-| **Total** | **394** | **119** | — | **0 sorry** |
+| `OctetsRoundtrip.lean` | 20 | 9 | ✅ | `putU16_freeze_getU16` |
+| `StreamId.lean` | 35 | 8 | ✅ | `streamId_is_bidi_client` |
+| `PacketNumLen.lean` | 20 | 10 | ✅ | `encodeLen_le_4` |
+| `SendBufRetransmit.lean` | 17 | 10 | ✅ | `retransmit_offset_ge` |
+| **Total** | **486** | **156** | — | **0 sorry** |
 
 ---
 
@@ -285,6 +307,8 @@ timeline
         OctetsMut, Correspondence, Critique : 40 theorems
     section Runs 59–63
         RecvBuf insertAny, Octets, OctetsMut fix : 85 theorems
+    section Runs 64–74
+        OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit : 92 theorems
 ```
 
 ---
@@ -315,4 +339,4 @@ timeline
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 24311908193](https://github.com/dsyme/quiche/actions/runs/24311908193).
+> [workflow run 24504131685](https://github.com/dsyme/quiche/actions/runs/24504131685).

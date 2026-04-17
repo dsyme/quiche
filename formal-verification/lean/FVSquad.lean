@@ -19,3 +19,5 @@ import FVSquad.OctetsRoundtrip
 import FVSquad.StreamId
 import FVSquad.PacketNumLen
 import FVSquad.SendBufRetransmit
+import FVSquad.VarIntRoundtrip
+import FVSquad.PacketNumEncodeDecode
