@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-16 (run 75, workflow 24525591370)
+Last updated: 2026-04-17 (run 76, workflow 24546795657)
 
 ## Lean File Registry (verified by grep)
 
@@ -28,7 +28,8 @@ Last updated: 2026-04-16 (run 75, workflow 24525591370)
 | FVSquad/PacketNumLen.lean | 20 | 10 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
 | FVSquad/VarIntRoundtrip.lean | ~18 | 15 | Phase 3 (2 sorry: 8-byte case) |
-| **TOTAL** | **~504** | **~171** | **2 sorry (8-byte roundtrip)** |
+| FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Phase 5 (0 sorry, run 76) |
+| **TOTAL** | **~514** | **~194** | **2 sorry (8-byte roundtrip in VarIntRoundtrip)** |
 
 ## FV Targets
 
@@ -36,8 +37,8 @@ Last updated: 2026-04-16 (run 75, workflow 24525591370)
 |--------|-------------|-------|------|-------|
 | T1-T21 | (all complete) | 5 | various | 486 theorems total, 0 sorry |
 | T22 | RecvBuf flow-control bound | 0 | — | identified |
-| T23 | put_varint→get_varint roundtrip | 3 | FVSquad/VarIntRoundtrip.lean | run75: 1/2/4-byte proved; 8-byte sorry (need putU32_bytes_unchanged) |
-| T24 | encode→decode composition | 2 | specs/pkt_num_encode_decode_informal.md | run75 informal spec |
+| T23 | put_varint→get_varint roundtrip | 3 | FVSquad/VarIntRoundtrip.lean | run75: 1/2/4-byte proved; 8-byte sorry (need putU32_bytes_unchanged); Correspondence entry added run76 |
+| T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | run76: 10 theorems 0 sorry; bridges T9(PacketNumDecode) + T20(PacketNumLen); Correspondence entry added |
 | T25 | StreamId↔stream_do_send guard | 0 | — | identified |
 | T26 | CUBIC Reno-friendly transition | 0 | — | MEDIUM |
 | T27 | CidMgmt retire_if_needed | 0 | — | MEDIUM |
@@ -47,14 +48,12 @@ Last updated: 2026-04-16 (run 75, workflow 24525591370)
 
 ## Open PRs (lean-squad label)
 
-- PR run74 (branch lean-squad-run74-24504131685-varint-roundtrip-report):
-  Task 2+10 — T23 informal spec + REPORT update (merged into run75 branch)
-- PR run75 (branch lean-squad-run75-24525591370-varint-roundtrip-lean):
-  Task 3 — T23 VarIntRoundtrip.lean (1/2/4-byte proved, 8-byte sorry) + Task 2 T24 informal spec
+- PR run76 (branch lean-squad-run76-24546795657-t24-pktnum-encode-decode-correspondence):
+  Task 3 — T24 PacketNumEncodeDecode.lean (10 theorems, 0 sorry) + Task 6 — CORRESPONDENCE.md T22/T23 entries
 
 ## Next Actions
 
 1. T23 phase 4→5: add `putU32_bytes_unchanged` to OctetsMut.lean, then prove 8-byte case
-2. T24 phase 3: write Lean spec for pkt_num encode/decode (PacketNumLen.lean already has decode_pktnum_correct)
-3. T29 phase 3: write Lean spec for QUIC packet header roundtrip
+2. T22 phase 1-3: RecvBuf flow-control bound (identified only — needs informal spec and Lean file)
+3. T29 phase 3: write Lean spec for QUIC packet header roundtrip (informal spec exists)
 4. T30 phase 1-3: varint 2-bit tag consistency (LOW effort, uses existing Varint.lean)
