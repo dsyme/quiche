@@ -28,8 +28,8 @@
 | 20 | `pkt_num_len` / `encode_pkt_num` length selection | `quiche/src/packet.rs` | 5 — Proofs | ✅ Done (run 66) | 20 theorems + 10 examples, 0 sorry; `FVSquad/PacketNumLen.lean` |
 | 21 | `SendBuf::retransmit` — retransmit model | `quiche/src/stream/send_buf.rs` | 5 — Proofs | ✅ Done (run 68) | 17 theorems + 10 examples, 0 sorry; `FVSquad/SendBufRetransmit.lean` |
 | 22 | `RecvBuf` flow-control bound (`highMark ≤ max_data`) | `quiche/src/stream/recv_buf.rs` | 0 | ⬜ Identified | Gap #2 from CRITIQUE.md; see specs/recv_buf_flowcontrol_informal.md (planned) |
-| 23 | `put_varint` → `get_varint` cross-module round-trip | `octets/src/lib.rs` | 0 | ⬜ Identified | Gap #3 from CRITIQUE.md; closes the varint codec verification |
-| 24 | `encode_pkt_num` → `decode_pkt_num` composition | `quiche/src/packet.rs` | 0 | ⬜ Identified | Gap #4 from CRITIQUE.md; closes the QUIC pkt-num lifecycle |
+| 23 | `put_varint` → `get_varint` cross-module round-trip | `octets/src/lib.rs` | 5 | ✅ Done (run 75-77) | 8 theorems, 0 sorry; `FVSquad/VarIntRoundtrip.lean` |
+| 24 | `encode_pkt_num` → `decode_pkt_num` composition | `quiche/src/packet.rs` | 5 | ✅ Done (run 76) | 10 theorems, 0 sorry; `FVSquad/PacketNumEncodeDecode.lean` |
 | 25 | `StreamId`↔`stream_do_send` guard correctness | `quiche/src/lib.rs` | 0 | ⬜ Identified | Gap #6 from CRITIQUE.md; RFC 9000 §2.1 stream-direction guard |
 | 26 | CUBIC W_cubic vs W_est Reno-friendly transition | `quiche/src/recovery/congestion/cubic.rs` | 0 | ⬜ Identified | RFC 8312bis §5.8; Cubic.lean already models W_cubic; add W_est and the comparison predicate |
 | 27 | `CidMgmt::retire_if_needed` path | `quiche/src/cid.rs` | 0 | ⬜ Identified | Prove auto-retire keeps active-CID count ≤ `active_conn_id_limit` (RFC 9000 §5.1.1) |
@@ -91,3 +91,6 @@
 
 | 18 | StreamId RFC 9000 §2.1 arithmetic | 5 — All Proofs | run 64 | 35 theorems; 0 sorry |
 | 19 | Octets↔OctetsMut cross-module round-trip | 5 — All Proofs | run 65 | 20 theorems + 9 examples; 0 sorry |
+| 31 | H3 frame type codec round-trip | `quiche/src/h3/frame.rs` | 0 | ⬜ Identified | HTTP/3 frame encode/decode round-trip; builds on VarIntRoundtrip.lean; see RESEARCH.md T31 |
+| 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
+| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 0 | ⬜ Identified | RFC 9114 §7.2.4: no duplicate keys, RFC 9114 §7.2.4 prohibited H2 settings; see RESEARCH.md T33 |

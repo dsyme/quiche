@@ -654,3 +654,120 @@ The following adjustments reflect CRITIQUE.md findings from runs 67–68:
 3. **T29 (packet header) is now the highest-value unstarted target** — it
    covers the entry point for all QUIC traffic and is identified as the single
    most security-relevant gap in the CRITIQUE.
+
+---
+
+## New Targets — Run 78 (2026-04-17)
+
+The following targets are newly identified this run, extending the survey to
+the HTTP/3 layer and BBR2 congestion control module — areas not yet covered
+by any FV target.
+
+### Target 31: HTTP/3 Frame Type Codec Round-Trip
+
+**Location**: `quiche/src/h3/frame.rs`, functions `Frame::from_bytes` (decode)
+and `Frame::to_bytes` (encode)
+
+**Description**: HTTP/3 frames are encoded on the wire using QUIC varints for
+type and length fields (RFC 9114 §7.1). The round-trip property
+`from_bytes(to_bytes(f)) == f` for core frame types (DATA, HEADERS, SETTINGS,
+GOAWAY, CancelPush) would formally verify the H3 framing codec.
+
+**Benefit**: The H3 frame codec is the entry point for all HTTP/3 traffic.
+A bug in the type-ID or length encoding would silently corrupt all H3 frames
+or fail to parse valid frames. The existing `VarIntRoundtrip.lean` and
+`OctetsRoundtrip.lean` provide the foundational lemmas needed.
+
+**Specification size**: ~100–150 Lean lines per frame variant; start with the
+simple fixed-field frames (GoAway, CancelPush, MaxPushId ~5 Lean lines each).
+
+**Proof tractability**: LOW-MEDIUM.
+- Simple frame types (GoAway, MaxPushId, CancelPush) encode as
+  `varint(type_id) ++ varint(payload_len) ++ varint(field)`.
+  These round-trips follow directly from `VarIntRoundtrip.lean`.
+- The SETTINGS frame has variable-length key-value pairs; model the
+  finite list case with a depth-bounded decidable proof.
+- DATA/HEADERS carry opaque byte payloads — model as `List Nat` (as in
+  OctetsMut) with length-preservation theorems.
+
+**Approximations needed**: Skip qlog serialisation; do not model unknown frame
+types; model payloads as `List Nat` rather than typed structs.
+
+**Priority**: ⭐⭐ HIGH — closes the HTTP/3 framing gap; builds on existing
+varint and byte-cursor infrastructure.
+
+---
+
+### Target 32: BBR2 Bandwidth Ceiling and Pacing Rate Bounds
+
+**Location**: `quiche/src/recovery/gcongestion/bbr2.rs`,
+`quiche/src/recovery/gcongestion/pacer.rs`
+
+**Description**: BBR2 (RFC draft-ietf-ccwg-bbr) computes a pacing rate from
+an estimated bottleneck bandwidth and RTT. A key safety property: the pacing
+rate and cwnd must never simultaneously exceed the bottleneck bandwidth estimate
+by more than the allowed gain factor (currently `PACING_GAIN = 1.25` for
+probe_bw phase). Formally: `pacing_rate ≤ btl_bw * pacing_gain`.
+
+**Benefit**: A bug in the pacing rate computation could cause BBR2 to exceed
+the network capacity by a large factor, causing congestion. This is
+safety-critical for Cloudflare's infrastructure.
+
+**Specification size**: ~80 Lean lines; the pacing model is a simple ratio.
+
+**Proof tractability**: MEDIUM.
+- The BBR2 state machine has many phases and complex transitions.
+- For a first target, focus on the `probe_bw` pacing calculation and the
+  invariant that `pacing_rate = btl_bw * pacing_gain / GAIN_DENOM`.
+- Use Nat arithmetic with explicit scaling (multiply by denominator first).
+
+**Approximations needed**: Model bandwidth estimates as Nat (bps), skip
+RTT-dependent cwnd; focus on pacing rate formula only.
+
+**Priority**: ⭐ MEDIUM — new module not yet covered; bridges the gap between
+the verified NewReno/CUBIC and the production BBR2.
+
+---
+
+### Target 33: H3 Settings Frame Invariants
+
+**Location**: `quiche/src/h3/frame.rs`, `quiche/src/h3/mod.rs`
+
+**Description**: The HTTP/3 SETTINGS frame carries connection-wide parameters
+(max field section size, QPACK table capacity, blocked streams). RFC 9114 §7.2.4
+forbids duplicate settings keys, requires settings values to be within bounds,
+and prohibits HTTP/2-specific settings (keys 2, 3, 4, 5). A formal
+specification would prove:
+1. No duplicate settings keys in a well-formed SETTINGS frame.
+2. `parse_settings_frame` correctly rejects HTTP/2 prohibited settings.
+3. The round-trip `decode(encode(settings)) == settings` for all valid
+   settings combinations.
+
+**Benefit**: A settings-parsing bug could allow a malicious peer to negotiate
+illegal parameters, causing protocol confusion or security vulnerabilities in
+the HTTP/3 connection setup.
+
+**Specification size**: ~60–80 Lean lines; the settings are key-value pairs
+with simple invariants.
+
+**Proof tractability**: LOW-MEDIUM (decidable for finite key sets).
+
+**Priority**: ⭐ MEDIUM — first FV coverage of the HTTP/3 parameter
+negotiation path, which is part of every H3 connection setup.
+
+---
+
+## Critique Feedback Incorporated (run 78)
+
+The following adjustments reflect CRITIQUE.md findings:
+
+1. **T23 (VarIntRoundtrip) is Done** — proved in run 75–77; all 4 encoding
+   widths proved, 0 sorry.
+2. **T24 (PacketNumEncodeDecode) is Done** — proved in run 76; 10 theorems.
+3. **T29 (PacketHeader) at Phase 2** — informal spec exists; Lean spec
+   (PacketHeader.lean) should be the next Phase 3 target.
+4. **New targets T31–T33** identify the HTTP/3 and BBR2 layers as the
+   natural next expansion area after the QUIC transport layer is largely
+   covered.
+5. **Conference paper created** (Task 11): `formal-verification/paper/paper.tex`
+   documents the full FV effort for submission to an FV/systems venue.
