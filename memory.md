@@ -144,3 +144,27 @@ FVSquad.lean imports 23 modules (in order): Octets, Varint, RangeSet,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
   OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
   VarIntRoundtrip, PacketNumEncodeDecode
+
+---
+
+## Run 80 (Everest Security Pivot)
+
+**Instruction**: Pivot to prove security properties similar to Project Everest (MSR).
+
+### New targets and files
+- **T34 — Nonce Injectivity** (`QuicNonce.lean`): `make_nonce` in `crypto/mod.rs`.
+  XOR-based. Key theorem: `nonceSuffix_injective`. 8 theorems, 0 sorry.
+- **T35 — Anti-Replay Window** (`PktNumWindow.lean`): `PktNumWindow` in `packet.rs`.
+  Bitmask model. Key theorems: `insert_contains_inrange`, `insert_contains_advance`. 7 theorems, 0 sorry.
+- **T36 — Header Protection** (`QuicHeaderProtection.lean`): `encrypt_hdr`/`decrypt_hdr`.
+  XOR involutivity. Key theorem: `applyHdrProtection_involutive`. 9 theorems, 0 sorry.
+
+### Key lemmas discovered
+- `by_contra` NOT available in Lean 4 core (no Mathlib); use `by_cases` instead.
+- `shiftLeft_one_pos` must be proved by induction (no `Nat.shiftLeft_pos`).
+- In `insert_contains_advance`, two syntactically different bit-position expressions
+  (`+ (128-1) -` vs `+ 128 - 1 -`) require separate `have` for each rewrite.
+- `maskPnBytes_involutive` cons case: use `show ...` to unfold and `rw [...]` to prove.
+
+### Lean version
+Lean 4.29.0 (elan). lake build passes with 0 sorry in new files.
