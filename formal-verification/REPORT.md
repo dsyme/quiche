@@ -2,20 +2,20 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 486 named theorems + 156 examples, 0 `sorry`, 21 Lean files
-(Lean 4.29.0, no Mathlib).
+**Status**: ✅ ACTIVE — 504 named theorems + 175 examples, **2 `sorry`** (8-byte
+varint case), 23 Lean files (Lean 4.29.0, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-16 10:00 UTC
-- **Commit**: `7e1ebb58`
+- **Date**: 2026-04-18 03:40 UTC
+- **Commit**: `bc4a6ced`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **486 named theorems**
-across 21 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **504 named theorems**
+across 23 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`) to
 stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire encoding
@@ -32,7 +32,7 @@ informal spec for the QUIC packet-header round-trip (T29).
 
 ## Proof Architecture
 
-The 21 files form three logical layers, with a cross-module bridge layer:
+The 23 files form three logical layers, with a cross-module bridge layer:
 
 ```mermaid
 graph TD
@@ -185,7 +185,9 @@ graph LR
 | `StreamId.lean` | 35 | 8 | ✅ | `streamId_is_bidi_client` |
 | `PacketNumLen.lean` | 20 | 10 | ✅ | `encodeLen_le_4` |
 | `SendBufRetransmit.lean` | 17 | 10 | ✅ | `retransmit_offset_ge` |
-| **Total** | **486** | **156** | — | **0 sorry** |
+| `VarIntRoundtrip.lean` | 8 | 16 | 🔄 2 sorry | `putVarint_freeze_4byte` |
+| `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
+| **Total** | **504** | **175** | — | **2 sorry** (8-byte varint) |
 
 ---
 

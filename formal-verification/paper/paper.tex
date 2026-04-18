@@ -57,8 +57,10 @@ transport protocol and HTTP/3 in Rust.
 Using \emph{Lean~4} without Mathlib, we have proved
 \textbf{504 named theorems across 23 files}, covering core QUIC algorithms
 from byte-level framing through congestion control and stream management.
-All proofs carry zero \texttt{sorry} obligations and are verified
-continuously by CI.
+502 of these theorems are fully sorry-free; 2~\texttt{sorry} obligations
+remain for the 8-byte varint encoding case in \texttt{VarIntRoundtrip.lean},
+awaiting a non-interference lemma for chained buffer writes.
+Proofs are verified continuously by CI.
 Our methodology applies a five-phase pipeline---target identification,
 informal specification, formal specification, implementation extraction,
 and proof---to each algorithmic component in turn.
@@ -105,9 +107,9 @@ Our contributions are:
   \item A \emph{target selection and specification methodology} adapted
     to Rust codebases, extracting functional models from imperative code
     while documenting the abstraction boundary.
-  \item \textbf{504 Lean~4 theorems} across 23 algorithmic components,
-    covering QUIC's byte framing, congestion control, flow control,
-    packet-number arithmetic, and stream management.
+  \item \textbf{504 Lean~4 theorems} (502 sorry-free) across 23 algorithmic
+    components, covering QUIC's byte framing, congestion control, flow
+    control, packet-number arithmetic, and stream management.
   \item \textbf{Three concrete findings}: a formally proved $\mathtt{Ord}$
     violation; a corrected RFC~\S A.3 specification; and a documented
     open question in the retransmit model.
@@ -254,8 +256,8 @@ Of 23 files audited, \textbf{no mismatches} were found.
 
 Table~\ref{tab:theorems} summarises the 23 Lean files.
 The project totals \textbf{504 named theorems}, \textbf{175 examples},
-and \textbf{0 \texttt{sorry}}, verified by Lean~4.29.0 via the Lake build
-system.
+and \textbf{2 \texttt{sorry}} (8-byte varint, blocked on a non-interference lemma),
+verified by Lean~4.29.0 via the Lake build system.
 
 \begin{table*}[t]
 \centering
@@ -269,7 +271,8 @@ system.
 \texttt{Octets.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 48  & \texttt{getU16\_split}           & \texttt{simp}, \texttt{omega} \\
 \texttt{OctetsMut.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 27  & \texttt{putU64\_getU64\_rt}      & \texttt{simp}, \texttt{omega} \\
 \texttt{OctetsRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  & 20  & \texttt{putU32\_freeze\_getU32}  & \texttt{simp}, \texttt{omega} \\
-\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\
+\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\ \hline
+\multicolumn{6}{l}{\small $^{\dagger}$2 sorry in \texttt{VarIntRoundtrip.lean} (8-byte case); await \texttt{putU32\_bytes\_unchanged} lemma.} \\
 \midrule
 \texttt{RangeSet.lean}          & \texttt{quiche/src/ranges.rs}       & Algorithm & 16 & \texttt{insert\_preserves\_inv}  & \texttt{simp}, \texttt{omega} \\
 \texttt{Minmax.lean}            & \texttt{quiche/src/minmax.rs}       & Algorithm & 15 & \texttt{minmax\_bounded}         & \texttt{omega} \\
@@ -292,7 +295,7 @@ system.
 \texttt{SendBuf.lean}           & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 26 & \texttt{emitN\_le\_maxData}      & \texttt{omega} \\
 \texttt{SendBufRetransmit.lean} & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 17 & \texttt{retransmit\_inv}         & \texttt{omega} \\
 \midrule
-\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{504} & \textbf{0 sorry} & \\
+\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{504} & \textbf{2 sorry}$^{\dagger}$ & \\
 \bottomrule
 \end{tabular}
 \caption{Summary of 23 Lean~4 files: Rust source, logical layer, named
@@ -599,9 +602,12 @@ reassembly---in a proof assistant.
 We have presented an incremental formal verification of 23 algorithmic
 components in \texttt{quiche}, Cloudflare's production QUIC implementation,
 using Lean~4 without Mathlib.
-The project has accumulated 504 machine-checked theorems with zero
-\texttt{sorry} obligations, covering byte framing, congestion control,
-flow control, packet-number arithmetic, and stream management.
+The project has accumulated 504 machine-checked theorems; 502 are fully
+sorry-free.  Two \texttt{sorry} obligations remain in the 8-byte varint
+encoding case of \texttt{VarIntRoundtrip.lean}, awaiting a single
+non-interference lemma (\texttt{putU32\_bytes\_unchanged}) in a future run.
+The proofs cover byte framing, congestion control, flow control,
+packet-number arithmetic, and stream management.
 
 Three findings stand out: a formally proved \texttt{Ord} contract
 violation in HTTP/3 stream scheduling (intentional by design); a corrected

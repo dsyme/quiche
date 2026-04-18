@@ -4,8 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-17 03:56 UTC
-- **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
+- **Date**: 2026-04-18 03:40 UTC
+- **Commit**: `bc4a6ced4a3b728942b69cfd48779eeac0490415`
+- **Lean build**: `lake build` passed with Lean 4.29.0 — 26 jobs, **2 sorry** (both in
+  `FVSquad/VarIntRoundtrip.lean`, 8-byte varint case; see §T22)
 
 ---
 
@@ -1316,11 +1318,23 @@ scalar-cursor model.  Bugs that affect only the deque shape without changing
 No mismatches identified.  All divergences are documented approximations, not
 incorrect modelling.  See individual target sections for the known gaps.
 
+## Open Sorry Obligations
+
+As confirmed by `lake build` (Lean 4.29.0, 2026-04-18):
+
+| Theorem | File | Lines | Blocking gap |
+|---------|------|-------|-------------|
+| `putVarint_freeze_getVarint_8byte` | `FVSquad/VarIntRoundtrip.lean` | 244–251 | `putU32_bytes_unchanged` non-interference lemma missing from `OctetsMut.lean` |
+| `putVarint_first_byte_tag` (8-byte branch) | `FVSquad/VarIntRoundtrip.lean` | 375–418 | Same: `putU32_bytes_unchanged` needed to prove second `putU32` doesn't overwrite first byte |
+
+Both sorry obligations are in the 8-byte varint case (values ≥ 2^30).  All
+other 502 theorems are fully proved (0 sorry).
+
 ---
 
 ## Target 22: `put_varint`→`get_varint` cursor roundtrip — `FVSquad/VarIntRoundtrip.lean`
 
-**Last updated**: 2026-04-17 03:56 UTC  **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
+**Last updated**: 2026-04-18 03:40 UTC  **Commit**: `bc4a6ced4a3b728942b69cfd48779eeac0490415`
 
 **Rust source**: `octets/src/lib.rs`  — `OctetsMut::put_varint` (line 499),
 `OctetsMut::get_varint` (line 473), `Octets::get_varint` (line 187).
@@ -1364,17 +1378,19 @@ misparse.  The current model does not cover this path.
 
 ### Impact on proofs
 
-18+ theorems + 15 examples.  Roundtrip fully proved for 1-, 2-, and 4-byte
+8 theorems + 16 examples.  Roundtrip fully proved for 1-, 2-, and 4-byte
 encodings (covering all values up to 2^30 − 1, i.e., the vast majority of
-QUIC packet fields).  The 8-byte case (values ≥ 2^30, up to MAX_VAR_INT)
-awaits the `putU32_bytes_unchanged` lemma in a future run.  The `putVarint_off`
-and `putVarint_len` theorems are independent of the sorry and are fully proved.
+QUIC packet fields).  **2 sorry obligations remain**: `putVarint_freeze_getVarint_8byte`
+and the 8-byte branch of `putVarint_first_byte_tag`.  Both await the
+`putU32_bytes_unchanged` non-interference lemma in `OctetsMut.lean`.  The
+`putVarint_off` and `putVarint_len` theorems are independent of the sorry
+and are fully proved.  Verified by `lake build` (Lean 4.29.0) on 2026-04-18.
 
 ---
 
 ## Target 23: Packet-number encode→decode composition — `FVSquad/PacketNumEncodeDecode.lean`
 
-**Last updated**: 2026-04-17 03:56 UTC  **Commit**: `0d67406a4ce5850217fdcf6f706d4ac13c007a2c`
+**Last updated**: 2026-04-18 03:40 UTC  **Commit**: `bc4a6ced4a3b728942b69cfd48779eeac0490415`
 
 **Rust source**: `quiche/src/packet.rs` — `pkt_num_len` (~line 569),
 `encode_pkt_num` (~line 719), `decode_pkt_num` (~line 634).
