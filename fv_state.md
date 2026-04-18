@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-18 (run 81, workflow 24601813049)
+Last updated: 2026-04-18 (run 82, workflow 24609842955)
 
 ## Lean File Registry (verified by lake build Lean 4.29.1)
 
@@ -32,14 +32,6 @@ Last updated: 2026-04-18 (run 81, workflow 24601813049)
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
 | **TOTAL** | **518** | **187** | **3 sorry** |
 
-## Open Sorry Obligations (confirmed lake build run81)
-
-| Theorem | File | Blocking gap |
-|---------|------|-------------|
-| putVarint_freeze_getVarint_8byte | VarIntRoundtrip.lean | putU32_bytes_unchanged in OctetsMut.lean |
-| putVarint_first_byte_tag (8-byte) | VarIntRoundtrip.lean | Same |
-| longHeader_roundtrip | PacketHeader.lean | Full buffer model needed |
-
 ## FV Targets
 
 | Target | Description | Phase | File | Notes |
@@ -50,18 +42,19 @@ Last updated: 2026-04-18 (run 81, workflow 24601813049)
 | T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | DONE |
 | T29 | QUIC packet-header first-byte | 4 | FVSquad/PacketHeader.lean | 14 thms, 1 sorry |
 | T30 | Varint 2-bit tag consistency | 0 | — | HIGH/LOW-effort, next |
-| T31 | H3 frame type codec round-trip | 0 | — | HIGH |
+| T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Phase 2 done (run 82) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
 | T33 | H3 Settings frame invariants | 0 | — | MEDIUM |
 
 ## Open PRs (lean-squad label)
 
-- PR run81 (branch lean-squad-run81-24601813049-packet-header-report):
-  Task 3 — PacketHeader.lean (T29) + Task 10 REPORT.md update
+- PR run82 (branch lean-squad-run82-24609842955-critique-h3spec):
+  Task 7 — CRITIQUE.md update (Targets 21/23/24/29)
+  Task 2 — H3 frame informal spec T31 (Phase 0→2)
 
 ## Next Actions
 
 1. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-2. T29: extend PacketHeader.lean with full byte-list encode/decode model
-3. T30: write Lean spec for varint 2-bit tag consistency (LOW effort, HIGH value)
-4. T31: write informal spec for H3 frame type codec
+2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
+3. T29: extend PacketHeader.lean with full byte-list encode/decode model
+4. T30: write Lean spec for varint 2-bit tag consistency

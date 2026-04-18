@@ -1,6 +1,6 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-04 (run 81)
+Last updated: 2026-04 (run 82)
 
 ## Theorem Count
 - Varint.lean: 10 theorems, 0 sorry ✅
@@ -26,9 +26,9 @@ Last updated: 2026-04 (run 81)
 - SendBufRetransmit.lean: 17 theorems, 0 sorry ✅
 - VarIntRoundtrip.lean: 8 theorems, 2 sorry 🔄
 - PacketNumEncodeDecode.lean: 10 theorems, 0 sorry ✅
-- **PacketHeader.lean: 14 theorems, 1 sorry 🔄 (NEW run 81)**
-- **Total run 81: 518 named theorems, 3 sorry**
+- PacketHeader.lean: 14 theorems, 1 sorry 🔄
+- **Total run 82: 518 named theorems, 3 sorry**
 
 ## Status Issue: #4 (open)
 ## Open PRs
-- run 81 PR pending (branch: lean-squad-run81-24601813049-packet-header-report)
+- run 82 PR (branch: lean-squad-run82-24609842955-critique-h3spec)

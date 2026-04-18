@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-18 (run 81)
+Last updated: 2026-04-18 (run 82)
 Lean toolchain: leanprover/lean4:v4.29.1 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -39,7 +39,7 @@ FVSquad.lean: import manifest for all modules
 | 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | Done (14 thms, 1 sorry for full RT) |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 0 | Identified (HIGH) |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 0 | NEW run78 (HIGH) |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 0 | NEW run78 (MEDIUM) |
 
@@ -70,8 +70,8 @@ FVSquad.lean: import manifest for all modules
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
 | FVSquad/VarIntRoundtrip.lean | 8 | 16 | 2 sorry (8-byte varint) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Done |
-| FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
-| **TOTAL** | **518** | **187** | **3 sorry** |
+| **PacketHeader.lean: 14 theorems, 1 sorry 🔄** | | | |
+| **TOTAL: 518 theorems, 3 sorry** | | | |
 
 ## Open Sorry Obligations (confirmed lake build run81)
 
@@ -86,9 +86,9 @@ Fix PacketHeader sorry: extend PacketHeader.lean with full byte-list model.
 
 ## Open PRs (lean-squad label)
 
-- PR run81 (branch lean-squad-run81-24601813049-packet-header-report):
-  Task 3 — PacketHeader.lean (T29, 14 theorems, 1 sorry)
-  Task 10 — REPORT.md updated (518 theorems, 24 files, 3 sorry, Lean 4.29.1)
+- PR run82 (branch lean-squad-run82-24609842955-critique-h3spec):
+  Task 7 — CRITIQUE.md update (Targets 21/23/24/29)
+  Task 2 — H3 frame informal spec (T31, Phase 0→2)
 
 ## Status Issue
 
@@ -105,14 +105,24 @@ Issue #4 (open)
 - OQ-T29-3 (run73): pkt_num/key_phase not in to_bytes/from_bytes roundtrip
 - OQ-T23-1 (run74): over-long encoding tag consistency (put_varint_with_len)
 - OQ-T23-2 (run74): OctetsMut.get_varint ≡ Octets.get_varint equivalence
+- OQ-T31-1 (run82): from_bytes behavior with payload_length > bytes.len()
+- OQ-T31-2 (run82): 0-length frame handling incomplete (TODO in code)
+- OQ-T31-3 (run82): Settings GREASE round-trip reconstruction
+- OQ-T31-4 (run82): payload_length vs bytes.len() precondition not enforced for non-Settings
 
 ## Next Priority Targets
 
 1. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry in VarIntRoundtrip.lean (Task 5)
-2. T29 PacketHeader.lean full buffer model → closes 1 sorry (Task 4+5)
-3. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines; Task 3)
-4. T31 H3 frame round-trip (Task 2 informal spec first)
+2. T31 H3 frame formal spec (Task 3): write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush
+3. T29 PacketHeader.lean full buffer model → closes 1 sorry (Task 4+5)
+4. T30: write Lean spec for varint 2-bit tag consistency (LOW effort, HIGH value; ~40 Lean lines)
 5. T22 RecvBuf flow-control bound
+
+## CRITIQUE.md Status (run 82)
+
+Last updated: 2026-04-18 17:20 UTC (commit d951c7e1)
+Covers: Targets 1-29, 518 theorems, 3 sorry
+New additions: Targets 21/23/24/29 sections, refreshed Gaps, new Positive Findings
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -135,7 +145,7 @@ Issue #4 (open)
 - PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
 - typeCode/longFirstByte proofs: `cases ty` + simp + omega (not decide)
 
-## CI Status (run81)
+## CI Status (run82)
 
 - lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
 - lake build: passes with 27 jobs, 3 sorry warnings, 0 errors (run81)
