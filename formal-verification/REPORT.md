@@ -2,31 +2,34 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 504 named theorems + 175 examples, **2 `sorry`** (8-byte
-varint case), 23 Lean files (Lean 4.29.0, no Mathlib).
+**Status**: ✅ ACTIVE — 518 named theorems + 187 examples, **3 `sorry`** (8-byte
+varint case ×2 + PacketHeader full-roundtrip ×1), 24 Lean files (Lean 4.29.1, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-18 03:40 UTC
-- **Commit**: `bc4a6ced`
+- **Date**: 2026-04-18 09:33 UTC
+- **Commit**: `b8c5001c`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **504 named theorems**
-across 23 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **518 named theorems**
+across 24 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`) to
 stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire encoding
-(`StreamId`, `PacketNumLen`, `SendBufRetransmit`). All proofs are verified by
-`lake build` with **0 sorry** remaining. Highlights include: formal proof of a
-*real RFC 9000 §A.3 conformance property* (`decode_pktnum_correct`); formal
-confirmation of an **`Ord` contract violation** in HTTP/3 stream scheduling
-(`StreamPriorityKey`); cross-module write-then-read round-trips for all integer
-widths (`OctetsRoundtrip`); and RFC 9000 §2.1 stream-ID classification laws
-(`StreamId`). Runs 64–74 added four new files (92 new theorems) and an
-informal spec for the QUIC packet-header round-trip (T29).
+(`StreamId`, `PacketNumLen`, `SendBufRetransmit`). Highlights include: formal
+proof of a *real RFC 9000 §A.3 conformance property* (`decode_pktnum_correct`);
+formal confirmation of an **`Ord` contract violation** in HTTP/3 stream
+scheduling (`StreamPriorityKey`); cross-module write-then-read round-trips for
+all integer widths (`OctetsRoundtrip`); RFC 9000 §2.1 stream-ID classification
+laws (`StreamId`); and — new in run 81 — **14 theorems covering QUIC
+packet-header first-byte encoding** (`PacketHeader`), including type-code
+round-trip, FORM_BIT/FIXED_BIT invariants, and injectivity of both type-code
+and first-byte functions. 3 sorry remain: 2 in VarIntRoundtrip (8-byte varint
+case awaiting a `putU32_bytes_unchanged` lemma) and 1 in PacketHeader (full
+buffer roundtrip, deferred to a richer model).
 
 ---
 
@@ -41,6 +44,7 @@ graph TD
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
         OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
+        PacketHeader["PacketHeader.lean<br/>14 theorems"]
     end
     subgraph L2["Layer 2 — Protocol algorithms"]
         RangeSet["RangeSet.lean<br/>16 theorems"]
@@ -81,6 +85,7 @@ graph LR
     O["Octets.lean<br/>48 theorems<br/>getU16_split ✅"]
     OM["OctetsMut.lean<br/>27 theorems<br/>putU8_getU8_roundtrip ✅"]
     ORT["OctetsRoundtrip.lean<br/>20 theorems<br/>putU16_freeze_getU16 ✅"]
+    PH["PacketHeader.lean<br/>14 theorems<br/>typeCode_roundtrip ✅"]
 ```
 
 **Key results**:
@@ -96,6 +101,15 @@ graph LR
   widths
 - `putU8/16/32_freeze_getU8/16/32` (OctetsRoundtrip): cross-module write
   (OctetsMut) then immutable-cursor read (Octets) round-trips
+- `typeCode_roundtrip` (PacketHeader): encoding the type code then decoding
+  it returns the original `PacketType` — the 2-bit long-header type field is
+  a lossless bijection on `{Initial, ZeroRTT, Handshake, Retry}`
+- `longFirstByte_form_bit`, `longFirstByte_fixed_bit` (PacketHeader):
+  FORM_BIT (0x80) and FIXED_BIT (0x40) are always set in long-header packets
+- `shortFirstByte_no_form_bit` (PacketHeader): FORM_BIT is always clear in
+  short-header packets — the two packet families are distinguishable by bit 7
+- `longFirstByte_type_bits` (PacketHeader): the 2-bit type field extracted
+  from the first byte equals the original type code
 
 ### Layer 2 — Protocol Algorithms (11 files, ~230 theorems)
 
@@ -187,7 +201,8 @@ graph LR
 | `SendBufRetransmit.lean` | 17 | 10 | ✅ | `retransmit_offset_ge` |
 | `VarIntRoundtrip.lean` | 8 | 16 | 🔄 2 sorry | `putVarint_freeze_4byte` |
 | `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
-| **Total** | **504** | **175** | — | **2 sorry** (8-byte varint) |
+| `PacketHeader.lean` | 14 | 12 | 🔄 1 sorry | `typeCode_roundtrip` |
+| **Total** | **518** | **187** | — | **3 sorry** |
 
 ---
 
@@ -311,13 +326,15 @@ timeline
         RecvBuf insertAny, Octets, OctetsMut fix : 85 theorems
     section Runs 64–74
         OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit : 92 theorems
+    section Runs 75–81
+        VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader : 32 theorems
 ```
 
 ---
 
 ## Toolchain
 
-- **Prover**: Lean 4 (version 4.29.0)
+- **Prover**: Lean 4 (version 4.29.1)
 - **Libraries**: stdlib only — no Mathlib dependency
 - **CI**: `.github/workflows/lean-ci.yml` — runs `lake build` on every PR
   that touches `formal-verification/lean/**`
@@ -341,4 +358,4 @@ timeline
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 24504131685](https://github.com/dsyme/quiche/actions/runs/24504131685).
+> [workflow run 24601813049](https://github.com/dsyme/quiche/actions/runs/24601813049).
