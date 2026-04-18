@@ -1,6 +1,6 @@
 # FV State Summary — dsyme/quiche
 
-Last updated: 2026-05 (run 80 — Everest security pivot)
+Last updated: 2026-04 (run 81)
 
 ## Theorem Count
 - Varint.lean: 10 theorems, 0 sorry ✅
@@ -14,21 +14,21 @@ Last updated: 2026-05 (run 80 — Everest security pivot)
 - PacketNumDecode.lean: 23 theorems, 0 sorry ✅
 - Cubic.lean: 26 theorems, 0 sorry ✅
 - RangeBuf.lean: 19 theorems, 0 sorry ✅
-- RecvBuf.lean: 29 theorems, 0 sorry ✅
+- RecvBuf.lean: 38 theorems, 0 sorry ✅
 - SendBuf.lean: 26 theorems, 0 sorry ✅
 - CidMgmt.lean: 21 theorems, 0 sorry ✅
-- **QuicNonce.lean: 8 theorems, 0 sorry ✅ (NEW run 80)**
-- **PktNumWindow.lean: 7 theorems, 0 sorry ✅ (NEW run 80)**
-- **QuicHeaderProtection.lean: 9 theorems, 0 sorry ✅ (NEW run 80)**
-- (many others — see memory.md for full list)
-- **Total run 80: ~504 + 24 new theorems = ~528 named theorems, 2 sorry (pre-existing VarIntRoundtrip)**
-
-## Security Targets (Everest-style, added run 80)
-- T34: QUIC nonce injectivity — FVSquad/QuicNonce.lean — DONE (0 sorry)
-- T35: Anti-replay window soundness — FVSquad/PktNumWindow.lean — DONE (0 sorry)
-- T36: Header protection round-trip — FVSquad/QuicHeaderProtection.lean — DONE (0 sorry)
-- T37: Anti-amplification rate bound — IDENTIFIED (future work)
+- StreamPriorityKey.lean: 21 theorems, 0 sorry ✅
+- OctetsMut.lean: 27 theorems, 0 sorry ✅
+- Octets.lean: 48 theorems, 0 sorry ✅
+- OctetsRoundtrip.lean: 20 theorems, 0 sorry ✅
+- StreamId.lean: 35 theorems, 0 sorry ✅
+- PacketNumLen.lean: 20 theorems, 0 sorry ✅
+- SendBufRetransmit.lean: 17 theorems, 0 sorry ✅
+- VarIntRoundtrip.lean: 8 theorems, 2 sorry 🔄
+- PacketNumEncodeDecode.lean: 10 theorems, 0 sorry ✅
+- **PacketHeader.lean: 14 theorems, 1 sorry 🔄 (NEW run 81)**
+- **Total run 81: 518 named theorems, 3 sorry**
 
 ## Status Issue: #4 (open)
 ## Open PRs
-- run 80 PR pending (branch: lean-squad-run80-24599671257-everest-security)
+- run 81 PR pending (branch: lean-squad-run81-24601813049-packet-header-report)
