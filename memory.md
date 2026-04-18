@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-16 (run 74)
+Last updated: 2026-04-18 (run 79)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -31,16 +31,19 @@ FVSquad.lean: import manifest for all modules
 | 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done |
 | 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs | 5 | Done |
 | 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs | 0 | Identified |
-| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 2 | Informal Spec (run74) |
-| 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 0 | Identified |
+| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 2 sorry for 8-byte) |
+| 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
 | 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs | 0 | Identified |
 | 26 | CUBIC W_cubic vs W_est | quiche/src/recovery/congestion/cubic.rs | 0 | Identified (MEDIUM) |
 | 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) |
 | 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
 | 29 | QUIC packet-header roundtrip | quiche/src/packet.rs | 2 | Informal Spec (run73) |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 0 | Identified (HIGH) |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 0 | NEW run78 (HIGH) |
+| 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
+| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 0 | NEW run78 (MEDIUM) |
 
-## Lean File Registry (actual counts from lake build)
+## Lean File Registry (verified lake build run79)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -65,14 +68,18 @@ FVSquad.lean: import manifest for all modules
 | FVSquad/StreamId.lean | 35 | 8 | Done |
 | FVSquad/PacketNumLen.lean | 20 | 10 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | 10 | Done |
-| **TOTAL** | **486** | **156** | **0 sorry** |
-
-Note: previous runs overestimated at 521; verified count from grep is 486.
+| FVSquad/VarIntRoundtrip.lean | 8 | 16 | 2 sorry (8-byte varint) |
+| FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Done |
+| **TOTAL** | **504** | **175** | **2 sorry** |
 
 ## Open PRs (lean-squad label)
 
-- PR run74 (branch lean-squad-run74-24504131685-varint-roundtrip-report):
-  Task 2+10 — T23 varint roundtrip informal spec + REPORT update
+- PR run78 (branch lean-squad-run78-24578215430-paper-research-e187acd3c26faf23):
+  Task 11 — Conference paper (paper.tex + paper.bib) + Task 1 T31/T32/T33
+- PR run79 (branch lean-squad-run79-24596073436-correspondence-paper):
+  Task 6 — CORRESPONDENCE.md (2 sorry found, Open Sorry Obligations section)
+  Task 11 — paper.tex accuracy (0 sorry → 2 sorry)
+  REPORT.md: status + file inventory updated
 
 ## Status Issue
 
@@ -85,26 +92,24 @@ Issue #4 (open)
 - OQ-FC-1 (run70, not modelled): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found and corrected
 - OQ-T29-1 (run73): Initial token=None encodes as varint 0, decodes as Some([]) — asymmetry
-- OQ-T29-2 (run73): to_bytes does not validate CID lengths (only from_bytes does for QUIC v1)
-- OQ-T29-3 (run73): pkt_num/key_phase not in to_bytes/from_bytes roundtrip (handled by encrypt_hdr/decrypt_hdr)
+- OQ-T29-2 (run73): to_bytes does not validate CID lengths
+- OQ-T29-3 (run73): pkt_num/key_phase not in to_bytes/from_bytes roundtrip
 - OQ-T23-1 (run74): over-long encoding tag consistency (put_varint_with_len)
 - OQ-T23-2 (run74): OctetsMut.get_varint ≡ Octets.get_varint equivalence
+- **run79 CORRECTION**: VarIntRoundtrip.lean has 2 sorry (not 0 as previously recorded)
+  Both in 8-byte varint case; need putU32_bytes_unchanged lemma to close.
 
-## CORRESPONDENCE.md Coverage (run72)
+## CORRESPONDENCE.md Coverage (run79)
 
-All 21 Lean files covered in CORRESPONDENCE.md. No mismatches identified.
+All 23 Lean files covered. 2 sorry obligations documented in new section.
+No mismatches identified.
 
 ## Next Priority Targets
 
-1. T23 PacketHeader.lean — write Lean spec (Task 3): RT-1..RT-5 theorems
-   (actually this is PacketHeader, T29)
-1. T23 VarInt Roundtrip (cursor model) — write Lean spec (Task 3)
-   - informal spec at specs/varint_roundtrip_informal.md
-   - Bridge Varint.lean pure model to OctetsMutState/OctetsState
+1. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry in VarIntRoundtrip.lean (Task 5)
 2. T29 PacketHeader.lean — write Lean spec (Task 3)
-   - informal spec at specs/packet_header_informal.md
 3. T30 Varint 2-bit tag (LOW effort, HIGH value; ~40 Lean lines)
-4. T24 encode_pkt_num→decode_pkt_num composition
+4. T31 H3 frame round-trip (Task 2 informal spec first)
 5. T22 RecvBuf flow-control bound
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
@@ -125,17 +130,17 @@ All 21 Lean files covered in CORRESPONDENCE.md. No mismatches identified.
 - Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
 - Cross-module: private theorems must be re-proved inline
 
-## CI Status (run73 audit)
+## CI Status (run79)
 
 - lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- lake build: passes with 24 jobs, 0 errors, 0 sorry (last known good: run67-73)
+- lake build: passes with 26 jobs, 2 sorry warnings, 0 errors (run79)
 - lean-toolchain: leanprover/lean4:v4.29.0
-- No issues found in run73 audit
 
 ## Lake Project
 
 No Mathlib dependency (lake-manifest.json is empty packages).
-FVSquad.lean imports 21 modules (in order): Octets, Varint, RangeSet,
+FVSquad.lean imports 23 modules (in order): Octets, Varint, RangeSet,
   Minmax, RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
-  OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit
+  OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
+  VarIntRoundtrip, PacketNumEncodeDecode
