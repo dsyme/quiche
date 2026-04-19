@@ -4,29 +4,30 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-14 03:54 UTC
-- **Commit**: `12d9f1cf`
+- **Date**: 2026-04-18 17:20 UTC
+- **Commit**: `d951c7e1`
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **20 modules with
-469 theorems + 146 examples, 0 sorry** (Lean 4.29.0, no Mathlib). Runs 65–67
-add `OctetsRoundtrip.lean` (20 theorems + 9 examples, run 65: cross-module
-put→freeze→get round-trip proofs for U8/U16/U32) and `PacketNumLen.lean` (20
-theorems + 10 examples, run 66: RFC 9000 §17.1 packet-number encoding-length
-characterisation). The prior run (64) added `StreamId.lean` (35 theorems + 8
-examples). The most notable results are: a **formal proof of an Ord law
-violation (OQ-1)** in `StreamPriorityKey::cmp` (antisymmetry fails in the
-both-incremental case — intentional by design), a complete byte-cursor
-correctness proof for the `Octets`/`OctetsMut` serialiser (including
-round-trips and non-aliasing), the RFC 9000 §17.1 coverage invariant for
-packet-number encoding, and `streamType_add_mul4` (RFC 9000 §2.1 stream-type
-orbit). Key previously noted results include `emitN_le_maxData` (RFC 9000 §4.1
-flow-control safety), `decode_pktnum_correct` (RFC 9000 §A.3 algorithm),
-`newScid_seq_fresh` (CID uniqueness), and `insertAny_inv` (out-of-order stream
-reassembly invariant).
+The formal verification suite for `quiche` now covers **24 modules with
+518 theorems + 187 examples, 3 sorry** (Lean 4.29.1, no Mathlib). Runs 68–81
+added `SendBufRetransmit.lean` (17 theorems + 10 examples, run 68: retransmit
+cursor semantics), `VarIntRoundtrip.lean` (8 theorems + 16 examples, run 75–77:
+OctetsMut→Octets varint round-trip with 2 sorry for the 8-byte case),
+`PacketNumEncodeDecode.lean` (10 theorems + 23 examples, run 76: encode↔decode
+composition proof with 0 sorry), and `PacketHeader.lean` (14 theorems + 12
+examples, run 81: QUIC packet-header first-byte encoding with 1 sorry for full
+round-trip). Runs 65–67 added `OctetsRoundtrip.lean` and `PacketNumLen.lean`;
+run 64 added `StreamId.lean`. The most notable results are: a **formal proof of
+an Ord law violation (OQ-1)** in `StreamPriorityKey::cmp`, a complete
+byte-cursor correctness proof for `Octets`/`OctetsMut`, the RFC 9000 §17.1
+coverage invariant for packet-number encoding, and the **end-to-end encode↔decode
+composition theorem** for QUIC packet numbers (`encode_decode_pktnum`, 0 sorry).
+Key previously noted results include `emitN_le_maxData` (RFC 9000 §4.1
+flow-control safety), `decode_pktnum_correct` (RFC 9000 §A.3), `newScid_seq_fresh`
+(CID uniqueness), and `insertAny_inv` (out-of-order stream reassembly).
 
 ---
 
@@ -191,54 +192,6 @@ before each incremental stream is served; (2) mixed urgency + incremental
 transitivity is proved only for urgency-distinct case; (3) RBTree structural
 invariants (tree balance under non-antisymmetric comparator) are out of scope.
 
----
-
-## Gaps and Recommendations
-
-Prioritised by impact:
-
-1. **RecvBuf general-case write** (high): the `insertContiguous` model covers
-   only the common in-order path.  The full `write()` function handles
-   out-of-order and overlapping data via BTreeMap range-splitting.  Verifying
-   invariant preservation for the general case — particularly the no-gap,
-   no-duplicate postcondition — is the highest-value remaining proof target
-   for the stream layer.
-
-2. **StreamPriorityKey OQ-1 resolution** (high): follow up with maintainers
-   on whether the `intrusive-collections` RBTree tolerates non-antisymmetric
-   comparators (OQ-1). If it does not, the incremental round-robin is
-   UB-adjacent. A theorem bounding the scheduling round-trip count would
-   quantify the fairness guarantee.
-
-3. **Connection ID sequence management** (medium — partially addressed):
-   CID byte-content uniqueness and the `retire_if_needed` path are still
-   unverified. Disjointness of active CID *values* (not just seqs) is
-   security-critical per RFC 9000 §5.1.
-
-4. **CUBIC w_cubic dynamic growth** (medium): the convexity and
-   Reno-friendly transition of the CUBIC window curve are not yet proved.
-   `wCubicNat_monotone` establishes non-decrease in time; the stronger
-   property that W_cubic(t) > W_Reno(t) beyond the transition point would
-   confirm correct AIMD–CUBIC mode switching.
-
-5. **RTT lower-bound / decay rate** (medium): add theorems showing
-   `smoothed_rtt` cannot fall below some fraction of `min_rtt`.  This
-   would catch an under-smoothing bug that could make the congestion
-   controller too aggressive.
-
-6. **Flow control u64 overflow guard** (medium): add a bounded model
-   (restrict `consumed + window < 2^62`) and prove no overflow occurs
-   under the varint limit.  This closes the one known gap between the
-   Lean model and the Rust u64 arithmetic.
-
-7. **SendBuf retransmission and reset paths** (medium): the current model
-   covers write/emit/ack/updateMaxData but not `retransmit()`, `reset()`,
-   `shutdown()`, or `stop()`.  These control the stream termination state
-   machine and interact non-trivially with flow control.
-
-8. **Varint wire-format tag bits** (low): add a theorem verifying that the
-   2-bit tag in the first byte of an encoded varint matches the length class.
-   Current proofs do not cover this aspect.
 
 ---
 
@@ -303,6 +256,21 @@ Prioritised by impact:
   `actual_pn = expected_pn − pnHwin`.  The theorem was tightened to use strict
   `<` (as specified in RFC 9000 §A.3 itself), confirming that the FV process
   caught a real precision gap that the original code review missed.
+
+- **`encode_decode_pktnum`** (PacketNumEncodeDecode.lean, run 76): the first
+  end-to-end encode↔decode composition theorem — formally proves that for any
+  valid QUIC packet number `pn` and largest-acknowledged `la`, the sender's
+  chosen encoding length `pktNumLen(pn, la)` satisfies the RFC 9000 §A.2
+  proximity conditions needed for the receiver to decode `pn` correctly. This
+  bridges the two independent halves of the packet-number lifecycle
+  (`PacketNumLen.lean` and `PacketNumDecode.lean`) with zero sorry.
+
+- **`retransmit_inv` + `retransmit_noop_acked`** (SendBufRetransmit.lean,
+  run 68): together these prove the two key safety properties of the
+  retransmit operation: (1) the send-buffer invariant is preserved, and (2)
+  acknowledged data cannot be requeued. The `retransmit_emitOff_formula`
+  theorem gives a complete, executable specification of the cursor-level
+  semantics, enabling future proofs about the retransmit→emit composition.
 
 ---
 
@@ -743,68 +711,194 @@ handled.
 
 ---
 
+### Target 21: SendBuf retransmit model (`FVSquad/SendBufRetransmit.lean`) — 17 theorems ✅ *(added run 68)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `retransmit_inv` | high | **high** | Invariant (ackOff ≤ emitOff ≤ off ≤ maxData) preserved after retransmit — the central safety guarantee |
+| `retransmit_emitOff_formula` | high | **high** | Exact formula for new emitOff: `min(s.emitOff, max(s.ackOff, off))` — specifies full semantics |
+| `retransmit_emitOff_le` | high | **high** | `retransmit` can only lower or keep emitOff — proves backtracking direction is correct |
+| `retransmit_noop_acked` | high | **high** | Fully acknowledged ranges (`off + len ≤ ackOff`) are no-ops — cannot un-acknowledge data |
+| `retransmit_noop_unemitted` | high | medium | Ranges not yet emitted (`off ≥ emitOff`) do not change emitOff — retransmit is idempotent for not-yet-sent data |
+| `retransmit_idempotent` | mid | medium | Applying retransmit twice gives the same state as once — no stale bookkeeping |
+| `retransmit_send_backlog_le` | mid | medium | The send backlog (`emitOff - ackOff`) does not increase past `off - ackOff` — an upper bound on queued retransmits |
+| `retransmit_emitN_inv` | high | **high** | Invariant preserved through a subsequent `emitN` call — lifecycle composition is safe |
+| `retransmit_emitOff_anti_mono` | mid | medium | emitOff is anti-monotone under retransmit: if one retransmit is a prefix of another, the prefix has smaller effect |
+| `retransmit_emitN_bounded` | mid | medium | After retransmit + emitN, offset stays within `maxData` bound |
+| `retransmit_emitN_le_maxData` | high | **high** | Bytes re-emitted after retransmit respect the flow-control window |
+| `retransmit_off_unchanged` + siblings | low | low | Effect theorems: ackOff, off, maxData, finOff unchanged — only emitOff is modified |
+| 4 simp accessor lemmas | low | low | `retransmit.off/ackOff/maxData/finOff` by definition |
+| 10 examples | low | low | Concrete retransmit scenarios verified by `decide` |
+
+**Assessment**: `retransmit_inv` and `retransmit_emitOff_formula` are the
+highest-value results. The formula theorem gives a complete, executable
+specification for the retransmit cursor effect; any mismatch between the
+formula and the Rust implementation would indicate a semantic bug.
+`retransmit_noop_acked` proves the critical safety property that acknowledged
+data cannot be requeued. The `retransmit_emitN_inv` and
+`retransmit_emitN_le_maxData` theorems ensure that the retransmit→emit
+lifecycle is safe under the flow-control window. **Approximations**: only the
+scalar cursor effect is modelled; byte contents and the deque shape (individual
+`RangeBuf.pos` resets) are abstracted away. **Gap**: the interaction between
+retransmit and FIN consistency (can retransmit set emitOff below finOff?) is
+not explicitly proved.
+
+---
+
+### Target 23: VarInt cross-module round-trip (`FVSquad/VarIntRoundtrip.lean`) — 8 theorems 🔄 *(2 sorry — run 75–77)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `putVarint_freeze_getVarint_1byte` | high | **high** | `put_varint` (1-byte) → `freeze` → `get_varint` = identity for v < 64 |
+| `putVarint_freeze_getVarint_2byte` | high | **high** | 2-byte round-trip for 64 ≤ v < 16384 |
+| `putVarint_freeze_getVarint_4byte` | high | **high** | 4-byte round-trip for 16384 ≤ v < 1073741824 |
+| `putVarint_freeze_getVarint_8byte` | high | **high** | 8-byte round-trip for v ≥ 1073741824 — **sorry** (blocked on `putU32_bytes_unchanged`) |
+| `putVarint_freeze_getVarint` | high | **high** | Combined round-trip for all valid QUIC varint values — **sorry** (inherits 8-byte sorry) |
+| `putVarint_off` | mid | medium | Cursor advances by `varintLen(v)` after `put_varint` |
+| `putVarint_len` | mid | medium | `putVarint` places exactly `varintLen(v)` bytes |
+| `putVarint_first_byte_tag` | mid | medium | First-byte tag bits equal `varintParseLen(first_byte) - 1` — partially sorry for 8-byte |
+| 16 examples | low | low | Concrete put→freeze→get at each encoding length verified by `decide` |
+
+**Assessment**: The three completed round-trip theorems (1-byte, 2-byte,
+4-byte) directly verify that the varint codec correctly encodes and decodes 75%
+of the QUIC varint value space. The 2 sorry for the 8-byte path are a known gap:
+the proof requires `putU32_bytes_unchanged` (a lemma about non-aliasing of two
+sequential `putU32` calls in `OctetsMut`), which was identified as a pending
+addition to `OctetsMut.lean`. Resolving these 2 sorry is a low-effort,
+high-value next step. **Gap**: `putVarint_first_byte_tag` is partly proved but
+has a sorry for the 8-byte encoding path for the same reason.
+
+---
+
+### Target 24: Packet-number encode↔decode composition (`FVSquad/PacketNumEncodeDecode.lean`) — 10 theorems ✅ *(run 76)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `encode_decode_pktnum` | high | **high** | **Main composition theorem**: `decodePktNum la (pn % pnWin(pktNumLen pn la)) (pktNumLen pn la) = pn` for all valid pn, la |
+| `pktNumLen_window_sufficient` | high | **high** | Bridge lemma: window ≥ 2 × numUnacked — establishes that pktNumLen always picks a sufficient width |
+| `pnHwin_ge_numUnacked` | high | **high** | Half-window ≥ numUnacked — the RFC 9000 §A.2 proximity precondition is always satisfied |
+| `pn_le_la_plus_hwin` | high | **high** | Upper proximity bound: satisfied by pktNumLen choice — enables decode_pktnum_correct |
+| `la_plus1_lt_pn_plus_hwin` | high | **high** | Lower proximity bound: satisfied — other precondition of decode_pktnum_correct |
+| `pktNumLen_win_le_overflow` | mid | medium | pnWin(pktNumLen) ≤ 2^62 — no overflow in the decode arithmetic |
+| `encode_decode_same` | mid | medium | Corollary: pn = la (zero unacknowledged) round-trips correctly |
+| `encode_decode_same_1byte` | mid | medium | Corollary: 1-byte case with `la % 256` |
+| `encode_decode_one_byte` | mid | medium | Corollary: pn within 126 of la uses 1-byte encoding and round-trips |
+| `pktNumLen_self_eq_one` | low | low | pktNumLen la la = 1 — encoding at pn=la uses 1 byte |
+| 23 examples | low | low | All encoding-length boundaries and round-trips verified by `native_decide` |
+
+**Assessment**: `encode_decode_pktnum` is one of the highest-value theorems in
+the entire suite. It formally closes the encode↔decode composition for all four
+QUIC packet-number encoding lengths, bridging `PacketNumLen.lean` (sender) and
+`PacketNumDecode.lean` (receiver). Any bug in the sender's length-selection
+logic (`pktNumLen`) or the receiver's decoding arithmetic (`decodePktNum`) would
+violate this theorem. The proof relies on 5 auxiliary lemmas that collectively
+establish the RFC 9000 §A.2 proximity conditions — these are proved for all
+valid inputs with only the QUIC protocol cap (pn < 2^62) and the in-flight
+bound (numUnacked ≤ 2^31) as preconditions. **Approximation**: the theorem
+models only the arithmetic of encode↔decode; the actual buffer I/O (writing
+`pn % pnWin` to the wire and reading it back) is abstracted away. **Gap**:
+the receiver may receive packets with pn < la (reordered or replayed packets);
+this case is not modelled.
+
+---
+
+### Target 29: QUIC packet-header first-byte (`FVSquad/PacketHeader.lean`) — 14 theorems 🔄 *(1 sorry — run 81)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `typeCode_roundtrip` | high | **high** | `typeOfCode(typeCode(ty)) = some ty` for all 4 long-header types — encode↔decode bijection for the 2-bit type field |
+| `typeOfCode_roundtrip` | high | **high** | `typeCode(ty) = some c → typeOfCode c = some ty` — inverse direction |
+| `typeCode_in_range` | mid | medium | Type code is always 0–3 — no out-of-range type codes are emitted |
+| `typeCode_injective` | mid | medium | Different packet types have different codes — no type collisions |
+| `longFirstByte_form_bit` | high | **high** | FORM_BIT (0x80) is always set in long-header first byte — wire format requirement |
+| `longFirstByte_fixed_bit` | high | **high** | FIXED_BIT (0x40) is always set — RFC 9000 §17.2 validity |
+| `longFirstByte_type_bits` | high | **high** | Type code occupies bits 5–4 of first byte — byte-layout correctness |
+| `longFirstByte_byte_range` | mid | medium | First byte is in [0, 255] — always a valid byte value |
+| `longFirstByte_injective` | high | **high** | Different long-header packet types produce different first bytes — decode is unambiguous |
+| `shortFirstByte_no_form_bit` | high | **high** | FORM_BIT is always clear in short-header first byte — type disambiguation is correct |
+| `shortFirstByte_fixed_bit` | high | **high** | FIXED_BIT is always set in short-header first byte — RFC 9000 §17.3 |
+| `short_long_first_byte_differ` | high | **high** | Short-header and long-header first bytes are always distinct — endpoint can always identify packet type |
+| `version_roundtrip` | high | **high** | QUIC version field (32-bit big-endian) round-trips correctly via `putU32`/`getU32` |
+| `longHeader_roundtrip` | high | **high** | Full Header encode↔decode round-trip — **sorry** (requires richer byte-list buffer model) |
+| 12 examples | low | low | Concrete first-byte values for each packet type verified by `decide` |
+
+**Assessment**: The type-code bijection and bit-presence theorems are
+high-value: a bug in the `to_bytes`/`from_bytes` first-byte encoding would
+violate `typeCode_roundtrip`, `longFirstByte_form_bit`, or `short_long_first_byte_differ`,
+causing all QUIC traffic to be misclassified. The `version_roundtrip` theorem
+closes the version-field correctness proof via the existing `OctetsRoundtrip`
+infrastructure. The 1 remaining sorry (`longHeader_roundtrip`) represents the
+full buffer encode↔decode round-trip, which requires extending the model to
+include DCID, SCID, token, and payload-length fields. This is the key remaining
+gap for this target. **Approximations**: only the first-byte layer and the
+version field are modelled; pkt_num_len (bits 1–0) and key_phase (bit 2) are
+fixed to 0; header protection is out of scope.
+
+---
+
 ## Gaps and Recommendations
 
 ### Highest-priority gaps (most likely to catch real bugs)
 
-1. **SendBuf: retransmission model** — The current SendBuf proofs cover only
-   the write→emit→ack lifecycle; the retransmit path (`retransmit_data`) is
-   entirely unmodelled. A correctness bug there could silently drop or
-   duplicate stream data. This is the single most impactful gap in the suite.
+1. **VarIntRoundtrip 8-byte sorry** — Add `putU32_bytes_unchanged` lemma to
+   `OctetsMut.lean`, which directly closes 2 sorry in `VarIntRoundtrip.lean`
+   (the 8-byte encode↔decode round-trip and first-byte tag consistency).
+   Low effort (~25 Lean lines), high value.
 
-2. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
+2. **PacketHeader full round-trip sorry** — Extend `PacketHeader.lean` with
+   a byte-list model of DCID, SCID, token, and payload-length fields. This
+   would close the `longHeader_roundtrip` sorry and formally verify the entire
+   QUIC header serialisation path. Medium effort, very high value.
+
+3. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
    to the peer as the receive window. The model does not prove this bound is
    maintained. A violation could cause the peer to send more data than we
    budgeted for, leading to memory exhaustion.
 
-3. **put_varint→get_varint cross-module round-trip** — `OctetsMut::put_varint`
-   then `Octets::get_varint` should recover the original value end-to-end.
-   `OctetsRoundtrip.lean` proves the U8/U16/U32 round-trips but not the
-   varint codec which uses a sequence of conditional U8 writes. This is the
-   remaining piece to fully close the serialiser verification.
+4. **H3 frame type codec round-trip (T31)** — The HTTP/3 frame codec
+   (`quiche/src/h3/frame.rs`) has clear round-trip invariants: for simple frame
+   types (GoAway, MaxPushId, CancelPush), `from_bytes(frame_type, to_bytes(f)) = f`.
+   Informal spec is the next step (Task 2).
 
-4. **encode_pkt_num → decode_pkt_num composition** — `PacketNumLen.lean`
-   proves the encoding-length selection and `PacketNumDecode.lean` proves
-   the decoding algorithm independently, but the composition theorem
-   (`encode` then `decode` recovers the original packet number) is not
-   formally established. This would close the QUIC packet-number lifecycle.
-
-5. **PacketHeader encoding** — QUIC packet headers are encoded/decoded in
-   `quiche/src/packet.rs`. Formal verification of the header encode/decode
-   round-trip would cover the entry point for all QUIC traffic.
-
-6. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
-   `stream_do_send` (`quiche/src/lib.rs:5894`) is not proved correct. A
-   formal proof that the guard exactly matches the stream type conditions from
-   RFC 9000 §2.1 would close this gap.
+5. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
+   `stream_do_send` (`quiche/src/lib.rs`) is not proved correct relative to
+   RFC 9000 §2.1 stream-type classification.
 
 ### Moderate priority
 
-7. **CUBIC: Reno-friendly transition** — The W_cubic vs W_est comparison
-   (RFC 8312bis §5.8) is unmodelled. This determines whether CUBIC enters
-   Reno-friendly mode; a bug could make CUBIC unfair to coexisting Reno flows.
+6. **CUBIC: Reno-friendly transition** — W_cubic vs W_est comparison
+   (RFC 8312bis §5.8) is unmodelled. This determines CUBIC's fairness to
+   coexisting Reno flows.
 
-8. **CidMgmt: retire_if_needed** — The path that auto-retires excess SCIDs
-   is not modelled. A bug could leave dangling CID entries above the RFC 9000
-   §5.1.1 cap.
+7. **CidMgmt: retire_if_needed** — The auto-retire path for excess SCIDs
+   is not modelled. Prove it maintains `activeCids ≤ active_connection_id_limit`
+   (RFC 9000 §5.1.1).
 
-9. **NewReno: AIMD composition** — Multiple ACK+loss event cycles are not
-   proved to converge. A multi-event induction theorem would confirm the
-   AIMD steady-state behaviour.
+8. **NewReno: AIMD composition** — Repeated ACK+loss cycles are not proved
+   to converge. A multi-event induction would confirm AIMD steady-state.
+
+9. **Varint 2-bit tag consistency (T30)** — Prove that the first-byte tag
+   bits emitted by `put_varint` are always consistent with the length prefix
+   (i.e. `varintParseLen(first_byte) = varintLen(v)`). ~40 Lean lines,
+   directly closes the Varint.lean gap noted in early critique runs.
 
 ### Observations on proof strength
 
-- The **strongest** results (highest bug-catching potential with respect to
-  model fidelity) are: `decode_pktnum_correct`, `emitN_le_maxData`,
-  `newScid_seq_fresh`, `insertAny_inv`, `streamType_add_mul4`,
-  `putU16_freeze_getU16`/`putU32_freeze_getU32`, and `pktNumLen_k_coverage`.
-  These directly prove properties that, if violated in the implementation,
-  would cause protocol errors or data corruption.
+- The **strongest** results (highest bug-catching potential): `decode_pktnum_correct`,
+  `encode_decode_pktnum`, `emitN_le_maxData`, `newScid_seq_fresh`,
+  `insertAny_inv`, `streamType_add_mul4`, `putU16_freeze_getU16`/
+  `putU32_freeze_getU32`, `pktNumLen_k_coverage`, `retransmit_inv`, and
+  `short_long_first_byte_differ`. These directly prove properties that, if
+  violated, would cause protocol errors or data corruption.
 - The **weakest** results are the `trivial` structural theorems (e.g., `new_*`
-  postconditions that just check struct field initialisation). These are
-  useful for establishing baseline consistency but have essentially zero
-  bug-catching value.
+  postconditions checking struct field initialisation). Useful for baseline
+  consistency but low bug-catching value.
 - The **OQ-1 finding** (StreamPriorityKey antisymmetry) remains the only
   formal finding that diverges from a standard contract. Its impact is unclear
-  without understanding whether the red-black tree scheduler relies on
-  antisymmetry; a maintainer response on this question would be valuable.
+  without understanding whether the scheduler relies on antisymmetry; a
+  maintainer response would be valuable.
+- The **3 sorry** (2 in VarIntRoundtrip, 1 in PacketHeader) are all identified
+  with clear resolutions: adding one lemma to OctetsMut.lean closes 2 of them;
+  the third requires a richer buffer model.
+
+
