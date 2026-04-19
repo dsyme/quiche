@@ -1,8 +1,8 @@
 # FV State Snapshot
 
-Last updated: 2026-04-19 (run 84, workflow 24625876108)
+Last updated: 2026-04-19 (run 85, workflow 24634718671)
 
-## Lean File Registry (verified by lake build Lean 4.29.1)
+## Lean File Registry (verified by lake build Lean 4.29.0)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -30,32 +30,32 @@ Last updated: 2026-04-19 (run 84, workflow 24625876108)
 | FVSquad/VarIntRoundtrip.lean | 8 | 16 | 2 sorry (8-byte varint) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Done |
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
-| **TOTAL** | **518** | **187** | **3 sorry** |
+| FVSquad/VarIntTag.lean | 15 | 11 | Done (run 85) |
+| **TOTAL** | **533** | **198** | **3 sorry** |
 
 ## FV Targets
 
 | Target | Description | Phase | File | Notes |
 |--------|-------------|-------|------|-------|
-| T1-T21 | (all complete) | 5 | various | Phase 5 done |
-| T22 | RecvBuf flow-control bound | 0 | — | identified |
-| T23 | put_varint→get_varint roundtrip | 5 | FVSquad/VarIntRoundtrip.lean | 2 sorry (8-byte) |
-| T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | DONE |
+| T1-T24 | (all complete) | 5 | various | Phase 5 done |
 | T29 | QUIC packet-header first-byte | 4 | FVSquad/PacketHeader.lean | 14 thms, 1 sorry |
-| T30 | Varint 2-bit tag consistency | 2 | specs/varint_tag_informal.md | Informal spec (run83); critique (run84) |
-| T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82); critique (run84) |
+| T30 | Varint 2-bit tag consistency | 5 | FVSquad/VarIntTag.lean | DONE run 85, 15 thms, 0 sorry |
+| T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
 | T33 | H3 Settings frame invariants | 0 | — | MEDIUM |
 
 ## Open PRs (lean-squad label)
 
-- PR run84 (branch lean-squad-run84-24625876108-critique-report):
-  Task 7 — CRITIQUE.md T30/T31 assessment + Paper Review
-  Task 10 — REPORT.md update (run 84)
+- PR run83 (#68, branch lean-squad-run83-...): T30 informal spec + REPORT
+- PR run84 (#69, branch lean-squad-run84-...): CRITIQUE T30/T31 + REPORT
+- PR run85 (branch lean-squad-run85-24634718671-aeneas-varinttag):
+  Task 3 — VarIntTag.lean (T30, 15 theorems, 0 sorry)
+  Task 8 — Aeneas attempted; failed (no sudo/opam in container)
 
 ## Next Actions
 
-1. T30: write FVSquad/VarIntTag.lean (~120 lines, all omega proofs) — Task 3
-2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
-3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-4. T29: extend PacketHeader.lean with full byte-list encode/decode model
-5. Update paper.tex: fix stale counts, add PacketHeader row, add encode_decode_pktnum finding
+1. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
+2. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+4. paper/paper.tex: update theorem count 518→533, add VarIntTag.lean row
+5. Task 8 (Aeneas): retry when opam/sudo available

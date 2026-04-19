@@ -1,7 +1,7 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-19 (run 84)
-Lean toolchain: leanprover/lean4:v4.29.1 (via elan)
+Last updated: 2026-04-19 (run 85)
+Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
 
@@ -38,12 +38,12 @@ FVSquad.lean: import manifest for all modules
 | 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) |
 | 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry for full RT |
-| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 2 | Informal spec done (run 83); critique added run 84 |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82); critique added run 84 |
+| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | DONE run 85 (15 thms, 0 sorry) |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 0 | NEW run78 (MEDIUM) |
 
-## Lean File Registry (verified lake build run81)
+## Lean File Registry (verified lake build run 85)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -71,7 +71,8 @@ FVSquad.lean: import manifest for all modules
 | FVSquad/VarIntRoundtrip.lean | 8 | 16 | 2 sorry (8-byte varint) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Done |
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
-| **TOTAL** | **518** | **187** | **3 sorry** |
+| FVSquad/VarIntTag.lean | 15 | 11 | Done (run 85) |
+| **TOTAL** | **533** | **198** | **3 sorry** |
 
 ## Open Sorry Obligations
 
@@ -83,9 +84,11 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs (lean-squad label)
 
-- run84 PR (branch lean-squad-run84-24625876108-critique-report):
-  Task 7 — CRITIQUE.md T30/T31 assessment + Paper Review
-  Task 10 — REPORT.md update (run 84)
+- run83 PR #68: T30 informal spec + REPORT (pending)
+- run84 PR #69: CRITIQUE T30/T31 + REPORT (pending)
+- run85 PR (branch lean-squad-run85-24634718671-aeneas-varinttag):
+  Task 3 — VarIntTag.lean T30 (15 thms, 0 sorry)
+  Task 8 — Aeneas attempted; FAILED (no opam/sudo in container)
 
 ## Status Issue
 
@@ -107,28 +110,31 @@ Issue #4 (open)
 - OQ-T31-3 (run82): Settings GREASE round-trip reconstruction
 - OQ-T31-4 (run82): payload_length vs bytes.len() precondition not enforced
 - OQ-T30-1 (run83): varint_parse_len_nat(first>255) behavior (open-ended bound)
-- OQ-T30-2 (run83): omega on very large 8-byte constants may timeout
-- OQ-T30-3 (run83): partition theorem vs 4 separate iffs — design choice
+- OQ-T30-2 (run83): omega on very large 8-byte constants (varint_tag8_nooverlap PROVED)
+- OQ-T30-3 (run83): partition theorem vs 4 separate iffs — both proved (run 85)
 
 ## Next Priority Targets
 
-1. T30: write FVSquad/VarIntTag.lean (~120 lines, all omega proofs) — Task 3
-   - varint_parse_len_N_iff biconditionals (§1 of spec)
-   - varint_len_N_iff biconditionals (§2 of spec)
-   - varint_tag_nooverlap lemmas (§3 of spec)
-   - varint_tag_consistency universal form (§4 of spec)
-   - completeness/partition (§5 of spec)
-2. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips (~150-200 lines)
-3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-5. paper/paper.tex: update theorem count 504→518, add PacketHeader.lean row,
-   add encode_decode_pktnum finding, fix sorry counts (see CRITIQUE.md Paper Review)
+1. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips
+2. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+4. paper/paper.tex: update counts (518→533, 24→25 files, add VarIntTag row)
+5. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
+
+## Task 8 Aeneas Status (run 85)
+
+- Charon: cloned successfully (github.com/AeneasVerif/charon)
+- Aeneas: cloned successfully (github.com/AeneasVerif/aeneas)
+- opam: NOT available (no sudo in container — "no new privileges" flag)
+- AENEAS_AVAILABLE=false — cannot build Charon OCaml lib or Aeneas binary
+- Retry condition: container with sudo/opam available
+- Charon toolchain requires: nightly-2026-02-07
 
 ## CRITIQUE.md Status (run 84)
 
-Last updated: 2026-04-19 09:30 UTC (commit d363eb87)
-Covers: Targets 1-29 (Lean proofs), T30 (Phase 2 assessment), T31 (Phase 2 assessment)
-Paper Review: 9 issues identified for paper.tex accuracy/completeness
+Last updated: 2026-04-19 09:30 UTC (commit d363eb87 area)
+Covers: T1-T29 (proofs), T30 (Phase 2 assessment, now Phase 5), T31 (Phase 2)
+Paper Review: 9 issues identified
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
@@ -138,6 +144,7 @@ Paper Review: 9 issues identified for paper.tex accuracy/completeness
 - `|>` before `=` in examples — parenthesise: `(expr).field = val`
 - `simp [h]; omega` — if simp closes goal, omega sees "No goals to be solved"
 - `decide` on goals with free `Nat` variables — not decidable; use cases+simp+omega
+- `<;> [tac1; tac2]` — not valid Lean 4 syntax; use bullets or `refine ⟨by tac1, by tac2⟩`
 
 ## Key Proof Patterns (no Mathlib)
 
@@ -150,18 +157,23 @@ Paper Review: 9 issues identified for paper.tex accuracy/completeness
 - Cross-module: private theorems must be re-proved inline
 - PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
 - typeCode/longFirstByte proofs: `cases ty` + simp + omega (not decide)
+- match + iff biconditionals: `match hm : expr with | val => simp; omega`
+  (after unfold, Lean 4 substitutes expr→val in goal; simp reduces match)
+- MAX_VAR_INT in omega goals: must `unfold MAX_VAR_INT at *` before omega
+- Universal from existential: `obtain ⟨b₀, ...⟩ := existential; intro b ...; have := Option.some.inj (...)`
+- Anonymous constructor tuples in exact: `exact Or.inl ⟨by omega, by simp⟩`
 
-## CI Status (run82)
+## CI Status (run 85)
 
-- lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- lake build: passes with 27 jobs, 3 sorry warnings, 0 errors (run81)
-- lean-toolchain: leanprover/lean4:v4.29.0 (note: elan installed v4.29.1)
+- lean-ci.yml: exists, correct triggers
+- lake build: PASSED, 28 jobs, 0 errors (run 85)
+- lean-toolchain: leanprover/lean4:v4.29.0
 
 ## Lake Project
 
-No Mathlib dependency (lake-manifest.json is empty packages).
-FVSquad.lean imports 24 modules (in order): Octets, Varint, RangeSet,
+No Mathlib dependency.
+FVSquad.lean imports 25 modules (in order): Octets, Varint, RangeSet,
   Minmax, RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
   Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
   OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
-  VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader
+  VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader, VarIntTag
