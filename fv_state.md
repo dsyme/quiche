@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-19 (run 83, workflow 24620481200)
+Last updated: 2026-04-19 (run 84, workflow 24625876108)
 
 ## Lean File Registry (verified by lake build Lean 4.29.1)
 
@@ -41,16 +41,16 @@ Last updated: 2026-04-19 (run 83, workflow 24620481200)
 | T23 | put_varint→get_varint roundtrip | 5 | FVSquad/VarIntRoundtrip.lean | 2 sorry (8-byte) |
 | T24 | encode→decode composition | 5 | FVSquad/PacketNumEncodeDecode.lean | DONE |
 | T29 | QUIC packet-header first-byte | 4 | FVSquad/PacketHeader.lean | 14 thms, 1 sorry |
-| T30 | Varint 2-bit tag consistency | 2 | specs/varint_tag_informal.md | Informal spec done (run83) |
-| T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Phase 2 done (run82) |
+| T30 | Varint 2-bit tag consistency | 2 | specs/varint_tag_informal.md | Informal spec (run83); critique (run84) |
+| T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82); critique (run84) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
 | T33 | H3 Settings frame invariants | 0 | — | MEDIUM |
 
 ## Open PRs (lean-squad label)
 
-- PR run83 (branch lean-squad-run83-24620481200-t30spec-report):
-  Task 2 — Varint 2-bit tag informal spec T30 (Phase 0→2)
-  Task 10 — REPORT.md update
+- PR run84 (branch lean-squad-run84-24625876108-critique-report):
+  Task 7 — CRITIQUE.md T30/T31 assessment + Paper Review
+  Task 10 — REPORT.md update (run 84)
 
 ## Next Actions
 
@@ -58,3 +58,4 @@ Last updated: 2026-04-19 (run 83, workflow 24620481200)
 2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
 3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
 4. T29: extend PacketHeader.lean with full byte-list encode/decode model
+5. Update paper.tex: fix stale counts, add PacketHeader row, add encode_decode_pktnum finding

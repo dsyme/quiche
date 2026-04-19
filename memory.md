@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-19 (run 83)
+Last updated: 2026-04-19 (run 84)
 Lean toolchain: leanprover/lean4:v4.29.1 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -38,8 +38,8 @@ FVSquad.lean: import manifest for all modules
 | 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) |
 | 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry for full RT |
-| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 2 | Informal spec done (run 83) |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
+| 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 2 | Informal spec done (run 83); critique added run 84 |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82); critique added run 84 |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 0 | NEW run78 (MEDIUM) |
 
@@ -83,9 +83,9 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs (lean-squad label)
 
-- run83 PR (branch lean-squad-run83-24620481200-t30spec-report):
-  Task 2 — Varint 2-bit tag informal spec T30 (Phase 0→2)
-  Task 10 — REPORT.md update (run 83)
+- run84 PR (branch lean-squad-run84-24625876108-critique-report):
+  Task 7 — CRITIQUE.md T30/T31 assessment + Paper Review
+  Task 10 — REPORT.md update (run 84)
 
 ## Status Issue
 
@@ -112,18 +112,23 @@ Issue #4 (open)
 
 ## Next Priority Targets
 
-1. T30: write FVSquad/VarIntTag.lean (~120 lines, all omega proofs)
+1. T30: write FVSquad/VarIntTag.lean (~120 lines, all omega proofs) — Task 3
    - varint_parse_len_N_iff biconditionals (§1 of spec)
+   - varint_len_N_iff biconditionals (§2 of spec)
    - varint_tag_nooverlap lemmas (§3 of spec)
    - varint_tag_consistency universal form (§4 of spec)
-2. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips
+   - completeness/partition (§5 of spec)
+2. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips (~150-200 lines)
 3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
 4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+5. paper/paper.tex: update theorem count 504→518, add PacketHeader.lean row,
+   add encode_decode_pktnum finding, fix sorry counts (see CRITIQUE.md Paper Review)
 
-## CRITIQUE.md Status (run 82)
+## CRITIQUE.md Status (run 84)
 
-Last updated: 2026-04-18 17:20 UTC (commit d951c7e1)
-Covers: Targets 1-29, 518 theorems, 3 sorry
+Last updated: 2026-04-19 09:30 UTC (commit d363eb87)
+Covers: Targets 1-29 (Lean proofs), T30 (Phase 2 assessment), T31 (Phase 2 assessment)
+Paper Review: 9 issues identified for paper.tex accuracy/completeness
 
 ## Anti-Patterns (DO NOT USE without Mathlib)
 
