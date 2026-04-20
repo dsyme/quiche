@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-20 (run 86)
+Last updated: 2026-04-20 (run 87)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -42,8 +42,10 @@ FVSquad.lean: import manifest for all modules
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
+| 34 | QPACK static table lookup correctness | quiche/src/h3/qpack/ | 0 | NEW run87 — pure lookup, ~30 Lean lines, fully decidable |
+| 35 | H3 parse_settings_frame RFC compliance | quiche/src/h3/frame.rs | 0 | NEW run87 — H2-key rejection + size guard |
 
-## Lean File Registry (verified lake build run 85)
+## Lean File Registry (verified lake build run 86)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -84,9 +86,10 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs (lean-squad label)
 
-- run86 PR (branch lean-squad-run86-24647797791-report-h3settings):
-  Task 2 — H3Settings informal spec T33 (phase 2)
-  Task 10 — REPORT update (533 theorems, 25 files)
+- run87 PR (branch lean-squad-run87-24661234574-research-paper-update):
+  Task 1 — Research T34/T35 new targets + TARGETS.md phase updates
+  Task 11 — paper.tex update (533 thms, 25 files, 3 sorry, new findings sections)
+  NOTE: paper.pdf NOT compiled (no sudo/LaTeX in container)
 
 ## Status Issue
 
@@ -119,16 +122,16 @@ Issue #4 (open)
 
 1. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips
 2. T33: write FVSquad/H3Settings.lean for Settings invariants
-3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-5. paper/paper.tex: update counts (518→533, 24→25 files, add VarIntTag row, add T33)
-6. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
+3. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide proofs)
+4. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+5. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+6. paper/paper.tex: compile PDF when LaTeX becomes available
 
 ## Task 8 Aeneas Status (run 85)
 
 - Charon: cloned successfully (github.com/AeneasVerif/charon)
 - Aeneas: cloned successfully (github.com/AeneasVerif/aeneas)
-- opam: NOT available (no sudo in container — "no new privileges" flag)
+- opam: NOT available (no new privileges flag — no sudo in container)
 - AENEAS_AVAILABLE=false — cannot build Charon OCaml lib or Aeneas binary
 - Retry condition: container with sudo/opam available
 - Charon toolchain requires: nightly-2026-02-07
@@ -137,4 +140,41 @@ Issue #4 (open)
 
 Last updated: 2026-04-19 09:30 UTC (commit d363eb87 area)
 Covers: T1-T29 (proofs), T30 (Phase 2 assessment, now Phase 5), T31 (Phase 2)
-Paper Review: 9 issues identified
+Paper Review: 9 issues identified — most addressed in run 87 paper update
+Remaining paper issues: compile PDF (LaTeX unavailable)
+
+## CI Status (run82)
+
+- lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
+- lake build: passes with 27 jobs, 3 sorry warnings, 0 errors (run81)
+- lean-toolchain: leanprover/lean4:v4.29.0
+
+## Lake Project
+
+No Mathlib dependency (lake-manifest.json is empty packages).
+FVSquad.lean imports 25 modules (in order): Octets, Varint, RangeSet,
+  Minmax, RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
+  Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
+  OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
+  VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader, VarIntTag
+
+## Anti-Patterns (DO NOT USE without Mathlib)
+
+- `split_ifs` — Mathlib-only; use `by_cases hc : COND`
+- `linarith` — Mathlib-only; use `omega`
+- `native_decide` on struct equality — SendState lacks DecidableEq
+- `|>` before `=` in examples — parenthesise: `(expr).field = val`
+- `simp [h]; omega` — if simp closes goal, omega sees "No goals to be solved"
+- `decide` on goals with free `Nat` variables — not decidable; use cases+simp+omega
+
+## Key Proof Patterns (no Mathlib)
+
+- If-then-else in hypothesis: `by_cases hc : COND`
+- min/max idempotence: `Nat.min_eq_left (Nat.min_le_right a b)`
+- Struct equality one field differs: `congr 1` then prove field equality
+- Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
+- Nat.sub with omega: need `b ≤ a` in context
+- Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
+- Cross-module: private theorems must be re-proved inline
+- PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
+- typeCode/longFirstByte proofs: `cases ty` + simp + omega (not decide)

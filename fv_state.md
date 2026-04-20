@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-20 (run 86, workflow 24647797791)
+Last updated: 2026-04-20 (run 87, workflow 24661234574)
 
 ## Lean File Registry (verified by lake build Lean 4.29.0)
 
@@ -43,18 +43,21 @@ Last updated: 2026-04-20 (run 86, workflow 24647797791)
 | T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
 | T33 | H3 Settings frame invariants | 2 | specs/h3_settings_informal.md | Informal spec (run86), 4 OQs |
+| T34 | QPACK static table lookup | 0 | — | NEW run87 — ~30 lines, fully decidable |
+| T35 | H3 parse_settings_frame RFC | 0 | — | NEW run87 — H2-key rejection + size guard |
 
 ## Open PRs (lean-squad label)
 
-- run86 PR (branch lean-squad-run86-24647797791-report-h3settings):
-  Task 2 — H3Settings informal spec T33 (phase 2)
-  Task 10 — REPORT update (533 theorems, 25 files)
+- run87 PR (branch lean-squad-run87-24661234574-research-paper-update):
+  Task 1 — Research T34/T35 new targets + TARGETS.md phase updates
+  Task 11 — paper.tex update (533 thms, 25 files, 4 findings, encode_decode_pktnum)
 
 ## Next Actions
 
 1. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
 2. T33: write FVSquad/H3Settings.lean (Settings invariants) — Task 3
-3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-5. paper/paper.tex: update theorem count 518→533, add VarIntTag.lean row, add T33 row
-6. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
+3. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide proofs) — Task 3
+4. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+5. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+6. paper/paper.pdf: compile when LaTeX available; update REPORT.md to 35 targets
+7. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
