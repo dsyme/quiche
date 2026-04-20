@@ -1,6 +1,6 @@
 # FV State Snapshot
 
-Last updated: 2026-04-19 (run 85, workflow 24634718671)
+Last updated: 2026-04-20 (run 86, workflow 24647797791)
 
 ## Lean File Registry (verified by lake build Lean 4.29.0)
 
@@ -42,20 +42,19 @@ Last updated: 2026-04-19 (run 85, workflow 24634718671)
 | T30 | Varint 2-bit tag consistency | 5 | FVSquad/VarIntTag.lean | DONE run 85, 15 thms, 0 sorry |
 | T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
-| T33 | H3 Settings frame invariants | 0 | — | MEDIUM |
+| T33 | H3 Settings frame invariants | 2 | specs/h3_settings_informal.md | Informal spec (run86), 4 OQs |
 
 ## Open PRs (lean-squad label)
 
-- PR run83 (#68, branch lean-squad-run83-...): T30 informal spec + REPORT
-- PR run84 (#69, branch lean-squad-run84-...): CRITIQUE T30/T31 + REPORT
-- PR run85 (branch lean-squad-run85-24634718671-aeneas-varinttag):
-  Task 3 — VarIntTag.lean (T30, 15 theorems, 0 sorry)
-  Task 8 — Aeneas attempted; failed (no sudo/opam in container)
+- run86 PR (branch lean-squad-run86-24647797791-report-h3settings):
+  Task 2 — H3Settings informal spec T33 (phase 2)
+  Task 10 — REPORT update (533 theorems, 25 files)
 
 ## Next Actions
 
 1. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
-2. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-4. paper/paper.tex: update theorem count 518→533, add VarIntTag.lean row
-5. Task 8 (Aeneas): retry when opam/sudo available
+2. T33: write FVSquad/H3Settings.lean (Settings invariants) — Task 3
+3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+5. paper/paper.tex: update theorem count 518→533, add VarIntTag.lean row, add T33 row
+6. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner

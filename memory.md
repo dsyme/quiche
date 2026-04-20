@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-19 (run 85)
+Last updated: 2026-04-20 (run 86)
 Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all modules
@@ -41,7 +41,7 @@ FVSquad.lean: import manifest for all modules
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | DONE run 85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
-| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 0 | NEW run78 (MEDIUM) |
+| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
 
 ## Lean File Registry (verified lake build run 85)
 
@@ -84,11 +84,9 @@ FVSquad.lean: import manifest for all modules
 
 ## Open PRs (lean-squad label)
 
-- run83 PR #68: T30 informal spec + REPORT (pending)
-- run84 PR #69: CRITIQUE T30/T31 + REPORT (pending)
-- run85 PR (branch lean-squad-run85-24634718671-aeneas-varinttag):
-  Task 3 — VarIntTag.lean T30 (15 thms, 0 sorry)
-  Task 8 — Aeneas attempted; FAILED (no opam/sudo in container)
+- run86 PR (branch lean-squad-run86-24647797791-report-h3settings):
+  Task 2 — H3Settings informal spec T33 (phase 2)
+  Task 10 — REPORT update (533 theorems, 25 files)
 
 ## Status Issue
 
@@ -112,14 +110,19 @@ Issue #4 (open)
 - OQ-T30-1 (run83): varint_parse_len_nat(first>255) behavior (open-ended bound)
 - OQ-T30-2 (run83): omega on very large 8-byte constants (varint_tag8_nooverlap PROVED)
 - OQ-T30-3 (run83): partition theorem vs 4 separate iffs — both proved (run 85)
+- OQ-T33-1 (run86): settings_length < b.off() possible if varint spans boundary?
+- OQ-T33-2 (run86): to_bytes does not check len ≤ 256 before writing
+- OQ-T33-3 (run86): H3_DATAGRAM_00 (0x276) vs H3_DATAGRAM (0x33) preference
+- OQ-T33-4 (run86): raw field is write-only / not serialised by to_bytes
 
 ## Next Priority Targets
 
 1. T31: write FVSquad/H3Frame.lean for GoAway/MaxPushId/CancelPush round-trips
-2. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-4. paper/paper.tex: update counts (518→533, 24→25 files, add VarIntTag row)
-5. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
+2. T33: write FVSquad/H3Settings.lean for Settings invariants
+3. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+4. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+5. paper/paper.tex: update counts (518→533, 24→25 files, add VarIntTag row, add T33)
+6. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
 
 ## Task 8 Aeneas Status (run 85)
 
@@ -135,45 +138,3 @@ Issue #4 (open)
 Last updated: 2026-04-19 09:30 UTC (commit d363eb87 area)
 Covers: T1-T29 (proofs), T30 (Phase 2 assessment, now Phase 5), T31 (Phase 2)
 Paper Review: 9 issues identified
-
-## Anti-Patterns (DO NOT USE without Mathlib)
-
-- `split_ifs` — Mathlib-only; use `by_cases hc : COND`
-- `linarith` — Mathlib-only; use `omega`
-- `native_decide` on struct equality — SendState lacks DecidableEq
-- `|>` before `=` in examples — parenthesise: `(expr).field = val`
-- `simp [h]; omega` — if simp closes goal, omega sees "No goals to be solved"
-- `decide` on goals with free `Nat` variables — not decidable; use cases+simp+omega
-- `<;> [tac1; tac2]` — not valid Lean 4 syntax; use bullets or `refine ⟨by tac1, by tac2⟩`
-
-## Key Proof Patterns (no Mathlib)
-
-- If-then-else in hypothesis: `by_cases hc : COND`
-- min/max idempotence: `Nat.min_eq_left (Nat.min_le_right a b)`
-- Struct equality one field differs: `congr 1` then prove field equality
-- Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
-- Nat.sub with omega: need `b ≤ a` in context
-- Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
-- Cross-module: private theorems must be re-proved inline
-- PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
-- typeCode/longFirstByte proofs: `cases ty` + simp + omega (not decide)
-- match + iff biconditionals: `match hm : expr with | val => simp; omega`
-  (after unfold, Lean 4 substitutes expr→val in goal; simp reduces match)
-- MAX_VAR_INT in omega goals: must `unfold MAX_VAR_INT at *` before omega
-- Universal from existential: `obtain ⟨b₀, ...⟩ := existential; intro b ...; have := Option.some.inj (...)`
-- Anonymous constructor tuples in exact: `exact Or.inl ⟨by omega, by simp⟩`
-
-## CI Status (run 85)
-
-- lean-ci.yml: exists, correct triggers
-- lake build: PASSED, 28 jobs, 0 errors (run 85)
-- lean-toolchain: leanprover/lean4:v4.29.0
-
-## Lake Project
-
-No Mathlib dependency.
-FVSquad.lean imports 25 modules (in order): Octets, Varint, RangeSet,
-  Minmax, RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
-  Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
-  OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
-  VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader, VarIntTag
