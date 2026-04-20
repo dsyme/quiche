@@ -2,20 +2,20 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 518 named theorems + 187 examples, **3 `sorry`** (8-byte
-varint case ×2 + PacketHeader full-roundtrip ×1), 24 Lean files (Lean 4.29.1, no Mathlib).
+**Status**: ✅ ACTIVE — 533 named theorems + 198 examples, **3 `sorry`** (8-byte
+varint case ×2 + PacketHeader full-roundtrip ×1), 25 Lean files (Lean 4.29.0, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-19 09:30 UTC
-- **Commit**: `14c1694a`
+- **Date**: 2026-04-20 04:10 UTC
+- **Commit**: `7399d409`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **518 named theorems**
-across 24 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **533 named theorems**
+across 25 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`) to
 stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire encoding
@@ -24,19 +24,22 @@ proof of a *real RFC 9000 §A.3 conformance property* (`decode_pktnum_correct`);
 formal confirmation of an **`Ord` contract violation** in HTTP/3 stream
 scheduling (`StreamPriorityKey`); cross-module write-then-read round-trips for
 all integer widths (`OctetsRoundtrip`); RFC 9000 §2.1 stream-ID classification
-laws (`StreamId`); and — new in run 81 — **14 theorems covering QUIC
-packet-header first-byte encoding** (`PacketHeader`), including type-code
-round-trip, FORM_BIT/FIXED_BIT invariants, and injectivity of both type-code
-and first-byte functions. Run 82 added the H3 frame informal spec (T31) covering
-GoAway, MaxPushId, CancelPush, and Settings round-trips. Run 83 adds the
-varint 2-bit tag structural spec (T30) with biconditional range theorems and
-non-overlap proofs. Run 84 (this run) updates the Proof Utility Critique (Task 7) with new sections
-for T30 (Varint 2-bit tag) and T31 (H3 frame codec), an assessment of their
-forthcoming Lean files, and a Paper Review of `paper/paper.tex` identifying
-accuracy gaps (stale counts, missing PacketHeader.lean entry) and missing content
-(`encode_decode_pktnum` as a headline finding). 3 sorry remain: 2 in
-VarIntRoundtrip (8-byte varint case awaiting a `putU32_bytes_unchanged` lemma)
-and 1 in PacketHeader (full buffer roundtrip, deferred to a richer model).
+laws (`StreamId`); **14 theorems covering QUIC packet-header first-byte
+encoding** (`PacketHeader`), including type-code round-trip, FORM_BIT/FIXED_BIT
+invariants, and injectivity of both type-code and first-byte functions; and —
+new in run 85 — **15 theorems for varint 2-bit tag consistency** (`VarIntTag`),
+covering the partition of the varint tag space into four mutually-exclusive
+ranges and proving the bijective relationship between tag bits and encoded
+lengths. Run 82 added the H3 frame informal spec (T31). Run 83 added the varint
+2-bit tag structural spec (T30). Run 84 updated the Proof Utility Critique
+(Task 7) with T30/T31 assessments and a Paper Review. Run 85 delivered
+`VarIntTag.lean` (T30, 15 theorems, 0 sorry, `lake build` passing). Run 86
+(this run) adds the H3 Settings frame invariants informal spec (T33) — covering
+the Settings frame's boolean constraints, reserved-identifier rejection, size
+guard, GREASE round-trip loss, and H3_DATAGRAM double-emit property — and
+updates this Project Report. 3 sorry remain: 2 in VarIntRoundtrip (8-byte
+varint case awaiting a `putU32_bytes_unchanged` lemma) and 1 in PacketHeader
+(full buffer roundtrip, deferred to a richer model).
 
 ---
 
@@ -48,6 +51,7 @@ The 24 files form three logical layers, with a cross-module bridge layer:
 graph TD
     subgraph L1["Layer 1 — Byte framing primitives"]
         Varint["Varint.lean<br/>10 theorems"]
+        VarIntTag["VarIntTag.lean<br/>15 theorems"]
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
         OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
@@ -82,13 +86,14 @@ graph TD
 
 ## What Was Verified
 
-### Layer 1 — Byte Framing Primitives (4 files, ~105 theorems)
+### Layer 1 — Byte Framing Primitives (6 files, ~134 theorems)
 
 The foundational byte-I/O layer used throughout QUIC packet parsing.
 
 ```mermaid
 graph LR
     V["Varint.lean<br/>10 theorems<br/>varint_round_trip ✅"]
+    VT["VarIntTag.lean<br/>15 theorems<br/>varint_tag_partition ✅"]
     O["Octets.lean<br/>48 theorems<br/>getU16_split ✅"]
     OM["OctetsMut.lean<br/>27 theorems<br/>putU8_getU8_roundtrip ✅"]
     ORT["OctetsRoundtrip.lean<br/>20 theorems<br/>putU16_freeze_getU16 ✅"]
@@ -98,6 +103,10 @@ graph LR
 **Key results**:
 - `varint_round_trip`: QUIC varint codec encode/decode identity — bugs here
   break all QUIC framing
+- `varint_tag_partition`: the four varint tag ranges (1/2/4/8 byte) are
+  mutually exclusive and exhaustive — each valid first byte belongs to exactly
+  one range; 15 theorems including biconditional iff forms and a partition
+  completeness theorem (run 85)
 - `getU16_split`: `getU16` decomposes into exactly two sequential `getU8`
   calls — compositional big-endian framing soundness
 - `getU16/32/64_eq_byte_pair/four_bytes/eight_bytes`: explicit big-endian
@@ -186,6 +195,7 @@ graph LR
 | File | Public Theorems | Examples | Phase | Key result |
 |------|-----------------|----------|-------|-----------|
 | `Varint.lean` | 10 | 25 | ✅ | `varint_round_trip` |
+| `VarIntTag.lean` | 15 | 11 | ✅ | `varint_tag_partition` |
 | `RangeSet.lean` | 16 | 15 | ✅ | `insert_preserves_invariant` |
 | `Minmax.lean` | 15 | 6 | ✅ | `update_monotone` |
 | `RttStats.lean` | 23 | 2 | ✅ | `adjusted_rtt_ge_min_rtt` |
@@ -209,14 +219,14 @@ graph LR
 | `VarIntRoundtrip.lean` | 8 | 16 | 🔄 2 sorry | `putVarint_freeze_4byte` |
 | `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
 | `PacketHeader.lean` | 14 | 12 | 🔄 1 sorry | `typeCode_roundtrip` |
-| **Total** | **518** | **187** | — | **3 sorry** |
+| **Total** | **533** | **198** | — | **3 sorry** |
 
 ### Informal Specs Awaiting Formal Lean Files
 
 | Target | Spec file | Phase | Priority |
 |--------|-----------|-------|----------|
-| T30 — Varint 2-bit tag properties | `varint_tag_informal.md` | Phase 2 ✅ (run 83) | HIGH — unblocks downstream tag reasoning |
 | T31 — H3 frame type codec round-trip | `h3_frame_informal.md` | Phase 2 ✅ (run 82) | MEDIUM — GoAway/MaxPushId/CancelPush/Settings |
+| T33 — H3 Settings frame invariants | `h3_settings_informal.md` | Phase 2 ✅ (run 86) | MEDIUM — boolean constraints, size guard, GREASE RT loss |
 
 ---
 
@@ -342,8 +352,10 @@ timeline
         OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit : 92 theorems
     section Runs 75–81
         VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader : 32 theorems
-    section Runs 82–84
-        H3Frame informal spec T31 (run 82), Varint tag spec T30 (run 83), Critique T30/T31 + Paper Review (run 84) : informal specs pipeline + critique
+    section Runs 82–85
+        H3Frame informal spec T31 (run 82), Varint tag spec T30 (run 83), Critique T30/T31 + Paper Review (run 84), VarIntTag.lean T30 (run 85, 15 theorems) : 15 new theorems + informal specs
+    section Run 86
+        H3 Settings informal spec T33 (run 86) : informal spec pipeline + REPORT update
 ```
 
 ---
@@ -374,4 +386,4 @@ timeline
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 24625876108](https://github.com/dsyme/quiche/actions/runs/24625876108).
+> [workflow run 24647797791](https://github.com/dsyme/quiche/actions/runs/24647797791).

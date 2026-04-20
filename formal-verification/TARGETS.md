@@ -93,4 +93,4 @@
 | 19 | Octets↔OctetsMut cross-module round-trip | 5 — All Proofs | run 65 | 20 theorems + 9 examples; 0 sorry |
 | 31 | H3 frame type codec round-trip | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_frame_informal.md` (run 82); scope: GoAway/MaxPushId/CancelPush single-varint frames; open questions OQ-T31-1 to OQ-T31-4 |
 | 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
-| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 0 | ⬜ Identified | RFC 9114 §7.2.4: no duplicate keys, RFC 9114 §7.2.4 prohibited H2 settings; see RESEARCH.md T33 |
+| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_settings_informal.md` (run 86); boolean constraints, size guard, GREASE RT loss, H3_DATAGRAM double-emit; open questions OQ-T33-1 to OQ-T33-4 |
