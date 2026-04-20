@@ -771,3 +771,100 @@ The following adjustments reflect CRITIQUE.md findings:
    covered.
 5. **Conference paper created** (Task 11): `formal-verification/paper/paper.tex`
    documents the full FV effort for submission to an FV/systems venue.
+
+---
+
+## New Targets — Run 87 (2026-04-20)
+
+The following targets extend coverage into the HTTP/3 QPACK compression
+layer and the settings-frame validation path, both identified as gaps in
+the CRITIQUE.md paper review section.
+
+### Target 34: QPACK Static Table Lookup Correctness
+
+**Location**: `quiche/src/h3/qpack/static_table.rs`,
+`quiche/src/h3/qpack/decoder.rs` (`lookup_static`)
+
+**Description**: The QPACK static table (RFC 9204 Appendix A) contains 99
+static header entries (index 0–98). The `lookup_static` function in the
+decoder maps an index to a `(&[u8], &[u8])` name/value pair. A key property:
+for all indices i ∈ 0..=98, `STATIC_DECODE_TABLE[i]` must equal the
+RFC-mandated entry. Out-of-range indices must return an error.
+
+**Benefit**: A corruption of the static table (e.g., wrong ordering, missing
+entry, wrong index mapping) would cause all QPACK-compressed headers to be
+decoded incorrectly, silently serving wrong header values. The `decide`
+automation can enumerate all 99 entries.
+
+**Specification size**: ~60 Lean lines — define a `Fin 99 → (String × String)`
+function returning the RFC 9204 Appendix A entries; prove equality for each.
+
+**Proof tractability**: VERY LOW — the table is a concrete list constant;
+`native_decide` or `decide` can close each equality automatically.
+
+**Approximations needed**: Model byte arrays as `List Nat` (ASCII bytes);
+skip the encoder-side `STATIC_ENCODE_TABLE` (a different multi-dimensional
+lookup used for compression, not decompression).
+
+**Priority**: ⭐⭐ HIGH — low effort, fully decidable, closes the first gap
+in QPACK coverage; the static table is used in every QPACK-decoded request.
+
+---
+
+### Target 35: H3 `parse_settings_frame` RFC 9114 Compliance
+
+**Location**: `quiche/src/h3/frame.rs`, function `parse_settings_frame`
+(line 557)
+
+**Description**: RFC 9114 §7.2.4 mandates that an HTTP/3 endpoint MUST
+treat receipt of HTTP/2-specific settings identifiers (keys 2, 3, 4, 5)
+as a connection error (H3_SETTINGS_ERROR). The `parse_settings_frame`
+function validates settings as it reads them. Key properties:
+
+1. **H2 rejection**: for keys k ∈ {2, 3, 4, 5}, `parse_settings_frame`
+   returns an error.
+2. **Size guard**: settings with value > `u64::MAX / 2` are rejected
+   (avoid varint overflow on encode).
+3. **Known-key acceptance**: valid H3 settings (key in the RFC 9114 §7.2.4
+   table or GREASE range) are accepted without error.
+4. **Unknown-key tolerance**: settings with unknown keys are silently
+   skipped per RFC extensibility rules.
+
+**Benefit**: A bug in the H2-key rejection logic could allow a malicious
+peer to negotiate prohibited settings, potentially causing protocol
+confusion or state-machine divergence in the H3 connection setup.
+
+**Specification size**: ~80–100 Lean lines; case analysis on the key set.
+
+**Proof tractability**: LOW-MEDIUM — the rejection conditions are simple
+inequalities or set membership; `decide` or `omega` can close each case.
+
+**Approximations needed**: Model the settings stream as a `List (Nat × Nat)`
+(key-value pairs); skip the full varint serialization (covered by T33).
+
+**Priority**: ⭐ MEDIUM — security-relevant validation path; builds on T33
+informal spec; complements the `parse_settings_frame` test suite already in
+`frame.rs` (lines 761–1161).
+
+---
+
+## Critique Feedback Incorporated (run 87)
+
+The following adjustments reflect CRITIQUE.md paper-review findings from
+run 84 and run 86:
+
+1. **T30 (VarIntTag) is Done** — `FVSquad/VarIntTag.lean` proved in run 85;
+   15 theorems, 0 sorry; `varint_tag_consistency` proved for all four lengths.
+2. **T29 (PacketHeader) at Phase 4** — `FVSquad/PacketHeader.lean` (14
+   theorems, 1 sorry) proved in run 81. Remaining sorry `longHeader_roundtrip`
+   requires a byte-list buffer model; tracked as an open obligation.
+3. **T33 (H3Settings informal spec) done** — `specs/h3_settings_informal.md`
+   written in run 86; Phase 2 complete. OQ-T33-1 to OQ-T33-4 are open questions
+   for maintainer clarification.
+4. **Conference paper updated** (Task 11): paper.tex updated this run (run 87)
+   to reflect 533 theorems, 25 files, 3 sorry. PacketHeader.lean and
+   VarIntTag.lean rows added to Table 1. `encode_decode_pktnum` highlighted
+   as a second headline result.
+5. **New T34/T35**: gap analysis from the CRITIQUE's paper-review section
+   identified QPACK coverage and settings validation as the next high-value
+   targets; both added to TARGETS.md.

@@ -34,8 +34,8 @@
 | 26 | CUBIC W_cubic vs W_est Reno-friendly transition | `quiche/src/recovery/congestion/cubic.rs` | 0 | ⬜ Identified | RFC 8312bis §5.8; Cubic.lean already models W_cubic; add W_est and the comparison predicate |
 | 27 | `CidMgmt::retire_if_needed` path | `quiche/src/cid.rs` | 0 | ⬜ Identified | Prove auto-retire keeps active-CID count ≤ `active_conn_id_limit` (RFC 9000 §5.1.1) |
 | 28 | NewReno multi-cycle AIMD convergence | `quiche/src/recovery/congestion/reno.rs` | 0 | ⬜ Identified | Prove repeated ACK+loss cycles converge to steady AIMD window; extends NewReno.lean |
-| 29 | QUIC packet-header encode/decode round-trip | `quiche/src/packet.rs` | 2 | 📝 Informal Spec | `specs/packet_header_informal.md`; roundtrip RT-1–RT-5 + OQ-T29-1/2/3 open questions |
-| 30 | Varint 2-bit tag consistency | `octets/src/lib.rs` | 0 | ⬜ Identified | Gap noted in CRITIQUE Varint section: first-byte tag bits must equal `varintParseLen(first_byte) - 1`; closes last Varint.lean gap |
+| 29 | QUIC packet-header encode/decode round-trip | `quiche/src/packet.rs` | 4 | 🔄 Implementation | `FVSquad/PacketHeader.lean` (run 81): 14 theorems, 1 sorry (`longHeader_roundtrip`); full byte-list model needed to close sorry |
+| 30 | Varint 2-bit tag consistency | `octets/src/lib.rs` | 5 | ✅ Done | `FVSquad/VarIntTag.lean` (run 85): 15 theorems, 0 sorry; `varint_tag_consistency` + no-overlap lemmas fully proved |
 
 ## Phase Definitions
 
@@ -50,33 +50,27 @@
 
 ## Next Actions
 
-1. **Target 21: `SendBuf::retransmit` model** — ✅ Done in run 68.
-   `FVSquad/SendBufRetransmit.lean` (17 theorems + 10 examples, 0 sorry):
-   `retransmit_inv` (invariant preserved), `retransmit_emitOff_le` (anti-monotone),
-   `retransmit_idempotent`, `retransmit_send_backlog_le` (backlog grows),
-   and `retransmit_emitN_inv` (invariant preserved through emitN).
-2. **Target 23: put_varint → get_varint cross-module round-trip** *(HIGH)*
-   — Model `put_varint` (OctetsMut) followed by `freeze` + `get_varint`
-   (Octets) and prove the original value is recovered for all QUIC-valid
-   varint values.  This closes the last gap in the codec verification.
-3. **Target 29: QUIC packet-header encode/decode round-trip** *(HIGHEST)*
-   — Informal spec in `specs/packet_header_informal.md` (run 73).  Next:
-   write `FVSquad/PacketHeader.lean` with type definitions and RT-1–RT-5
-   theorems (Task 3).  Open questions OQ-T29-1/2/3 documented.
-4. **Target 30: Varint 2-bit tag consistency** *(HIGH, LOW effort)*
-   — Prove `varintParseLen(first_byte) = varintLen(v)` for all v in the
-   varint range.  Closes the last Varint.lean gap with ~40 Lean lines.
-5. **Target 24: encode_pkt_num → decode_pkt_num composition** — Prove that
-   encoding then decoding a valid packet number recovers the original.
-   `PacketNumLen.lean` + `PacketNumDecode.lean` prove the parts independently;
-   this proves the composition.
-6. **Target 25: StreamId↔stream_do_send guard correctness** — Prove that the
-   `is_bidi && is_local` guard in `stream_do_send` correctly selects exactly
-   the stream IDs that RFC 9000 §2.1 permits for sending.
-7. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
+1. **Target 30: Varint 2-bit tag consistency** — ✅ Done in run 85.
+   `FVSquad/VarIntTag.lean` (15 theorems, 0 sorry):
+   `varint_tag_consistency`, `varintParseLen_1_iff` through `varintParseLen_8_iff`,
+   and all no-overlap lemmas fully proved with `omega`.
+2. **Target 31: H3 frame codec round-trip** *(HIGH)* — Informal spec done (run 82).
+   Next: write `FVSquad/H3Frame.lean` with GoAway/MaxPushId/CancelPush round-trips.
+   OQ-T31-1 to OQ-T31-4 document open questions.
+3. **Target 33: H3 Settings frame invariants** *(HIGH)* — Informal spec done (run 86).
+   Next: write `FVSquad/H3Settings.lean` with key invariants and RFC constraints.
+   OQ-T33-1 to OQ-T33-4 document open questions.
+4. **Target 29: Packet-header full roundtrip** *(MEDIUM)* — `PacketHeader.lean` at
+   Phase 4 (14 theorems, 1 sorry). Closing `longHeader_roundtrip` requires a
+   byte-list buffer model of `encode_pkt_num` + `decode_pkt_num`.
+5. **Target 34: QPACK static table lookup** *(LOW effort)* — Pure lookup table;
+   provable via `decide`; ~30 Lean lines; closes first QPACK gap.
+6. **Target 35: `parse_settings_frame` RFC compliance** *(MEDIUM)* — Prove H2-key
+   rejection using case analysis; builds on T33 informal spec.
+7. **Target 25: StreamId↔stream_do_send guard correctness** — Prove the
+   `is_bidi && is_local` guard selects exactly the RFC 9000 §2.1 send-allowed IDs.
+8. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
    `Cubic.lean` with `W_est` model and `cwnd_after_ack_ge_west` theorem.
-8. **Target 27: CidMgmt retire_if_needed** *(MEDIUM)* — Prove the retire
-   path maintains `activeCids ≤ active_connection_id_limit`.
 9. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
    is maintained by the receive buffer write path.
 
@@ -91,6 +85,3 @@
 
 | 18 | StreamId RFC 9000 §2.1 arithmetic | 5 — All Proofs | run 64 | 35 theorems; 0 sorry |
 | 19 | Octets↔OctetsMut cross-module round-trip | 5 — All Proofs | run 65 | 20 theorems + 9 examples; 0 sorry |
-| 31 | H3 frame type codec round-trip | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_frame_informal.md` (run 82); scope: GoAway/MaxPushId/CancelPush single-varint frames; open questions OQ-T31-1 to OQ-T31-4 |
-| 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
-| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_settings_informal.md` (run 86); boolean constraints, size guard, GREASE RT loss, H3_DATAGRAM double-emit; open questions OQ-T33-1 to OQ-T33-4 |
