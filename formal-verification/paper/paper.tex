@@ -50,27 +50,34 @@
   \country{}}
 \email{lean-squad@automated.example}
 
+\begin{document}
+
 \begin{abstract}
 We present an incremental formal verification effort targeting
 \texttt{quiche}, Cloudflare's production implementation of the QUIC
 transport protocol and HTTP/3 in Rust.
 Using \emph{Lean~4} without Mathlib, we have proved
-\textbf{504 named theorems across 23 files}, covering core QUIC algorithms
+\textbf{533 named theorems across 25 files}, covering core QUIC algorithms
 from byte-level framing through congestion control and stream management.
-502 of these theorems are fully sorry-free; 2~\texttt{sorry} obligations
-remain for the 8-byte varint encoding case in \texttt{VarIntRoundtrip.lean},
-awaiting a non-interference lemma for chained buffer writes.
+530 of these theorems are fully sorry-free; 3~\texttt{sorry} obligations
+remain: 2~for the 8-byte varint encoding case in \texttt{VarIntRoundtrip.lean}
+(awaiting a non-interference lemma for chained buffer writes), and 1~for the
+full long-header round-trip in \texttt{PacketHeader.lean} (requires a byte-list
+buffer model).
 Proofs are verified continuously by CI.
 Our methodology applies a five-phase pipeline---target identification,
 informal specification, formal specification, implementation extraction,
 and proof---to each algorithmic component in turn.
-We report three notable findings:
+We report four notable findings:
 (1)~a formal proof that \texttt{StreamPriorityKey::cmp} violates the
     \texttt{Ord} antisymmetry contract, confirmed intentional by the
     implementors;
 (2)~a precision gap in RFC~9000~\S A.3 that our specification of
-    \texttt{decode\_pkt\_num} exposed and corrected; and
-(3)~an unresolved model gap in the zero-length retransmit path of
+    \texttt{decode\_pkt\_num} exposed and corrected;
+(3)~a formal composition theorem \texttt{encode\_decode\_pktnum} proving
+    that packet number encoding and decoding are inverses across all four
+    QUIC encoding lengths; and
+(4)~an unresolved model gap in the zero-length retransmit path of
     \texttt{SendBuf::retransmit}.
 The entire project runs without Mathlib, using only Lean~4's built-in
 tactics (\texttt{omega}, \texttt{simp}, \texttt{decide}), demonstrating
@@ -107,12 +114,13 @@ Our contributions are:
   \item A \emph{target selection and specification methodology} adapted
     to Rust codebases, extracting functional models from imperative code
     while documenting the abstraction boundary.
-  \item \textbf{504 Lean~4 theorems} (502 sorry-free) across 23 algorithmic
+  \item \textbf{533 Lean~4 theorems} (530 sorry-free) across 25 algorithmic
     components, covering QUIC's byte framing, congestion control, flow
     control, packet-number arithmetic, and stream management.
-  \item \textbf{Three concrete findings}: a formally proved $\mathtt{Ord}$
-    violation; a corrected RFC~\S A.3 specification; and a documented
-    open question in the retransmit model.
+  \item \textbf{Four concrete findings}: a formally proved $\mathtt{Ord}$
+    violation; a corrected RFC~\S A.3 specification; a composition theorem
+    (\texttt{encode\_decode\_pktnum}) closing the packet-number pipeline; and
+    a documented open question in the retransmit model.
   \item Evidence that \emph{Lean~4 without Mathlib} is sufficient for
     this class of protocol proofs, using only
     \texttt{omega}/\texttt{simp}/\texttt{decide}.
@@ -207,7 +215,26 @@ We prioritise targets with: (a)~security or correctness impact if wrong;
 (b)~tractable proof obligations (decidable or linear arithmetic);
 (c)~low abstraction cost (pure or nearly-pure functions);
 (d)~existing tests that encode implicit specifications.
-Table~\ref{tab:targets-overview} shows the 23 targets and their phases.
+Table~\ref{tab:targets-overview} shows the 35 identified targets and their
+current phases; 25 have reached Phase~5 (proofs complete or in progress).
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lrr}
+\toprule
+\textbf{Phase} & \textbf{Targets} & \textbf{Lean files} \\
+\midrule
+5 — Proofs complete      & 25 & 25 \\
+4 — Implementation       &  1 & (T29, PacketHeader) \\
+2 — Informal spec        &  2 & (T31, T33) \\
+0/1 — Identified/Researched & 7 & — \\
+\midrule
+\textbf{Total identified} & \textbf{35} & \textbf{25} \\
+\bottomrule
+\end{tabular}
+\caption{Pipeline phase distribution across 35 identified FV targets.}
+\label{tab:targets-overview}
+\end{table}
 
 \subsection{Functional Modelling of Rust}
 
@@ -245,7 +272,7 @@ Rust counterpart at the line level, assigning one of four correspondence
 levels: \emph{exact}, \emph{abstraction} (pure subset modelled),
 \emph{approximation} (semantically different in a documented way), or
 \emph{mismatch} (incorrect).
-Of 23 files audited, \textbf{no mismatches} were found.
+Of 25 files audited, \textbf{no mismatches} were found.
 
 % ---------------------------------------------------------------------------
 \section{Results}
@@ -254,9 +281,11 @@ Of 23 files audited, \textbf{no mismatches} were found.
 
 \subsection{Proof Inventory}
 
-Table~\ref{tab:theorems} summarises the 23 Lean files.
-The project totals \textbf{504 named theorems}, \textbf{175 examples},
-and \textbf{2 \texttt{sorry}} (8-byte varint, blocked on a non-interference lemma),
+Table~\ref{tab:theorems} summarises the 25 Lean files.
+The project totals \textbf{533 named theorems}, \textbf{198 examples},
+and \textbf{3 \texttt{sorry}} (2 in \texttt{VarIntRoundtrip.lean} for
+the 8-byte case; 1 in \texttt{PacketHeader.lean} for the full long-header
+round-trip),
 verified by Lean~4.29.0 via the Lake build system.
 
 \begin{table*}[t]
@@ -271,8 +300,10 @@ verified by Lean~4.29.0 via the Lake build system.
 \texttt{Octets.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 48  & \texttt{getU16\_split}           & \texttt{simp}, \texttt{omega} \\
 \texttt{OctetsMut.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 27  & \texttt{putU64\_getU64\_rt}      & \texttt{simp}, \texttt{omega} \\
 \texttt{OctetsRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  & 20  & \texttt{putU32\_freeze\_getU32}  & \texttt{simp}, \texttt{omega} \\
-\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\ \hline
-\multicolumn{6}{l}{\small $^{\dagger}$2 sorry in \texttt{VarIntRoundtrip.lean} (8-byte case); await \texttt{putU32\_bytes\_unchanged} lemma.} \\
+\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\
+\texttt{VarIntTag.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 15  & \texttt{varint\_tag\_consistency}  & \texttt{omega} \\
+\texttt{PacketHeader.lean}      & \texttt{quiche/src/packet.rs}       & Framing  & 14  & \texttt{short\_long\_first\_byte\_differ} & \texttt{simp}, \texttt{omega} \\ \hline
+\multicolumn{6}{l}{\small $^{\dagger}$2 sorry in \texttt{VarIntRoundtrip.lean} (8-byte case); 1 sorry in \texttt{PacketHeader.lean} (\texttt{longHeader\_roundtrip}).} \\
 \midrule
 \texttt{RangeSet.lean}          & \texttt{quiche/src/ranges.rs}       & Algorithm & 16 & \texttt{insert\_preserves\_inv}  & \texttt{simp}, \texttt{omega} \\
 \texttt{Minmax.lean}            & \texttt{quiche/src/minmax.rs}       & Algorithm & 15 & \texttt{minmax\_bounded}         & \texttt{omega} \\
@@ -281,7 +312,7 @@ verified by Lean~4.29.0 via the Lake build system.
 \texttt{DatagramQueue.lean}     & \texttt{quiche/src/dgram.rs}        & Algorithm & 26 & \texttt{dq\_push\_capacity}      & \texttt{omega} \\
 \texttt{PacketNumDecode.lean}   & \texttt{quiche/src/packet.rs}       & Algorithm & 23 & \texttt{decode\_pktnum\_correct} & \texttt{omega} \\
 \texttt{PacketNumLen.lean}      & \texttt{quiche/src/packet.rs}       & Algorithm & 20 & \texttt{pktNumLen\_k\_coverage}  & \texttt{omega} \\
-\texttt{PacketNumEncodeDecode.lean} & \texttt{quiche/src/packet.rs}   & Algorithm & 10 & \texttt{encode\_decode\_inv}     & \texttt{omega} \\
+\texttt{PacketNumEncodeDecode.lean} & \texttt{quiche/src/packet.rs}   & Algorithm & 10 & \texttt{encode\_decode\_pktnum}   & \texttt{omega} \\
 \texttt{StreamId.lean}          & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 35 & \texttt{streamType\_add\_mul4}   & \texttt{omega} \\
 \texttt{StreamPriorityKey.lean} & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 21 & \textbf{OQ-1 antisymmetry}       & \texttt{decide} \\
 \texttt{CidMgmt.lean}           & \texttt{quiche/src/cid.rs}          & Algorithm & 21 & \texttt{newScid\_seq\_fresh}      & \texttt{omega} \\
@@ -295,10 +326,10 @@ verified by Lean~4.29.0 via the Lake build system.
 \texttt{SendBuf.lean}           & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 26 & \texttt{emitN\_le\_maxData}      & \texttt{omega} \\
 \texttt{SendBufRetransmit.lean} & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 17 & \texttt{retransmit\_inv}         & \texttt{omega} \\
 \midrule
-\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{504} & \textbf{2 sorry}$^{\dagger}$ & \\
+\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{533} & \textbf{3 sorry}$^{\dagger}$ & \\
 \bottomrule
 \end{tabular}
-\caption{Summary of 23 Lean~4 files: Rust source, logical layer, named
+\caption{Summary of 25 Lean~4 files: Rust source, logical layer, named
 theorem count, headline result, and predominant proof tactics.
 \textbf{Bold} marks results with cross-cutting implications.}
 \label{tab:theorems}
@@ -306,7 +337,7 @@ theorem count, headline result, and predominant proof tactics.
 
 \subsection{Proof Architecture}
 
-The 23 files form four logical layers, as shown in
+The 25 files form four logical layers, as shown in
 Figure~\ref{fig:arch}.
 
 \begin{figure}[h]
@@ -319,13 +350,15 @@ Figure~\ref{fig:arch}.
   arr/.style={-{Stealth[scale=0.8]}, thick}
 ]
 % Layer 1: Framing
-\node[box, minimum width=24mm] (V)  at (0,  6.5) {Varint};
-\node[box, minimum width=24mm] (O)  at (2.6,6.5) {Octets};
-\node[box, minimum width=24mm] (OM) at (5.2,6.5) {OctetsMut};
-\node[box, minimum width=24mm] (OR) at (7.8,6.5) {OctetsRT};
-\node[box, minimum width=20mm] (VR) at (9.9,6.5) {VarIntRT};
+\node[box, minimum width=22mm] (V)  at (0,  6.5) {Varint};
+\node[box, minimum width=22mm] (O)  at (2.4,6.5) {Octets};
+\node[box, minimum width=22mm] (OM) at (4.8,6.5) {OctetsMut};
+\node[box, minimum width=22mm] (OR) at (7.2,6.5) {OctetsRT};
+\node[box, minimum width=18mm] (VR) at (9.2,6.5) {VarIntRT};
+\node[box, minimum width=18mm] (VT) at (11.1,6.5) {VarIntTag};
+\node[box, minimum width=18mm] (PH) at (13.0,6.5) {PktHdr};
 \begin{pgfonlayer}{background}
-  \node[layer, fit=(V)(VR), label=above:{\small\textit{Layer 1 — Byte framing}}] {};
+  \node[layer, fit=(V)(PH), label=above:{\small\textit{Layer 1 — Byte framing}}] {};
 \end{pgfonlayer}
 % Layer 2: Algorithms
 \node[box, minimum width=21mm] (RS) at (0.5,4.8) {RangeSet};
@@ -370,7 +403,9 @@ Figure~\ref{fig:arch}.
 \caption{Proof architecture: four logical layers from byte framing
 (top) to stream I/O (bottom).
 \textbf{Bold} marks the \texttt{StreamPriorityKey} file where the
-$\mathtt{Ord}$ violation was discovered.}
+$\mathtt{Ord}$ violation was discovered.
+Layer~1 now includes \texttt{VarIntTag} (tag-bit consistency) and
+\texttt{PacketHeader} (first-byte encoding properties).}
 \label{fig:arch}
 \end{figure}
 
@@ -435,7 +470,46 @@ half-window proximity constraint from the RFC.
 The corrected specification required adding a non-trivial helper lemma
 (\texttt{mul\_uniq\_in\_range}) proved with \texttt{omega}.
 
-\subsubsection{OQ-RT-1: Zero-Length Retransmit Gap (Run~68)}
+\subsubsection{Encode--Decode Composition for Packet Numbers (Run~76)}
+
+\texttt{PacketNumEncodeDecode.lean} closes the composition loop for QUIC
+packet number arithmetic: given a valid packet number \texttt{pn} and an
+expected packet number \texttt{largest\_pn} satisfying the half-window
+proximity constraint, encoding then decoding recovers the original value.
+
+\begin{lstlisting}[caption={\texttt{encode\_decode\_pktnum}: composition theorem.}]
+theorem encode_decode_pktnum
+    (largest_pn pn : Nat)
+    (hprox : pn + pnHwin (pkt_num_len pn) >= largest_pn + 1)
+    (hpn   : largest_pn + 1 + pnHwin (pkt_num_len pn) > pn) :
+    decode_pkt_num largest_pn (encode_pkt_num pn) (pkt_num_len pn) = pn
+\end{lstlisting}
+
+This theorem complements \texttt{decode\_pktnum\_correct} (the RFC-faithful
+decode specification) and \texttt{pktNumLen\_k\_coverage} (the encode-length
+selector).
+Together, they form a verified pipeline from wire bytes to recovered packet
+number, covering all four QUIC packet-number encoding lengths.
+
+\subsubsection{Varint Tag-Bit Consistency (Run~85)}
+
+\texttt{VarIntTag.lean} proves that the 2-bit tag in the first byte of a
+QUIC varint always correctly indicates the encoding length.
+The key theorem:
+
+\begin{lstlisting}[caption={\texttt{varint\_tag\_consistency}: first-byte tag correctness.}]
+theorem varint_tag_consistency (v : Nat)
+    (h : v < 2^62) :
+    varint_parse_len_nat (first_byte_of_varint v) = varint_encode_len v
+\end{lstlisting}
+
+A bug in the tag-writing code (e.g., wrong bit mask or wrong shift) would
+corrupt all downstream varint parsing without being caught by the round-trip
+property alone.
+\texttt{VarIntTag.lean} also proves no-overlap lemmas confirming the four
+tag-bit ranges are mutually exclusive.
+
+
 
 The \texttt{SendBuf::retransmit} model raises an open question: when
 a zero-length retransmit is called with an offset beyond
@@ -472,10 +546,13 @@ carefully structured inductive argument.
 No bug was found in the quiche source that invalidated a proved theorem.
 The RFC~9000~\S A.3 gap (\S\ref{sec:findings}.\ref{oq1-pktnum}) was a
 specification error, not an implementation bug.
-This is itself a positive finding: the 504 theorems provide formal
+This is itself a positive finding: the 533 theorems provide formal
 evidence that the modelled properties hold in the Lean functional model,
 with correspondences to the Rust source documented in
 \texttt{CORRESPONDENCE.md}.
+The HTTP/3 layer (H3 frame codec, Settings validation, QPACK) has not yet
+been verified; informal specifications for two H3 targets (T31, T33) are in
+progress.
 
 % ---------------------------------------------------------------------------
 \section{Discussion}
@@ -599,20 +676,24 @@ reassembly---in a proof assistant.
 \label{sec:conclusion}
 % ---------------------------------------------------------------------------
 
-We have presented an incremental formal verification of 23 algorithmic
+We have presented an incremental formal verification of 25 algorithmic
 components in \texttt{quiche}, Cloudflare's production QUIC implementation,
 using Lean~4 without Mathlib.
-The project has accumulated 504 machine-checked theorems; 502 are fully
-sorry-free.  Two \texttt{sorry} obligations remain in the 8-byte varint
-encoding case of \texttt{VarIntRoundtrip.lean}, awaiting a single
-non-interference lemma (\texttt{putU32\_bytes\_unchanged}) in a future run.
+The project has accumulated 533 machine-checked theorems; 530 are fully
+sorry-free.  Three \texttt{sorry} obligations remain: 2 in the 8-byte varint
+encoding case of \texttt{VarIntRoundtrip.lean} (awaiting a single
+non-interference lemma \texttt{putU32\_bytes\_unchanged}), and 1 in
+\texttt{PacketHeader.lean} (the full \texttt{longHeader\_roundtrip}, requiring
+a byte-list buffer model).
 The proofs cover byte framing, congestion control, flow control,
-packet-number arithmetic, and stream management.
+packet-number arithmetic, stream management, and packet-header encoding.
 
-Three findings stand out: a formally proved \texttt{Ord} contract
+Four findings stand out: a formally proved \texttt{Ord} contract
 violation in HTTP/3 stream scheduling (intentional by design); a corrected
 specification of the RFC~9000~\S A.3 packet-number decoding algorithm;
-and a documented open question in the retransmit model.
+a composition theorem (\texttt{encode\_decode\_pktnum}) formally closing the
+QUIC packet-number encode--decode pipeline; and a documented open question
+in the retransmit model.
 No implementation bugs were found, which is itself evidence that the
 modelled properties hold in the Lean functional model.
 
@@ -622,9 +703,10 @@ a substantial class of protocol-level proofs: linear arithmetic
 functional modelling of Rust's ownership patterns is feasible with
 explicit freeze/state-return transformations.
 Future work includes: closing the overflow gap with \texttt{UInt64}
-arithmetic; proving the QUIC packet-header encode/decode round-trip
-(T29, the next highest-priority target); and exploring Aeneas extraction
-to mechanically bridge the Lean model to the Rust source.
+arithmetic; proving the H3 frame codec round-trip (T31, informal spec done);
+verifying the H3 Settings frame invariants (T33, informal spec done);
+exploring QPACK static table lookup correctness (T34); and exploring Aeneas
+extraction to mechanically bridge the Lean model to the Rust source.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{paper}
