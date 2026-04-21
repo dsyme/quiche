@@ -36,6 +36,13 @@
 | 28 | NewReno multi-cycle AIMD convergence | `quiche/src/recovery/congestion/reno.rs` | 0 | ⬜ Identified | Prove repeated ACK+loss cycles converge to steady AIMD window; extends NewReno.lean |
 | 29 | QUIC packet-header encode/decode round-trip | `quiche/src/packet.rs` | 4 | 🔄 Implementation | `FVSquad/PacketHeader.lean` (run 81): 14 theorems, 1 sorry (`longHeader_roundtrip`); full byte-list model needed to close sorry |
 | 30 | Varint 2-bit tag consistency | `octets/src/lib.rs` | 5 | ✅ Done | `FVSquad/VarIntTag.lean` (run 85): 15 theorems, 0 sorry; `varint_tag_consistency` + no-overlap lemmas fully proved |
+| 31 | H3 frame type codec round-trip | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_frame_informal.md` (run 82); scope: GoAway/MaxPushId/CancelPush single-varint frames; open questions OQ-T31-1 to OQ-T31-4 |
+| 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
+| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_settings_informal.md` (run 86); boolean constraints, size guard, GREASE RT loss, H3_DATAGRAM double-emit; open questions OQ-T33-1 to OQ-T33-4 |
+| 34 | QPACK static table lookup | `quiche/src/h3/qpack/` | 1 | 🔬 Researched | Pure lookup table ~30 Lean lines; all `decide`; run 87 research added |
+| 35 | H3 `parse_settings_frame` RFC compliance | `quiche/src/h3/frame.rs` | 1 | 🔬 Researched | H2-key rejection + size guard; builds on T33 informal spec; run 87 research |
+| 36 | `Bandwidth` arithmetic invariants | `quiche/src/recovery/bandwidth.rs` | 1 | 🔬 Researched | gcongestion module; all `omega`; ~40 Lean lines; run 88/89 research |
+| 37 | `BytesInFlight` counter state-machine invariant | `quiche/src/recovery/bytes_in_flight.rs` | 1 | 🔬 Researched | `bytes > 0 ↔ interval_start.is_some()`; MEDIUM; run 88/89 research |
 
 ## Phase Definitions
 
@@ -50,29 +57,33 @@
 
 ## Next Actions
 
-1. **Target 30: Varint 2-bit tag consistency** — ✅ Done in run 85.
-   `FVSquad/VarIntTag.lean` (15 theorems, 0 sorry):
-   `varint_tag_consistency`, `varintParseLen_1_iff` through `varintParseLen_8_iff`,
-   and all no-overlap lemmas fully proved with `omega`.
-2. **Target 31: H3 frame codec round-trip** *(HIGH)* — Informal spec done (run 82).
+1. **Route-B tests (T20)** — ✅ Done in run 89.
+   `formal-verification/tests/pkt_num_len/` (18/18 PASS):
+   Rust bit-counting vs Lean threshold model verified on all QUIC-valid inputs.
+2. **Target 36: Bandwidth arithmetic** *(HIGH, easy)* — All `omega`, ~40 Lean lines.
+   Key theorems: `bandwidth_zero_le`, `bandwidth_bytes_roundtrip`, `bandwidth_bits_roundtrip`,
+   `bandwidth_add_bits`, `bandwidth_ord_iff`. No Mathlib needed.
+3. **Target 31: H3 frame codec round-trip** *(HIGH)* — Informal spec done (run 82).
    Next: write `FVSquad/H3Frame.lean` with GoAway/MaxPushId/CancelPush round-trips.
    OQ-T31-1 to OQ-T31-4 document open questions.
-3. **Target 33: H3 Settings frame invariants** *(HIGH)* — Informal spec done (run 86).
+4. **Target 33: H3 Settings frame invariants** *(HIGH)* — Informal spec done (run 86).
    Next: write `FVSquad/H3Settings.lean` with key invariants and RFC constraints.
    OQ-T33-1 to OQ-T33-4 document open questions.
-4. **Target 29: Packet-header full roundtrip** *(MEDIUM)* — `PacketHeader.lean` at
-   Phase 4 (14 theorems, 1 sorry). Closing `longHeader_roundtrip` requires a
-   byte-list buffer model of `encode_pkt_num` + `decode_pkt_num`.
 5. **Target 34: QPACK static table lookup** *(LOW effort)* — Pure lookup table;
    provable via `decide`; ~30 Lean lines; closes first QPACK gap.
 6. **Target 35: `parse_settings_frame` RFC compliance** *(MEDIUM)* — Prove H2-key
    rejection using case analysis; builds on T33 informal spec.
-7. **Target 25: StreamId↔stream_do_send guard correctness** — Prove the
+7. **Target 37: `BytesInFlight` counter invariant** *(MEDIUM)* — State-machine proof;
+   `bytes > 0 ↔ interval_start.is_some()`; MEDIUM complexity.
+8. **Target 29: Packet-header full roundtrip** *(MEDIUM)* — `PacketHeader.lean` at
+   Phase 4 (14 theorems, 1 sorry). Closing `longHeader_roundtrip` requires a
+   byte-list buffer model of `encode_pkt_num` + `decode_pkt_num`.
+9. **Target 25: StreamId↔stream_do_send guard correctness** — Prove the
    `is_bidi && is_local` guard selects exactly the RFC 9000 §2.1 send-allowed IDs.
-8. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
-   `Cubic.lean` with `W_est` model and `cwnd_after_ack_ge_west` theorem.
-9. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
-   is maintained by the receive buffer write path.
+10. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
+    `Cubic.lean` with `W_est` model and `cwnd_after_ack_ge_west` theorem.
+11. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
+    is maintained by the receive buffer write path.
 
 ## Archived / Completed Targets
 
@@ -82,9 +93,5 @@
 | 2 | RangeSet invariants | 5 — All Proofs | PR #22 (merged) | insert_preserves_invariant + 13 others; 0 sorry |
 | 3 | Minmax filter | 5 — All Proofs | PR #15 (merged) | 15 theorems; 0 sorry |
 | 7 | PRR (Proportional Rate Reduction) | 5 — All Proofs | pending | 20 theorems; 0 sorry |
-
 | 18 | StreamId RFC 9000 §2.1 arithmetic | 5 — All Proofs | run 64 | 35 theorems; 0 sorry |
 | 19 | Octets↔OctetsMut cross-module round-trip | 5 — All Proofs | run 65 | 20 theorems + 9 examples; 0 sorry |
-| 31 | H3 frame type codec round-trip | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_frame_informal.md` (run 82); scope: GoAway/MaxPushId/CancelPush single-varint frames; open questions OQ-T31-1 to OQ-T31-4 |
-| 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
-| 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/h3_settings_informal.md` (run 86); boolean constraints, size guard, GREASE RT loss, H3_DATAGRAM double-emit; open questions OQ-T33-1 to OQ-T33-4 |
