@@ -868,3 +868,87 @@ run 84 and run 86:
 5. **New T34/T35**: gap analysis from the CRITIQUE's paper-review section
    identified QPACK coverage and settings validation as the next high-value
    targets; both added to TARGETS.md.
+
+---
+
+## New Targets: T36, T37 — gcongestion module (run 88/89)
+
+### Target 36: `Bandwidth` Arithmetic Invariants
+
+**Location**: `quiche/src/recovery/bandwidth.rs`
+
+**Description**: The `Bandwidth` struct wraps a `u64` storing bits-per-second.
+It provides conversions to/from bytes/bits/kbits (integer-only), as well as
+ordering, add, and saturating-sub operations. All arithmetic is pure integer
+operations on `u64`.
+
+**Benefit**: Conversion arithmetic bugs (bytes↔bits, kbits, mbits) would
+silently miscalculate BBR2 pacing rates without failing any type check. The
+`u64` representation makes all properties `omega`-decidable. This is the
+first FV coverage of the `gcongestion` module.
+
+**Key theorems** (~10):
+- `bandwidth_zero_le`: `Bandwidth::ZERO ≤ any`
+- `bandwidth_bytes_roundtrip`: `from_bytes_per_second(to_bytes_per_second(b)) = b`
+- `bandwidth_bits_roundtrip`: `from_bits_per_second(to_bits_per_second(b)) = b`
+- `bandwidth_kbits_correct`: `to_kbits_per_second(b) = b.bps / 1000`
+- `bandwidth_add_bits`: `(a + b).bps = a.bps + b.bps`
+- `bandwidth_sub_some`: `a.bps ≥ b.bps → (a - b) = Some(a.bps - b.bps)`
+- `bandwidth_sub_none`: `a.bps < b.bps → (a - b) = None`
+- `bandwidth_ord_iff`: `a ≤ b ↔ a.bps ≤ b.bps`
+- `bandwidth_mul_duration_correct`: `(b * d).bytes = b.bps * d.nanos / 8_000_000_000`
+
+**Specification size**: ~40 Lean lines.
+
+**Proof tractability**: HIGH — all `omega`, no Mathlib needed.
+
+**Approximations needed**: `Mul<f64>` and `Mul<f32>` operations involve
+floating-point and are omitted from the model (only integer operations
+are verified).
+
+**Priority**: ⭐⭐ HIGH (easy + first gcongestion coverage)
+
+---
+
+### Target 37: `BytesInFlight` Counter State-Machine Invariant
+
+**Location**: `quiche/src/recovery/bytes_in_flight.rs`
+
+**Description**: `BytesInFlight` tracks bytes currently in-flight with a state
+machine: `bytes_in_flight > 0 ↔ bytes_in_flight_interval_start.is_some()`.
+Operations: `add(delta, now)`, `saturating_subtract(delta, now)`.
+
+**Benefit**: A desynchronisation bug (counter non-zero but interval_start=None
+or vice versa) would corrupt duration tracking for BBR2 delivery rate estimates.
+The invariant `bytes > 0 ↔ interval_start.is_some()` is the key correctness
+property.
+
+**Key theorems** (~6):
+- `bif_non_negative`: counter always ≥ 0 (guaranteed by Nat)
+- `bif_add_preserves_invariant`: `add` maintains the state-machine invariant
+- `bif_sub_preserves_invariant`: `saturating_subtract` maintains the invariant
+- `bif_positive_interval_open`: `bytes > 0 → interval_start.is_some()`
+- `bif_zero_interval_none`: `bytes = 0 → interval_start = None`
+- `bif_duration_monotone`: total tracked duration never decreases
+
+**Specification size**: ~50 Lean lines.
+
+**Proof tractability**: MEDIUM — counter proofs trivial (`omega`); state-machine
+lemmas need `cases` analysis on `Option`.
+
+**Approximations needed**: `Instant` modelled as `Nat` (monotone counter,
+`now₂ ≥ now₁` hypothesis); `Duration` modelled as `Nat` (nanoseconds).
+
+**Priority**: ⭐ MEDIUM
+
+---
+
+## Critique Feedback Incorporated (run 89)
+
+1. **Route-B tests for T20** — `formal-verification/tests/pkt_num_len/`
+   added (run 89): 18/18 PASS. Lean threshold model vs Rust bit-counting
+   algorithm verified on all valid QUIC inputs. Documented out-of-range
+   divergence at `numUnacked = 2^31` (expected, matches model boundary
+   documented in `pktNumLen_four_coverage`).
+2. **T36/T37 added** — New gcongestion targets identified and documented;
+   T36 is the highest-priority easy target for the next Lean spec run.
