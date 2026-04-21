@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-21 (run 89)
+Last updated: 2026-04-22 (run 90)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 25 modules
+FVSquad.lean: import manifest for all 26 modules
 
 ## FV Targets
 
@@ -44,7 +44,7 @@ FVSquad.lean: import manifest for all 25 modules
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
 | 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | NEW run87 — pure lookup, ~30 Lean lines |
 | 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | NEW run87 — H2-key rejection + size guard |
-| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 1 | NEW run88/89 — gcongestion, ~40 lines, all omega |
+| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | DONE run 90 — 26 thms + 9 examples, 0 sorry |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | NEW run88/89 — ~50 lines, MEDIUM |
 
 ## Lean File Registry (verified lake build run 89)
@@ -76,7 +76,8 @@ FVSquad.lean: import manifest for all 25 modules
 | FVSquad/PacketNumEncodeDecode.lean | 10 | 23 | Done |
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
 | FVSquad/VarIntTag.lean | 15 | 11 | Done (run 85) |
-| **TOTAL** | **533** | **198** | **3 sorry** |
+| FVSquad/Bandwidth.lean | 26 | 9 | Done (run 90, 0 sorry) |
+| **TOTAL** | **559** | **207** | **3 sorry** |
 
 ## Open Sorry Obligations
 
@@ -98,6 +99,7 @@ Key finding: numUnacked=2^31 diverges (Rust=5, Lean=4) — expected, out-of-rang
 
 - Issue #73 (run88): research info only (PR push failed — protected lean-ci.yml)
 - PR run89: Route-B tests T20 + T36/T37 research
+- PR run90: T36 Bandwidth.lean (26 thms, 9 examples, 0 sorry) + informal spec
 
 ## Status Issue
 
@@ -117,7 +119,7 @@ Issue #4 (open)
 
 ## Next Priority Targets
 
-1. T36: write FVSquad/Bandwidth.lean (~40 lines, all omega) — easiest new file
+1. T37: write FVSquad/BytesInFlight.lean (~50 lines, MEDIUM) — counter invariants
 2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
 3. T33: write FVSquad/H3Settings.lean (Settings invariants)
 4. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide)
