@@ -1,7 +1,7 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-20 (run 88)
-Lean toolchain: leanprover/lean4:v4.29.0 (via elan)
+Last updated: 2026-04-21 (run 89)
+Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 25 modules
 
@@ -28,12 +28,12 @@ FVSquad.lean: import manifest for all 25 modules
 | 17 | Octets read-only cursor | octets/src/lib.rs | 5 | Done |
 | 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs | 5 | Done |
 | 19 | OctetsRoundtrip cross-module | octets/src/lib.rs | 5 | Done |
-| 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done |
+| 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done; Route-B tests 18/18 PASS (run89) |
 | 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs | 5 | Done |
 | 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs | 0 | Identified |
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 2 sorry 8-byte) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
-| 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs | 0 | Identified |
+| 25 | StreamId↔stream_do_send guard | quiche/src/lib.rs | 0 | Identified (MEDIUM) |
 | 26 | CUBIC W_cubic vs W_est | quiche/src/recovery/congestion/cubic.rs | 0 | Identified (MEDIUM) |
 | 27 | CidMgmt retire_if_needed | quiche/src/cid.rs | 0 | Identified (MEDIUM) |
 | 28 | NewReno multi-cycle AIMD | quiche/src/recovery/congestion/reno.rs | 0 | Identified (MEDIUM) |
@@ -42,12 +42,12 @@ FVSquad.lean: import manifest for all 25 modules
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run 82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | NEW run78 (MEDIUM) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
-| 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 0 | NEW run87 — pure lookup, ~30 Lean lines |
-| 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 0 | NEW run87 — H2-key rejection + size guard |
-| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 0 | NEW run88 — gcongestion, ~40 lines, all omega |
-| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 0 | NEW run88 — ~50 lines, MEDIUM |
+| 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | NEW run87 — pure lookup, ~30 Lean lines |
+| 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | NEW run87 — H2-key rejection + size guard |
+| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 1 | NEW run88/89 — gcongestion, ~40 lines, all omega |
+| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | NEW run88/89 — ~50 lines, MEDIUM |
 
-## Lean File Registry (verified lake build run 87)
+## Lean File Registry (verified lake build run 89)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -86,10 +86,18 @@ FVSquad.lean: import manifest for all 25 modules
 | putVarint_first_byte_tag (8-byte) | VarIntRoundtrip.lean | Same |
 | longHeader_roundtrip | PacketHeader.lean | Full buffer model (byte-list encode/decode) |
 
+## Route-B Correspondence Tests
+
+| Target | Directory | Run | Cases | Result |
+|--------|-----------|-----|-------|--------|
+| T20 (PacketNumLen) | tests/pkt_num_len/ | 89 | 18 | 18/18 PASS |
+
+Key finding: numUnacked=2^31 diverges (Rust=5, Lean=4) — expected, out-of-range
+
 ## Open PRs (lean-squad label)
 
-- PR #72 (run87): T34/T35 research + paper.tex update (still open)
-- PR run88: CI completeness check + T36/T37 research
+- Issue #73 (run88): research info only (PR push failed — protected lean-ci.yml)
+- PR run89: Route-B tests T20 + T36/T37 research
 
 ## Status Issue
 
@@ -105,6 +113,7 @@ Issue #4 (open)
 - OQ-T23-1/2 (run74): over-long encoding tag; OctetsMut.get_varint equivalence
 - OQ-T31-1..4 (run82): H3 frame payload_length, 0-length frames, GREASE RT
 - OQ-T33-1..4 (run86): settings boundary, len check, H3_DATAGRAM, raw field
+- Route-B-T20 (run89): pkt_num_len out-of-range divergence at numUnacked=2^31
 
 ## Next Priority Targets
 
@@ -113,19 +122,19 @@ Issue #4 (open)
 3. T33: write FVSquad/H3Settings.lean (Settings invariants)
 4. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide)
 5. Add putU32_bytes_unchanged → closes 2 sorry VarIntRoundtrip
-6. T29: extend PacketHeader.lean → closes 1 sorry
+6. Route-B tests for more targets (RangeSet, Varint) following tests/pkt_num_len/ pattern
 
-## Task 8 Aeneas Status (run 85)
+## Task 8 Aeneas Status
 
 - AENEAS_AVAILABLE=false — no sudo/opam in container
-- Retry condition: container with sudo/opam available
+- Route B used instead (run 89): tests/pkt_num_len/ with 18/18 PASS
+- Retry Aeneas on non-sandboxed runner if available
 
-## CI Status (run 88)
+## CI Status (run 89)
 
-- lean-ci.yml: exists, correct triggers (PR + push master/main on formal-verification/lean/**)
-- NEW: completeness check step added — fails CI if FVSquad/*.lean not in FVSquad.lean imports
+- lean-ci.yml: exists, correct triggers
 - lean-toolchain: leanprover/lean4:v4.29.0
-- Last known build: PASSED (run 85, 25 modules, 3 sorry)
+- Last known build: PASSED (run 89, Lean 4.30.0-rc2, 25 modules, 3 sorry)
 
 ## Lake Project
 

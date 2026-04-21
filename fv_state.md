@@ -1,8 +1,8 @@
 # FV State Snapshot
 
-Last updated: 2026-04-20 (run 88, workflow 24681187441)
+Last updated: 2026-04-21 (run 89, workflow 24703159938)
 
-## Lean File Registry (verified by lake build Lean 4.29.0)
+## Lean File Registry (verified by lake build Lean 4.30.0-rc2)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -33,6 +33,14 @@ Last updated: 2026-04-20 (run 88, workflow 24681187441)
 | FVSquad/VarIntTag.lean | 15 | 11 | Done (run 85) |
 | **TOTAL** | **533** | **198** | **3 sorry** |
 
+## Route-B Correspondence Tests (NEW run 89)
+
+| Target | Directory | Cases | Result | Notes |
+|--------|-----------|-------|--------|-------|
+| T20 (PacketNumLen) | tests/pkt_num_len/ | 18 | 18/18 PASS | Rust bit-counting vs Lean threshold model |
+
+Divergence documented: numUnacked=2^31 → Rust=5, Lean=4 (expected, out-of-range)
+
 ## FV Targets
 
 | Target | Description | Phase | File | Notes |
@@ -43,26 +51,24 @@ Last updated: 2026-04-20 (run 88, workflow 24681187441)
 | T31 | H3 frame type codec round-trip | 2 | specs/h3_frame_informal.md | Informal spec (run82) |
 | T32 | BBR2 pacing rate bounds | 0 | — | MEDIUM |
 | T33 | H3 Settings frame invariants | 2 | specs/h3_settings_informal.md | Informal spec (run86), 4 OQs |
-| T34 | QPACK static table lookup | 0 | — | run87 — ~30 lines, fully decidable |
-| T35 | H3 parse_settings_frame RFC | 0 | — | run87 — H2-key rejection + size guard |
-| T36 | Bandwidth arithmetic invariants | 0 | — | NEW run88 — gcongestion/bandwidth.rs, ~40 lines, all omega |
-| T37 | BytesInFlight counter invariant | 0 | — | NEW run88 — recovery/bytes_in_flight.rs, ~50 lines |
+| T34 | QPACK static table lookup | 1 | — | Researched (run87) ~30 lines, fully decidable |
+| T35 | H3 parse_settings_frame RFC | 1 | — | Researched (run87) H2-key rejection + size guard |
+| T36 | Bandwidth arithmetic invariants | 1 | — | Researched (run88/89) gcongestion/bandwidth.rs, ~40 lines, all omega |
+| T37 | BytesInFlight counter invariant | 1 | — | Researched (run88/89) recovery/bytes_in_flight.rs, ~50 lines |
 
 ## Open PRs (lean-squad label)
 
-- PR #71 (run86): T33 informal spec + REPORT update — MERGED this run
-- PR #72 (run87): T34/T35 research + paper.tex update — still open
-- PR run88 (branch lean-squad-run88-24681187441-ci-research):
-  Task 9 — CI completeness check step in lean-ci.yml
-  Task 1 — Research T36/T37 new gcongestion targets + TARGETS.md T31-T37 table rows
+- Issue #73 (run88): T36/T37 research + CI completeness check (FAILED to push lean-ci.yml — protected file; info preserved in issue; changes apply to RESEARCH.md/TARGETS.md from run89)
+- PR run89 (branch lean-squad-run89-24703159938-route-b-tests-research):
+  Task 8 — Route-B tests for T20 (18/18 PASS)
+  Task 1 — Research T36/T37 + TARGETS.md fix
 
 ## Next Actions
 
-1. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips) — Task 3
-2. T33: write FVSquad/H3Settings.lean (Settings invariants) — Task 3
-3. T36: write FVSquad/Bandwidth.lean (all omega, ~40 lines) — Task 3 (very easy)
-4. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide) — Task 3
+1. T36: write FVSquad/Bandwidth.lean (all omega, ~40 lines) — EASIEST next Lean file
+2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
+3. T33: write FVSquad/H3Settings.lean (Settings invariants)
+4. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide)
 5. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
 6. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-7. paper/paper.pdf: compile when LaTeX available; update REPORT.md to 37 targets
-8. Task 8 (Aeneas): needs opam (sudo apt-get); retry on non-sandboxed runner
+7. Route-B tests: add more targets (e.g., RangeSet, Varint) following tests/pkt_num_len/ pattern
