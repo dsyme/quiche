@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-22 (run 90)
+Last updated: 2026-04-22 (run 91)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 26 modules
@@ -44,10 +44,14 @@ FVSquad.lean: import manifest for all 26 modules
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
 | 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | NEW run87 — pure lookup, ~30 Lean lines |
 | 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | NEW run87 — H2-key rejection + size guard |
-| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | DONE run 90 — 26 thms + 9 examples, 0 sorry |
+| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | DONE run 90 — 26 thms + 9 examples, 0 sorry; PR #75 |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | NEW run88/89 — ~50 lines, MEDIUM |
+| 38 | PathState monotone progression | quiche/src/path.rs | 1 | NEW run91 — RFC 9000 §8.2; ~45 lines; MEDIUM |
+| 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 1 | NEW run91 — all decide; ~20 lines; HIGH |
+| 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | NEW run91 — fuel model; ~50 lines; MEDIUM |
+| 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 1 | NEW run91 — Nat.min; ~25 lines; HIGH |
 
-## Lean File Registry (verified lake build run 89)
+## Lean File Registry (verified lake build run 90)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -95,11 +99,19 @@ FVSquad.lean: import manifest for all 26 modules
 
 Key finding: numUnacked=2^31 diverges (Rust=5, Lean=4) — expected, out-of-range
 
+## CI Status
+
+- lean-ci.yml: ✅ exists, working, path-triggered on formal-verification/lean/**
+- CI improvement (run 91): removed redundant lake update (no deps); added build summary
+- No aeneas-generate.yml (Route A not used)
+- No correspondence-test CI (Route B tests are manual for now)
+
 ## Open PRs (lean-squad label)
 
-- Issue #73 (run88): research info only (PR push failed — protected lean-ci.yml)
-- PR run89: Route-B tests T20 + T36/T37 research
-- PR run90: T36 Bandwidth.lean (26 thms, 9 examples, 0 sorry) + informal spec
+- PR #75 (run90): T36 Bandwidth.lean (26 thms, 9 examples, 0 sorry) + informal spec
+- PR run91 (branch lean-squad-run91-24737203845-research-ci):
+  Task 1 — Research T38-T41 + T36 promoted to Phase 5
+  Task 9 — lean-ci.yml: remove lake update, add build summary
 
 ## Status Issue
 
@@ -119,46 +131,10 @@ Issue #4 (open)
 
 ## Next Priority Targets
 
-1. T37: write FVSquad/BytesInFlight.lean (~50 lines, MEDIUM) — counter invariants
-2. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
-3. T33: write FVSquad/H3Settings.lean (Settings invariants)
-4. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide)
-5. Add putU32_bytes_unchanged → closes 2 sorry VarIntRoundtrip
-6. Route-B tests for more targets (RangeSet, Varint) following tests/pkt_num_len/ pattern
-
-## Task 8 Aeneas Status
-
-- AENEAS_AVAILABLE=false — no sudo/opam in container
-- Route B used instead (run 89): tests/pkt_num_len/ with 18/18 PASS
-- Retry Aeneas on non-sandboxed runner if available
-
-## CI Status (run 89)
-
-- lean-ci.yml: exists, correct triggers
-- lean-toolchain: leanprover/lean4:v4.29.0
-- Last known build: PASSED (run 89, Lean 4.30.0-rc2, 25 modules, 3 sorry)
-
-## Lake Project
-
-No Mathlib dependency (lake-manifest.json is empty packages).
-FVSquad.lean imports 25 modules.
-
-## Anti-Patterns (DO NOT USE without Mathlib)
-
-- `split_ifs` — Mathlib-only; use `by_cases hc : COND`
-- `linarith` — Mathlib-only; use `omega`
-- `native_decide` on struct equality — SendState lacks DecidableEq
-- `|>` before `=` in examples — parenthesise: `(expr).field = val`
-- `simp [h]; omega` — if simp closes goal, omega sees "No goals to be solved"
-- `decide` on goals with free `Nat` variables — not decidable; use cases+simp+omega
-
-## Key Proof Patterns (no Mathlib)
-
-- If-then-else in hypothesis: `by_cases hc : COND`
-- min/max idempotence: `Nat.min_eq_left (Nat.min_le_right a b)`
-- Struct equality one field differs: `congr 1` then prove field equality
-- Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
-- Nat.sub with omega: need `b ≤ a` in context
-- Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
-- Cross-module: private theorems must be re-proved inline
-- PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
+1. T39: write FVSquad/QPACKStaticTable.lean (~20 lines, all decide) — EASIEST
+2. T41: write FVSquad/PacerPacingRate.lean (~25 lines, Nat.min) — EASY, gcongestion
+3. T37: write FVSquad/BytesInFlight.lean (~50 lines, MEDIUM) — counter invariants
+4. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
+5. T33: write FVSquad/H3Settings.lean (Settings invariants)
+6. T38: write FVSquad/PathState.lean (~45 lines, MEDIUM) — RFC 9000 §8.2
+7. T34: write FVSquad/QPACKDecode.lean (builds on T39)
