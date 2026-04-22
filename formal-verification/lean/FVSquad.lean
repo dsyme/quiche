@@ -23,3 +23,4 @@ import FVSquad.VarIntRoundtrip
 import FVSquad.PacketNumEncodeDecode
 import FVSquad.PacketHeader
 import FVSquad.VarIntTag
+import FVSquad.Bandwidth
