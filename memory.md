@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-22 (run 92)
+Last updated: 2026-04-22 (run 93)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 26 modules
@@ -44,14 +44,16 @@ FVSquad.lean: import manifest for all 26 modules
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | NEW run86 (informal spec done) |
 | 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | NEW run87 — pure lookup, ~30 Lean lines |
 | 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | NEW run87 — H2-key rejection + size guard |
-| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | DONE run 90 — 22 thms + 9 examples, 0 sorry; PR #75 |
+| 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | DONE run 90 — 22 thms + 9 examples, 0 sorry |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | NEW run88/89 — ~50 lines, MEDIUM |
 | 38 | PathState monotone progression | quiche/src/path.rs | 1 | NEW run91 — RFC 9000 §8.2; ~45 lines; MEDIUM |
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 1 | NEW run91 — all decide; ~20 lines; HIGH |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | NEW run91 — fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 1 | NEW run91 — Nat.min; ~25 lines; HIGH |
+| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 1 | NEW run93 — all decide; ~30 lines; HIGH |
+| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 1 | NEW run93 — induction; ~60 lines; HIGH |
 
-## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 92)
+## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 93)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -97,21 +99,17 @@ FVSquad.lean: import manifest for all 26 modules
 |--------|-----------|-----|-------|--------|
 | T20 (PacketNumLen) | tests/pkt_num_len/ | 89 | 18 | 18/18 PASS |
 
-Key finding: numUnacked=2^31 diverges (Rust=5, Lean=4) — expected, out-of-range
-
 ## CI Status
 
 - lean-ci.yml: ✅ exists, working, path-triggered on formal-verification/lean/**
-- CI improvements (run 91): removed redundant lake update (no deps); added build summary
 - No aeneas-generate.yml (Route A not used)
-- No correspondence-test CI (Route B tests are manual for now)
 
 ## Open PRs (lean-squad label)
 
-- PR #75 (run90): T36 Bandwidth.lean (22 thms, 9 examples, 0 sorry) — OPEN, merged into run92 branch
-- PR run92 (branch lean-squad-run92-24759205671-report-paper):
-  Task 10 — REPORT.md update (26 files, 555 theorems, 238 examples)
-  Task 11 — paper.tex update (555 theorems, Bandwidth §4.2.6, 26 files in Table 2)
+- PR #77 (run92): REPORT.md + paper.tex — OPEN (merged into run93 branch)
+- PR run93 (branch lean-squad-run93-24772421785-critique-research):
+  Task 7 — CRITIQUE.md refresh (T30/T36 sections; Gaps/Paper Review updated)
+  Task 1 — Research T42 (frame classification) + T43 (ACK range bounds)
 
 ## Status Issue
 
@@ -123,48 +121,12 @@ Issue #4 (open)
 - OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
 - OQ-FC-1 (run70, not modelled): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
-- OQ-T29-1/2/3 (run73): token encoding, CID validation, pkt_num not in roundtrip
-- OQ-T23-1/2 (run74): over-long encoding tag; OctetsMut.get_varint equivalence
-- OQ-T31-1..4 (run82): H3 frame payload_length, 0-length frames, GREASE RT
-- OQ-T33-1..4 (run86): settings boundary, len check, H3_DATAGRAM, raw field
-- Route-B-T20 (run89): pkt_num_len out-of-range divergence at numUnacked=2^31
 
-## Next Priority Targets
+## Next Actions
 
-1. T39: write FVSquad/QPACKStaticTable.lean (~20 lines, all decide) — EASIEST
-2. T41: write FVSquad/PacerPacingRate.lean (~25 lines, Nat.min) — EASY, gcongestion
-3. T37: write FVSquad/BytesInFlight.lean (~50 lines, MEDIUM) — counter invariants
+1. T42: write FVSquad/FrameClassification.lean (all decide, ~30 lines) — EASIEST
+2. T39: write FVSquad/QPACKStatic.lean (all decide, ~20 lines)
+3. T41: write FVSquad/Pacer.lean (Nat.min_le_left, ~25 lines)
 4. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
-5. T33: write FVSquad/H3Settings.lean (Settings invariants)
-6. T38: write FVSquad/PathState.lean (~45 lines, MEDIUM) — RFC 9000 §8.2
-7. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-
-## Anti-Patterns (DO NOT USE without Mathlib)
-
-- `split_ifs` — Mathlib-only; use `by_cases hc : COND`
-- `linarith` — Mathlib-only; use `omega`
-- `native_decide` on struct equality — SendState lacks DecidableEq
-- `|>` before `=` in examples — parenthesise: `(expr).field = val`
-- `simp [h]; omega` — if simp closes goal, omega sees "No goals to be solved"
-- `decide` on goals with free `Nat` variables — not decidable; use cases+simp+omega
-
-## Key Proof Patterns (no Mathlib)
-
-- If-then-else in hypothesis: `by_cases hc : COND`
-- min/max idempotence: `Nat.min_eq_left (Nat.min_le_right a b)`
-- Struct equality one field differs: `congr 1` then prove field equality
-- Roundtrip existential: `refine ⟨witness, ?_⟩` then simp+omega
-- Nat.sub with omega: need `b ≤ a` in context
-- Nat.max with omega: add `have := Nat.le_max_left a b` explicitly
-- Cross-module: private theorems must be re-proved inline
-- PacketType case analysis: `cases ty <;> simp [...] at * <;> omega`
-- typeCode/longFirstByte proofs: `cases ty` + simp + omega (not decide)
-
-## Lake Project
-
-No Mathlib dependency (lake-manifest.json is empty packages).
-FVSquad.lean imports 26 modules (in order): Octets, Varint, RangeSet,
-  Minmax, RttStats, FlowControl, NewReno, DatagramQueue, PRR, PacketNumDecode,
-  Cubic, RangeBuf, RecvBuf, SendBuf, CidMgmt, StreamPriorityKey, OctetsMut,
-  OctetsRoundtrip, StreamId, PacketNumLen, SendBufRetransmit,
-  VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader, VarIntTag, Bandwidth
+5. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines)
+6. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
