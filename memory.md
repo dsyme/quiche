@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-22 (run 93)
+Last updated: 2026-04-23 (run 94)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 26 modules
+FVSquad.lean: import manifest for all 27 modules
 
 ## FV Targets
 
@@ -50,10 +50,10 @@ FVSquad.lean: import manifest for all 26 modules
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 1 | NEW run91 — all decide; ~20 lines; HIGH |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | NEW run91 — fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 1 | NEW run91 — Nat.min; ~25 lines; HIGH |
-| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 1 | NEW run93 — all decide; ~30 lines; HIGH |
+| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | DONE run94 — 50 thms, 0 sorry; all decide/simp |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 1 | NEW run93 — induction; ~60 lines; HIGH |
 
-## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 93)
+## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 94)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -83,7 +83,8 @@ FVSquad.lean: import manifest for all 26 modules
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
 | FVSquad/VarIntTag.lean | 15 | 22 | Done (run 85) |
 | FVSquad/Bandwidth.lean | 22 | 9 | Done (run 90, 0 sorry) |
-| **TOTAL** | **555** | **238** | **3 sorry** |
+| FVSquad/FrameClassification.lean | 50 | 0 | Done (run 94, 0 sorry) |
+| **TOTAL** | **605** | **238** | **3 sorry** |
 
 ## Open Sorry Obligations
 
@@ -106,10 +107,10 @@ FVSquad.lean: import manifest for all 26 modules
 
 ## Open PRs (lean-squad label)
 
-- PR #77 (run92): REPORT.md + paper.tex — OPEN (merged into run93 branch)
-- PR run93 (branch lean-squad-run93-24772421785-critique-research):
-  Task 7 — CRITIQUE.md refresh (T30/T36 sections; Gaps/Paper Review updated)
-  Task 1 — Research T42 (frame classification) + T43 (ACK range bounds)
+- PR #77 (run92): REPORT.md + paper.tex — OPEN (merged into run94 branch)
+- PR run94 (branch lean-squad-run94-24815850933-frame-critique): PENDING PUSH
+  Task 5 — FrameClassification.lean (T42, 50 thms, 0 sorry)
+  Task 7 — CRITIQUE.md refresh (27 files, 605 thms; FrameClassification section; Gaps updated; Paper Review updated)
 
 ## Status Issue
 
@@ -121,12 +122,12 @@ Issue #4 (open)
 - OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
 - OQ-FC-1 (run70, not modelled): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
+- classification_non_obvious (run94): PathChallenge/PathResponse/NewConnectionId are BOTH probing AND ack-eliciting (not mutually exclusive)
 
 ## Next Actions
 
-1. T42: write FVSquad/FrameClassification.lean (all decide, ~30 lines) — EASIEST
-2. T39: write FVSquad/QPACKStatic.lean (all decide, ~20 lines)
-3. T41: write FVSquad/Pacer.lean (Nat.min_le_left, ~25 lines)
+1. T39: write FVSquad/QPACKStatic.lean (all decide, ~20 lines) — EASIEST
+2. T41: write FVSquad/Pacer.lean (Nat.min_le_left, ~25 lines)
+3. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines)
 4. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
-5. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines)
-6. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
+5. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
