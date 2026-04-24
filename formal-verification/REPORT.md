@@ -2,42 +2,42 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 533 named theorems + 198 examples, **3 `sorry`** (8-byte
-varint case ×2 + PacketHeader full-roundtrip ×1), 25 Lean files (Lean 4.29.0, no Mathlib).
+**Status**: ✅ ACTIVE — 555 named theorems + 238 examples, **3 `sorry`** (8-byte
+varint case ×2 + PacketHeader full-roundtrip ×1), 26 Lean files (Lean 4.29.0, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-20 04:10 UTC
-- **Commit**: `7399d409`
+- **Date**: 2026-04-22 03:52 UTC
+- **Commit**: `3710f42b`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **533 named theorems**
-across 25 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **555 named theorems**
+across 26 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
-`OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`) to
-stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire encoding
-(`StreamId`, `PacketNumLen`, `SendBufRetransmit`). Highlights include: formal
-proof of a *real RFC 9000 §A.3 conformance property* (`decode_pktnum_correct`);
-formal confirmation of an **`Ord` contract violation** in HTTP/3 stream
-scheduling (`StreamPriorityKey`); cross-module write-then-read round-trips for
-all integer widths (`OctetsRoundtrip`); RFC 9000 §2.1 stream-ID classification
-laws (`StreamId`); **14 theorems covering QUIC packet-header first-byte
-encoding** (`PacketHeader`), including type-code round-trip, FORM_BIT/FIXED_BIT
-invariants, and injectivity of both type-code and first-byte functions; and —
-new in run 85 — **15 theorems for varint 2-bit tag consistency** (`VarIntTag`),
-covering the partition of the varint tag space into four mutually-exclusive
-ranges and proving the bijective relationship between tag bits and encoded
-lengths. Run 82 added the H3 frame informal spec (T31). Run 83 added the varint
-2-bit tag structural spec (T30). Run 84 updated the Proof Utility Critique
-(Task 7) with T30/T31 assessments and a Paper Review. Run 85 delivered
-`VarIntTag.lean` (T30, 15 theorems, 0 sorry, `lake build` passing). Run 86
-(this run) adds the H3 Settings frame invariants informal spec (T33) — covering
-the Settings frame's boolean constraints, reserved-identifier rejection, size
-guard, GREASE round-trip loss, and H3_DATAGRAM double-emit property — and
-updates this Project Report. 3 sorry remain: 2 in VarIntRoundtrip (8-byte
+`OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`,
+`Bandwidth`) to stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire
+encoding (`StreamId`, `PacketNumLen`, `SendBufRetransmit`). Highlights include:
+formal proof of a *real RFC 9000 §A.3 conformance property*
+(`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
+violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); cross-module
+write-then-read round-trips for all integer widths (`OctetsRoundtrip`); RFC
+9000 §2.1 stream-ID classification laws (`StreamId`); **14 theorems covering
+QUIC packet-header first-byte encoding** (`PacketHeader`); **15 theorems for
+varint 2-bit tag consistency** (`VarIntTag`), covering the partition of the
+varint tag space into four mutually-exclusive ranges (run 85); and — new in
+run 90 — **22 theorems for bandwidth arithmetic invariants** (`Bandwidth.lean`,
+T36), including unit-conversion round-trips, addition commutativity and
+associativity, saturating subtraction, `toBytesPerPeriod` monotonicity,
+`fromKbitsPerSecond` strict monotonicity, and the lower-bound invariant of
+`fromBytesAndTimeDelta` — all verified without sorry against the
+`quiche/src/recovery/bandwidth.rs` gcongestion-controller primitive. Run 91
+added research targets T38 (PathState), T39 (QPACK static table), T40 (QPACK
+decode_int), and T41 (Pacer pacing_rate cap), and improved CI. Run 92 (this
+run) updates the Project Report and conference paper to reflect the current
+26-file, 555-theorem state. 3 sorry remain: 2 in VarIntRoundtrip (8-byte
 varint case awaiting a `putU32_bytes_unchanged` lemma) and 1 in PacketHeader
 (full buffer roundtrip, deferred to a richer model).
 
@@ -45,7 +45,7 @@ varint case awaiting a `putU32_bytes_unchanged` lemma) and 1 in PacketHeader
 
 ## Proof Architecture
 
-The 24 files form three logical layers, with a cross-module bridge layer:
+The 26 files form three logical layers, with a cross-module bridge layer:
 
 ```mermaid
 graph TD
@@ -77,6 +77,7 @@ graph TD
         RecvBuf["RecvBuf.lean<br/>38 theorems"]
         SendBuf["SendBuf.lean<br/>26 theorems"]
         SendBufRT["SendBufRetransmit.lean<br/>17 theorems"]
+        Bandwidth["Bandwidth.lean<br/>22 theorems"]
     end
     L1 --> L2
     L2 --> L3
@@ -165,7 +166,7 @@ graph LR
 - `encodeLen_le_4`, `encodeLen_decodeLen_roundtrip` (PacketNumLen): packet
   number length encoding is 1–4 bytes and round-trips correctly
 
-### Layer 3 — Congestion Control & Stream I/O (6 files, ~139 theorems)
+### Layer 3 — Congestion Control & Stream I/O (7 files, ~161 theorems)
 
 ```mermaid
 graph LR
@@ -175,6 +176,7 @@ graph LR
     RC["RecvBuf.lean<br/>38 theorems<br/>insertAny_inv ✅"]
     SB["SendBuf.lean<br/>26 theorems<br/>emitN_le_maxData ✅"]
     SBR["SendBufRetransmit.lean<br/>17 theorems<br/>retransmit_offset_ge ✅"]
+    BW["Bandwidth.lean<br/>22 theorems<br/>toBytesPerPeriod_mono_bw ✅"]
 ```
 
 **Key results**:
@@ -187,6 +189,10 @@ graph LR
   — RFC 9000 §4.1 safety property
 - `retransmit_offset_ge` (SendBufRetransmit): retransmit offset is always ≥
   the acknowledged offset — no data is retransmitted before its ACK boundary
+- `toBytesPerPeriod_mono_bw` (Bandwidth): bytes-per-period is monotone in
+  bandwidth — a BBR2 scheduler correctness invariant; `fromBytes_toBytes_roundtrip`
+  confirms unit-conversion round-trip; `fromBytesAndTimeDelta_pos` confirms the
+  lower-bound invariant that any positive byte count yields non-zero bandwidth
 
 ---
 
@@ -195,7 +201,7 @@ graph LR
 | File | Public Theorems | Examples | Phase | Key result |
 |------|-----------------|----------|-------|-----------|
 | `Varint.lean` | 10 | 25 | ✅ | `varint_round_trip` |
-| `VarIntTag.lean` | 15 | 11 | ✅ | `varint_tag_partition` |
+| `VarIntTag.lean` | 15 | 22 | ✅ | `varint_tag_partition` |
 | `RangeSet.lean` | 16 | 15 | ✅ | `insert_preserves_invariant` |
 | `Minmax.lean` | 15 | 6 | ✅ | `update_monotone` |
 | `RttStats.lean` | 23 | 2 | ✅ | `adjusted_rtt_ge_min_rtt` |
@@ -219,7 +225,8 @@ graph LR
 | `VarIntRoundtrip.lean` | 8 | 16 | 🔄 2 sorry | `putVarint_freeze_4byte` |
 | `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
 | `PacketHeader.lean` | 14 | 12 | 🔄 1 sorry | `typeCode_roundtrip` |
-| **Total** | **533** | **198** | — | **3 sorry** |
+| `Bandwidth.lean` | 22 | 9 | ✅ | `toBytesPerPeriod_mono_bw` |
+| **Total** | **555** | **238** | — | **3 sorry** |
 
 ### Informal Specs Awaiting Formal Lean Files
 
@@ -227,6 +234,10 @@ graph LR
 |--------|-----------|-------|----------|
 | T31 — H3 frame type codec round-trip | `h3_frame_informal.md` | Phase 2 ✅ (run 82) | MEDIUM — GoAway/MaxPushId/CancelPush/Settings |
 | T33 — H3 Settings frame invariants | `h3_settings_informal.md` | Phase 2 ✅ (run 86) | MEDIUM — boolean constraints, size guard, GREASE RT loss |
+| T38 — PathState monotone progression | (planned) | Phase 1 (run 91) | MEDIUM — RFC 9000 §8.2; ~45 lines |
+| T39 — QPACK static table lookup bounds | (planned) | Phase 1 (run 91) | HIGH — all decide; ~20 lines |
+| T40 — QPACK decode_int prefix-mask | (planned) | Phase 1 (run 91) | MEDIUM — fuel model; ~50 lines |
+| T41 — Pacer pacing_rate cap | (planned) | Phase 1 (run 91) | HIGH — Nat.min; ~25 lines |
 
 ---
 
@@ -354,8 +365,12 @@ timeline
         VarIntRoundtrip, PacketNumEncodeDecode, PacketHeader : 32 theorems
     section Runs 82–85
         H3Frame informal spec T31 (run 82), Varint tag spec T30 (run 83), Critique T30/T31 + Paper Review (run 84), VarIntTag.lean T30 (run 85, 15 theorems) : 15 new theorems + informal specs
-    section Run 86
-        H3 Settings informal spec T33 (run 86) : informal spec pipeline + REPORT update
+    section Runs 86–89
+        H3 Settings informal spec T33 (run 86), REPORT update, Route-B tests T20 18/18 PASS (run 89), Research T36/T37 : informal specs + correspondence tests
+    section Run 90
+        Bandwidth.lean T36 (22 theorems, 9 examples, 0 sorry — BBR2 bandwidth arithmetic invariants) : 22 new theorems
+    section Runs 91–92
+        Research T38–T41 + CI improvements (run 91), REPORT + Paper update (run 92) : research pipeline
 ```
 
 ---
@@ -386,4 +401,4 @@ timeline
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 24647797791](https://github.com/dsyme/quiche/actions/runs/24647797791).
+> [workflow run 24759205671](https://github.com/dsyme/quiche/actions/runs/24759205671).
