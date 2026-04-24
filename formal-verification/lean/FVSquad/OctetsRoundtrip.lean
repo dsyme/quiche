@@ -247,6 +247,19 @@ theorem putU8_octets_independent (s s' : OctetsMutState) (v j : Nat)
     octListGet s'.buf j = octListGet s.buf j :=
   putU8_bytes_unchanged s s' v j h hj
 
+-- Writing 4 bytes at s.off..s.off+3 with putU32 leaves all other positions
+-- unchanged.  Useful for chaining two consecutive putU32 calls (8-byte varint).
+theorem putU32_bytes_unchanged (s s' : OctetsMutState) (v j : Nat)
+    (h : s.putU32 v = some s')
+    (hj : j ≠ s.off ∧ j ≠ s.off + 1 ∧ j ≠ s.off + 2 ∧ j ≠ s.off + 3) :
+    octListGet s'.buf j = octListGet s.buf j := by
+  obtain ⟨_, hb, _⟩ := putU32_buf_off s s' v h
+  rw [hb]
+  simp only [octListGet_set_ne _ _ _ _ (by omega : s.off + 3 ≠ j),
+             octListGet_set_ne _ _ _ _ (by omega : s.off + 2 ≠ j),
+             octListGet_set_ne _ _ _ _ (by omega : s.off + 1 ≠ j),
+             octListGet_set_ne _ _ _ _ (by omega : s.off ≠ j)]
+
 -- =============================================================================
 -- §7  Sequential freeze: write two bytes, then read both with Octets
 -- =============================================================================
