@@ -1,16 +1,16 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-23 (run 96)
+Last updated: 2026-04-24 (run 97)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 27 modules
+FVSquad.lean: import manifest for all 29 modules
 
 ## FV Targets
 
 | # | Name | File | Phase | Status |
 |---|------|------|-------|--------|
 | 1 | Varint encoding | octets/src/lib.rs | 5 | Done |
-| 2 | RangeSet interval algebra | quiche/src/ranges.rs | 5 | Done; Route-B 21/21 PASS (run96) |
+| 2 | RangeSet interval algebra | quiche/src/ranges.rs | 5 | Done; Route-B 21/21 PASS |
 | 3 | Minmax filter | quiche/src/minmax.rs | 5 | Done |
 | 4 | RTT estimator (EWMA) | quiche/src/recovery/rtt.rs | 5 | Done |
 | 5 | Flow control window | quiche/src/flowcontrol.rs | 5 | Done |
@@ -28,7 +28,7 @@ FVSquad.lean: import manifest for all 27 modules
 | 17 | Octets read-only cursor | octets/src/lib.rs | 5 | Done |
 | 18 | StreamId RFC 9000 §2.1 | quiche/src/stream/mod.rs | 5 | Done |
 | 19 | OctetsRoundtrip cross-module | octets/src/lib.rs | 5 | Done |
-| 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done; Route-B 18/18 PASS (run89) |
+| 20 | pkt_num_len encoding length | quiche/src/packet.rs | 5 | Done; Route-B 18/18 PASS |
 | 21 | SendBuf::retransmit model | quiche/src/stream/send_buf.rs | 5 | Done |
 | 22 | RecvBuf flow-control bound | quiche/src/stream/recv_buf.rs | 0 | Identified |
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 2 sorry 8-byte) |
@@ -38,18 +38,18 @@ FVSquad.lean: import manifest for all 27 modules
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 2 | Informal spec done (run82) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
-| 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | ~30 lines, all decide; HIGH |
-| 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | H2-key rejection + size guard |
+| 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | Researched run87 |
+| 35 | H3 parse_settings_frame RFC | quiche/src/h3/frame.rs | 1 | Researched run87 |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | ~50 lines, MEDIUM |
 | 38 | PathState monotone progression | quiche/src/path.rs | 1 | RFC 9000 §8.2; ~45 lines; MEDIUM |
-| 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 1 | all decide; ~20 lines; HIGH |
+| 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 5 | Done run97 (12 thms, 0 sorry) |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 1 | Nat.min; ~25 lines; HIGH |
-| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run96 (28 thms, 0 sorry); informal spec in frame_classification_informal.md |
+| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 1 | induction; ~60 lines; HIGH |
 
-## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 96)
+## Lean File Registry (verified lake build Lean 4.30.0-rc2, run 97)
 
 | File | Theorems | Examples | Status |
 |------|----------|----------|--------|
@@ -79,14 +79,15 @@ FVSquad.lean: import manifest for all 27 modules
 | FVSquad/PacketHeader.lean | 14 | 12 | 1 sorry (full RT deferred) |
 | FVSquad/VarIntTag.lean | 15 | 22 | Done (run 85) |
 | FVSquad/Bandwidth.lean | 22 | 9 | Done (run 90, 0 sorry) |
-| FVSquad/FrameClassification.lean | 28 | 6 | Done (run 96, 0 sorry) |
-| **TOTAL** | **583** | **244** | **3 sorry** |
+| FVSquad/FrameClassification.lean | 25 | 13 | Done (run 97, 0 sorry) |
+| FVSquad/QPACKStatic.lean | 12 | 6 | Done (run 97, 0 sorry) |
+| **TOTAL** | **620** | **257** | **3 sorry** |
 
 ## Open Sorry Obligations
 
 | Theorem | File | Blocking gap |
 |---------|------|-------------|
-| putVarint_freeze_getVarint_8byte | VarIntRoundtrip.lean | putU32_bytes_unchanged in OctetsMut.lean |
+| putVarint_freeze_getVarint_8byte | VarIntRoundtrip.lean | putU32_bytes_before in OctetsRoundtrip.lean |
 | putVarint_first_byte_tag (8-byte) | VarIntRoundtrip.lean | Same |
 | longHeader_roundtrip | PacketHeader.lean | Full buffer model (byte-list encode/decode) |
 
@@ -104,10 +105,10 @@ FVSquad.lean: import manifest for all 27 modules
 
 ## Open PRs (lean-squad label)
 
-- PR #77 (run92): REPORT.md + paper.tex — merged into master in run 96
-- PR run96 (branch lean-squad-run96-24850488407-frame-classification-rangeset):
-  Task 5 — FrameClassification.lean (T42, 28 thms, 0 sorry)
-  Task 8 — Route-B tests for T2 RangeSet (21/21 PASS)
+- PR run97 (branch lean-squad-run97-24871494942-frame-classification-qpack):
+  Task 3/4 — T42 FrameClassification.lean (25 thms, 0 sorry)
+  Task 5 — T39 QPACKStatic.lean (12 thms, 0 sorry)
+  + informal spec: frame_classification_informal.md
 
 ## Status Issue
 
@@ -119,15 +120,13 @@ Issue #4 (open)
 - OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
 - OQ-FC-1 (run70): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
-- RangeSet accumulator-cons-order (run96): Lean range_insert_go uses reversed-cons acc; 
-  initial Rust transcription had wrong direction; corrected and 21/21 tests pass
+- RangeSet accumulator-cons-order (run96): corrected and 21/21 tests pass
 
 ## Next Actions
 
-1. T39: write FVSquad/QPACKStatic.lean (all decide, ~20 lines)
-2. T41: write FVSquad/Pacer.lean (Nat.min_le_left, ~25 lines) — needs informal spec
-3. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines)
-4. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
-5. Add putU32_bytes_unchanged to OctetsMut.lean → closes 2 sorry VarIntRoundtrip
-6. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-7. Route-B: add more targets (e.g., OctetsRoundtrip, Varint)
+1. T41: write FVSquad/Pacer.lean (Nat.min_le_left, ~25 lines) — HIGH
+2. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines) — HIGH
+3. T31: write FVSquad/H3Frame.lean (GoAway/MaxPushId/CancelPush round-trips)
+4. Add putU32_bytes_before to OctetsRoundtrip.lean → closes 2 sorry VarIntRoundtrip
+5. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+6. Route-B: add more targets (e.g., OctetsRoundtrip, Varint)
