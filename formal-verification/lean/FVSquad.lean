@@ -24,3 +24,4 @@ import FVSquad.PacketNumEncodeDecode
 import FVSquad.PacketHeader
 import FVSquad.VarIntTag
 import FVSquad.Bandwidth
+import FVSquad.Pacer

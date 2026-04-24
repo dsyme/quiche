@@ -139,6 +139,27 @@ private theorem getVarint_tag2 (s : OctetsState)
              if_neg (show octListGet s.buf s.off / 64 ≠ 1 by omega),
              if_pos htag, if_pos hoff3]
 
+-- 8-byte dispatch: triggers when b0 / 64 ≠ 0, 1, 2 (i.e. tag = 3).
+private theorem getVarint_tag3 (s : OctetsState)
+    (hoff7 : s.off + 7 < s.buf.length)
+    (htag : octListGet s.buf s.off / 64 = 3) :
+    OctetsState.getVarint s =
+      some ((octListGet s.buf s.off % 64) * 72057594037927936 +
+             octListGet s.buf (s.off + 1) * 281474976710656 +
+             octListGet s.buf (s.off + 2) * 1099511627776 +
+             octListGet s.buf (s.off + 3) * 4294967296 +
+             octListGet s.buf (s.off + 4) * 16777216 +
+             octListGet s.buf (s.off + 5) * 65536 +
+             octListGet s.buf (s.off + 6) * 256 +
+             octListGet s.buf (s.off + 7),
+            { s with off := s.off + 8 }) := by
+  have hoff0 : s.off < s.buf.length := by omega
+  simp only [OctetsState.getVarint, if_pos hoff0,
+             if_neg (show octListGet s.buf s.off / 64 ≠ 0 by omega),
+             if_neg (show octListGet s.buf s.off / 64 ≠ 1 by omega),
+             if_neg (show octListGet s.buf s.off / 64 ≠ 2 by omega),
+             if_pos hoff7]
+
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- §4  Roundtrip proofs — one theorem per encoding length
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -248,10 +269,95 @@ theorem putVarint_freeze_getVarint_8byte (s s' : OctetsMutState) (v : Nat)
           | none => none) = some s') :
     OctetsState.getVarint { buf := s'.buf, off := s.off } =
       some (v, { buf := s'.buf, off := s.off + 8 }) := by
-  sorry
-  -- TODO: chain through s₁, use putU32_freeze_byte0..3 for each half,
-  -- prove non-interference (write at s.off+4 does not affect s.off..s.off+3),
-  -- and close with omega as in the 4-byte proof.
+  -- Let w = v + 0xC000000000000000, wH = w / 2^32, wL = w % 2^32.
+  -- Obtain the intermediate state s₁ (after writing wH).
+  have wH_def : (v + 13835058055282163712) / 4294967296 =
+      (v + 13835058055282163712) / 4294967296 := rfl
+  have wL_def : (v + 13835058055282163712) % 4294967296 =
+      (v + 13835058055282163712) % 4294967296 := rfl
+  match hm : s.putU32 ((v + 13835058055282163712) / 4294967296) with
+  | none =>
+    rw [hm] at h; simp at h
+  | some s₁ =>
+    rw [hm] at h
+    -- s₁.off = s.off + 4
+    have hoff1 : s₁.off = s.off + 4 :=
+      putU32_off s s₁ _ hm
+    -- s₁.buf.length = s.buf.length
+    have hlen1 : s₁.buf.length = s.buf.length :=
+      putU32_len s s₁ _ hm
+    -- Bytes of wH in s₁.buf (at s.off..s.off+3)
+    have hb0s₁ := putU32_freeze_byte0 s s₁ _ hm
+    have hb1s₁ := putU32_freeze_byte1 s s₁ _ hm
+    have hb2s₁ := putU32_freeze_byte2 s s₁ _ hm
+    have hb3s₁ := putU32_freeze_byte3 s s₁ _ hm
+    -- Now the second putU32 writes wL at s₁.off = s.off+4.
+    have hlen2 : s'.buf.length = s₁.buf.length :=
+      putU32_len s₁ s' _ h
+    -- s'.off = s₁.off + 4 = s.off + 8
+    have hoff2 : s'.off = s.off + 8 := by
+      have := putU32_off s₁ s' _ h; omega
+    -- Bytes b0..b3 in s'.buf: the second putU32 writes at s₁.off = s.off+4,
+    -- which is distinct from s.off, s.off+1, s.off+2, s.off+3.
+    have hb0 : octListGet s'.buf s.off = octListGet s₁.buf s.off := by
+      apply putU32_bytes_unchanged s₁ s' _ s.off h
+      exact ⟨by omega, by omega, by omega, by omega⟩
+    have hb1 : octListGet s'.buf (s.off + 1) = octListGet s₁.buf (s.off + 1) := by
+      apply putU32_bytes_unchanged s₁ s' _ (s.off + 1) h
+      exact ⟨by omega, by omega, by omega, by omega⟩
+    have hb2 : octListGet s'.buf (s.off + 2) = octListGet s₁.buf (s.off + 2) := by
+      apply putU32_bytes_unchanged s₁ s' _ (s.off + 2) h
+      exact ⟨by omega, by omega, by omega, by omega⟩
+    have hb3 : octListGet s'.buf (s.off + 3) = octListGet s₁.buf (s.off + 3) := by
+      apply putU32_bytes_unchanged s₁ s' _ (s.off + 3) h
+      exact ⟨by omega, by omega, by omega, by omega⟩
+    -- Bytes b4..b7: written by second putU32 at s₁.off = s.off+4.
+    have hb4 : octListGet s'.buf (s.off + 4) =
+        (v + 13835058055282163712) % 4294967296 / 16777216 := by
+      have := putU32_freeze_byte0 s₁ s' _ h; rw [hoff1] at this; exact this
+    have hb5 : octListGet s'.buf (s.off + 5) =
+        (v + 13835058055282163712) % 4294967296 / 65536 % 256 := by
+      have := putU32_freeze_byte1 s₁ s' _ h; rw [hoff1] at this; exact this
+    have hb6 : octListGet s'.buf (s.off + 6) =
+        (v + 13835058055282163712) % 4294967296 / 256 % 256 := by
+      have := putU32_freeze_byte2 s₁ s' _ h; rw [hoff1] at this; exact this
+    have hb7 : octListGet s'.buf (s.off + 7) =
+        (v + 13835058055282163712) % 4294967296 % 256 := by
+      have := putU32_freeze_byte3 s₁ s' _ h; rw [hoff1] at this; exact this
+    -- Capacity: first putU32 requires s.off + 3 < s.buf.length
+    have hcap : s.off + 3 < s.buf.length := by
+      simp only [OctetsMutState.putU32] at hm
+      by_cases hc : s.off + 3 < s.buf.length
+      · exact hc
+      · simp [if_neg hc] at hm
+    -- s'.buf.length = s.buf.length
+    have hlen_total : s'.buf.length = s.buf.length := by omega
+    -- Capacity for 8-byte read: s.off + 7 < s'.buf.length
+    have hcap8 : s.off + 7 < s'.buf.length := by
+      rw [hlen_total]
+      simp only [OctetsMutState.putU32] at hm
+      by_cases hc : s.off + 3 < s.buf.length
+      · simp [if_pos hc] at hm; subst hm
+        simp only [OctetsMutState.putU32, hoff1, hlen1] at h
+        by_cases hc2 : s.off + 4 + 3 < s.buf.length
+        · omega
+        · simp [if_neg hc2] at h
+      · simp [if_neg hc] at hm
+    -- Tag of first byte: b0 = wH / 16777216; since v ≥ 1073741824,
+    -- wH ≥ 0xC0000000, so b0 ≥ 192, giving b0 / 64 = 3.
+    have hb0_val : octListGet s'.buf s.off =
+        (v + 13835058055282163712) / 4294967296 / 16777216 := by
+      rw [hb0, hb0s₁]
+    have hv2' : v ≤ 4611686018427387903 := hv2
+    have htag : octListGet s'.buf s.off / 64 = 3 := by
+      rw [hb0_val]; omega
+    -- Evaluate getVarint: dispatch on tag = 3 (8-byte branch)
+    rw [getVarint_tag3 { buf := s'.buf, off := s.off } hcap8 htag,
+        hb0_val, hb1, hb2, hb3, hb4, hb5, hb6, hb7, hb1s₁, hb2s₁, hb3s₁]
+    simp only [Option.some.injEq, Prod.mk.injEq, OctetsState.mk.injEq,
+               eq_self_iff_true, and_true]
+    -- Reconstruct v from the 8 serialized bytes.
+    omega
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- §5  Combined roundtrip theorem
@@ -370,6 +476,11 @@ private theorem varint_parse_len_nat_eq4 {b : Nat} (h : b / 64 = 2) :
     varint_parse_len_nat b = 4 := by
   unfold varint_parse_len_nat; rw [h]
 
+private theorem varint_parse_len_nat_valid_tag3 (b : Nat) (h : b / 64 = 3) :
+    varint_parse_len_nat b = 8 := by
+  unfold varint_parse_len_nat
+  simp only [h]
+
 /-- The first byte written by putVarint has tag bits consistent with
     varint_parse_len_nat: the encoded length equals varint_len_nat v. -/
 theorem putVarint_first_byte_tag (s s' : OctetsMutState) (v : Nat)
@@ -412,14 +523,19 @@ theorem putVarint_first_byte_tag (s s' : OctetsMutState) (v : Nat)
             -- The second putU32 writes at offset s₁.off = s.off + 4, so bytes
             -- at positions s.off..s.off+3 are unchanged.
             have hb0_s1 := putU32_freeze_byte0 s s₁ _ hm
-            -- s' = result of writing low word at s₁.off = s.off + 4 into s₁.buf
-            -- Since the second putU32 writes at s.off+4..s.off+7, it doesn't
-            -- change byte at s.off. We need octListGet s'.buf s.off = same as s₁.
-            sorry
-            -- TODO: once putU32_bytes_unchanged is available, use it here.
+            have hoff1 : s₁.off = s.off + 4 := putU32_off s s₁ _ hm
+            -- b0 in s'.buf equals b0 in s₁.buf (second putU32 writes at s.off+4)
+            have hb0 : octListGet s'.buf s.off = octListGet s₁.buf s.off := by
+              apply putU32_bytes_unchanged s₁ s' _ s.off h
+              exact ⟨by omega, by omega, by omega, by omega⟩
+            rw [hb0, hb0_s1]
             -- Arithmetic: b0 = (v + 0xC000000000000000) / 2^32 / 2^24
             --             b0 / 64 = 3 (omega from hv1: v ≥ 1073741824)
             --             varint_parse_len_nat b0 = 8 ✓
+            have htag : ((v + 13835058055282163712) / 4294967296 / 16777216) / 64 = 3 := by
+              have hv' : v ≤ 4611686018427387903 := hv
+              omega
+            rw [htag]
           | none => simp [hm] at h
         · exact absurd hv h4
 
