@@ -4,11 +4,11 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-25 03:45 UTC
-- **Commit**: `725bb4c3`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 32 jobs, **3 sorry**
-  (1 in `FVSquad/PacketHeader.lean`, 3 in `FVSquad/AckRanges.lean`)
-- **Route-B tests added** (run 89): `formal-verification/tests/pkt_num_len/` — 18/18 PASS
+- **Date**: 2026-04-25 09:50 UTC
+- **Commit**: `1d3b444f`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 32 jobs, **1 sorry**
+  (1 in `FVSquad/PacketHeader.lean`; all 3 AckRanges sorry obligations CLOSED run 102)
+- **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/ack_ranges/` **25/25 PASS** (run 102)
 
 ---
 
@@ -1520,14 +1520,17 @@ correctness as a chain of mechanically verified lemmas.
    the loop to iterate many times, consuming up to `block_count` varint reads.
    This is a potential DoS vector (run100 finding). The Lean model faithfully
    reproduces this uncapped behaviour.
-4. **Loop invariant proofs deferred**: the full inductive proofs that all
-   ranges are valid and bounded require a loop invariant lemma. These are
-   left as `sorry` pending a future proof-assistance run. They are verified
-   for concrete inputs via `native_decide`.
+4. **Loop invariant proofs**: the full inductive proofs that all ranges are
+   valid and bounded were completed in run 102 via `loop_invariant` (§3b in
+   `AckRanges.lean`). All 3 sorry obligations are now closed. The 29 theorems
+   in `AckRanges.lean` have 0 sorry remaining.
 
 ### Validation evidence
 
-- Route B tests: none yet for this target.
+- **Route-B tests**: `formal-verification/tests/ack_ranges/` — **25/25 PASS** (run 102).
+  Tests exercise single/multi-block decoding, all underflow guards, boundary
+  values, and property checks (`allValid`, `boundedBy`, monotone separation).
+  Run: `lean --run formal-verification/tests/ack_ranges/lean_eval.lean`
 - Decidable checks: 13 `native_decide` examples in `AckRanges.lean` exercise
   the decoder on representative inputs including edge cases (zero-span,
   underflow guards, multi-block).

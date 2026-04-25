@@ -83,6 +83,50 @@ theorem smallest_le_largest {la ab : Nat} (h : ¬ la < ab) :
     la - ab ≤ la := by omega
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- § 3b  Loop invariant (key lemma underlying §4.3–4.5)
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- At each iteration the new entry (sm', lg) satisfies sm' ≤ lg ≤ ub because:
+--   • guard  ¬ sm < 2 + gap  gives  sm ≥ 2 + gap  so lg = sm-gap-2 ≥ 0
+--   • guard  ¬ lg < blk      gives  lg ≥ blk      so sm' = lg-blk ≤ lg
+--   • lg = sm - gap - 2 ≤ sm ≤ ub  (Nat subtraction is monotone below sm)
+-- Inductively this holds for all entries accumulated in `acc`.
+private theorem loop_invariant
+    (ub sm : Nat) (acc : List AckRange) (bl : List (Nat × Nat))
+    (hsm : sm ≤ ub)
+    (hva : ∀ r ∈ acc, validRange r)
+    (hba : ∀ r ∈ acc, r.2 ≤ ub)
+    (rs : List AckRange)
+    (h : decodeAckBlocks.loop sm acc bl = some rs)
+    : (∀ r ∈ rs, validRange r) ∧ (∀ r ∈ rs, r.2 ≤ ub) := by
+  induction bl generalizing sm acc with
+  | nil =>
+    simp [decodeAckBlocks.loop] at h
+    subst h
+    exact ⟨fun r hr => hva r (List.mem_reverse.mp hr),
+           fun r hr => hba r (List.mem_reverse.mp hr)⟩
+  | cons hd tl ih =>
+    simp only [decodeAckBlocks.loop] at h
+    split at h; · simp at h
+    rename_i hgap
+    split at h; · simp at h
+    rename_i hblk
+    apply ih (sm - hd.1 - 2 - hd.2)
+        ((sm - hd.1 - 2 - hd.2, sm - hd.1 - 2) :: acc)
+    · omega
+    · intro r hr
+      simp [List.mem_cons] at hr
+      rcases hr with rfl | hr
+      · simp [validRange]
+      · exact hva r hr
+    · intro r hr
+      simp [List.mem_cons] at hr
+      rcases hr with rfl | hr
+      · simp; omega
+      · exact hba r hr
+    · exact h
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- § 4  Core safety theorems
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -106,62 +150,66 @@ theorem decodeAckBlocks_nonempty
   intro heq
   subst heq
   unfold decodeAckBlocks at h
-  by_cases hlt : la < ab
-  · simp [hlt] at h
-  · simp [hlt] at h
-    -- loop with initial acc = [(la-ab, la)] cannot return some []
-    -- because the base case returns acc.reverse which is nonempty
-    have : ∀ (s : Nat) (acc : List AckRange) (bl : List (Nat × Nat)),
-        acc ≠ [] → decodeAckBlocks.loop s acc bl ≠ some [] := by
-      intro s acc bl hne hloop
-      induction bl generalizing s acc with
-      | nil =>
-        unfold decodeAckBlocks.loop at hloop
-        -- hloop : some acc.reverse = some [], so acc.reverse = []
-        have heq : acc.reverse = [] := by simpa using hloop
-        exact hne (List.reverse_eq_nil_iff.mp heq)
-      | cons hd tl ih =>
-        simp only [decodeAckBlocks.loop] at hloop
-        split at hloop
-        · exact absurd hloop (by simp)
-        split at hloop
-        · exact absurd hloop (by simp)
-        · exact ih _ _ (by simp) hloop
-    exact this _ _ _ (by simp) h
+  split at h; · simp at h
+  rename_i hlt; simp only at h
+  have aux : ∀ (s : Nat) (acc : List AckRange) (bl : List (Nat × Nat)),
+      acc ≠ [] → decodeAckBlocks.loop s acc bl ≠ some [] := by
+    intro s acc bl hne hloop
+    induction bl generalizing s acc with
+    | nil =>
+      simp [decodeAckBlocks.loop] at hloop
+      exact hne hloop
+    | cons hd tl ih =>
+      simp only [decodeAckBlocks.loop] at hloop
+      split at hloop; · simp at hloop
+      split at hloop; · simp at hloop
+      exact ih _ _ (by simp) hloop
+  exact aux _ _ _ (by simp) h
 
--- § 4.3  The first range has smallest ≤ largest (validRange).
-theorem decodeAckBlocks_first_valid
-    (la ab : Nat) (blocks : List (Nat × Nat))
-    (rs : List AckRange)
-    (h : decodeAckBlocks la ab blocks = some rs) :
-    ∃ s l tail, rs = (s, l) :: tail ∧ s ≤ l := by
-  have hge := decodeAckBlocks_first_guard la ab blocks rs h
-  have hne := decodeAckBlocks_nonempty la ab blocks rs h
-  obtain ⟨hd, tl, rfl⟩ := List.exists_cons_of_ne_nil hne
-  exact ⟨hd.1, hd.2, tl, rfl, by
-    -- The head of the result is (la - ab, la) or derived from the loop
-    -- with guards ensuring sm ≤ lg. Full induction deferred.
-    sorry⟩
+-- § 4.3 / § 4.4 / § 4.5  Core safety theorems (proved via loop_invariant)
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- § 4.4  All ranges are valid on success.
+-- The loop invariant (§3b) carries `allValid acc` through every iteration.
 theorem decodeAckBlocks_all_valid
     (la ab : Nat) (blocks : List (Nat × Nat))
     (rs : List AckRange)
     (h : decodeAckBlocks la ab blocks = some rs) :
     allValid rs := by
-  -- The full inductive argument on the loop state is complex.
-  -- Established by native_decide for concrete inputs; general proof deferred.
-  sorry
+  unfold decodeAckBlocks at h
+  split at h; · simp at h
+  rename_i hlt; simp only at h
+  exact (loop_invariant la (la - ab) [(la - ab, la)] blocks (Nat.sub_le la ab)
+    (by intro r hr; simp at hr; subst hr; simp [validRange])
+    (by intro r hr; simp at hr; subst hr; simp)
+    rs h).1
 
 -- § 4.5  All ranges are bounded by largest_ack on success.
+-- The loop invariant (§3b) carries `boundedBy la acc` through every iteration.
 theorem decodeAckBlocks_bounded
     (la ab : Nat) (blocks : List (Nat × Nat))
     (rs : List AckRange)
     (h : decodeAckBlocks la ab blocks = some rs) :
     boundedBy la rs := by
-  -- The loop strictly decreases the largest value at each step.
-  -- Full proof deferred pending a loop invariant lemma.
-  sorry
+  unfold decodeAckBlocks at h
+  split at h; · simp at h
+  rename_i hlt; simp only at h
+  exact (loop_invariant la (la - ab) [(la - ab, la)] blocks (Nat.sub_le la ab)
+    (by intro r hr; simp at hr; subst hr; simp [validRange])
+    (by intro r hr; simp at hr; subst hr; simp)
+    rs h).2
+
+-- § 4.3  The first range has smallest ≤ largest (validRange).
+-- Follows immediately from decodeAckBlocks_all_valid.
+theorem decodeAckBlocks_first_valid
+    (la ab : Nat) (blocks : List (Nat × Nat))
+    (rs : List AckRange)
+    (h : decodeAckBlocks la ab blocks = some rs) :
+    ∃ s l tail, rs = (s, l) :: tail ∧ s ≤ l := by
+  have hav := decodeAckBlocks_all_valid la ab blocks rs h
+  have hne := decodeAckBlocks_nonempty la ab blocks rs h
+  obtain ⟨hd, tl, rfl⟩ := List.exists_cons_of_ne_nil hne
+  exact ⟨hd.1, hd.2, tl, rfl, hav hd List.mem_cons_self⟩
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- § 5  Decidable unit checks (native_decide)

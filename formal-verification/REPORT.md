@@ -2,20 +2,20 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 591 named theorems + 238+ examples, **1 `sorry`**
-(PacketHeader full-roundtrip ×1), 28 Lean files (Lean 4.30.0-rc2, no Mathlib).
+**Status**: ✅ ACTIVE — 620 named theorems + 238+ examples, **1 `sorry`**
+(PacketHeader full-roundtrip ×1), 29 Lean files (Lean 4.30.0-rc2, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-24 11:30 UTC
-- **Commit**: `cc8f98da`
+- **Date**: 2026-04-25 09:50 UTC
+- **Commit**: `1d3b444f`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **591 named theorems**
-across 28 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **620 named theorems**
+across 29 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`,
 `Bandwidth`) to stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire
@@ -28,12 +28,14 @@ write-then-read round-trips for all integer widths (`OctetsRoundtrip`); RFC
 QUIC packet-header first-byte encoding** (`PacketHeader`); **15 theorems for
 varint 2-bit tag consistency** (`VarIntTag`); **22 theorems for bandwidth
 arithmetic invariants** (`Bandwidth.lean`); **17 theorems for the Pacer
-pacing-rate cap** (`Pacer.lean`); and — new in run 99 — **19 theorems for the
-HTTP/3 frame type codec** (`H3Frame.lean`, T31), covering type-ID distinctness,
-varint-payload round-trips for GoAway, CancelPush, and MaxPushId, encoding-
-length consistency, and the RFC 9114 type-ID-to-varint-range property. Only
-1 sorry remains: the full buffer round-trip in PacketHeader (deferred to a
-richer byte-buffer model).
+pacing-rate cap** (`Pacer.lean`); **19 theorems for the HTTP/3 frame type
+codec** (`H3Frame.lean`, T31), covering type-ID distinctness, varint-payload
+round-trips for GoAway, CancelPush, and MaxPushId; and — new in run 101/102 —
+**29 theorems for ACK frame acked-range bounds** (`AckRanges.lean`, T43),
+including a full inductive loop-invariant proof that all decoded ranges satisfy
+`sm ≤ lg` and are bounded by `largest_ack`, with 25/25 Route-B correspondence
+tests passing. Only 1 sorry remains: the full buffer round-trip in PacketHeader
+(deferred to a richer byte-buffer model).
 
 ---
 
@@ -222,7 +224,8 @@ graph LR
 | `Bandwidth.lean` | 22 | 9 | ✅ | `toBytesPerPeriod_mono_bw` |
 | `Pacer.lean` | 17 | 0 | ✅ | `pacer_rate_cap` |
 | `H3Frame.lean` | 19 | 12 | ✅ | `goAway_round_trip` |
-| **Total** | **591** | **238+** | — | **1 sorry** |
+| `AckRanges.lean` | 29 | 13 | ✅ | `decodeAckBlocks_all_valid` |
+| **Total** | **620** | **238+** | — | **1 sorry** |
 
 ### Informal Specs Awaiting Formal Lean Files
 
@@ -368,6 +371,8 @@ timeline
         Research T38–T41 + CI improvements (run 91), REPORT + Paper update (run 92) : research pipeline
     section Runs 93–99
         QPACKStatic.lean T39 (12 theorems, 0 sorry — QPACK static table bounds, run 97), FrameClassification.lean T42 (25 theorems — ack_eliciting/probing, run 97), Pacer.lean T41 (17 theorems — pacing-rate cap, run 98), H3Frame.lean T31 (19 theorems — GoAway/CancelPush/MaxPushId round-trips, run 99) : 73 new theorems (runs 97-99)
+    section Runs 100–102
+        AckRanges.lean T43 (29 theorems, loop invariant proof, 0 sorry — run 101/102), Route-B tests 25/25 PASS (run 102) : 29 new theorems; 1 sorry total
 ```
 
 ---
