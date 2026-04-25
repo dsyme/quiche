@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-25 (run 102)
+Last updated: 2026-04-25 (run 103)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 29 modules
@@ -14,11 +14,11 @@ FVSquad.lean: import manifest for all 29 modules
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99 (19 thms, 0 sorry) |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
-| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 1 | ~50 lines, MEDIUM |
+| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 2 | Informal spec done run103 (6 invariants, 3 OQs) |
 | 38 | PathState monotone progression | quiche/src/path.rs | 1 | RFC 9000 §8.2; ~45 lines; MEDIUM |
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 5 | Done run97 (12 thms, 0 sorry) |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
@@ -58,7 +58,7 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
 | FVSquad/H3Frame.lean | 19 | Done (run 99) |
-| FVSquad/AckRanges.lean | 29 | DONE run102 (0 sorry) — loop_invariant closed 3 obligations |
+| FVSquad/AckRanges.lean | 29 | DONE run102 (0 sorry) |
 | **TOTAL** | **620** | **1 sorry** |
 
 ## Open Sorry Obligations
@@ -75,6 +75,7 @@ FVSquad.lean: import manifest for all 29 modules
 | T36 (Bandwidth) | tests/bandwidth_arithmetic/ | 90/94 | 25 | 25/25 PASS |
 | T2 (RangeSet) | tests/rangeset_insert/ | 96 | 21 | 21/21 PASS |
 | T43 (AckRanges) | tests/ack_ranges/ | 102 | 25 | 25/25 PASS |
+| T31 (H3Frame) | tests/h3_frame/ | 103 | 25 | 25/25 PASS |
 
 ## CI Status
 
@@ -82,9 +83,12 @@ FVSquad.lean: import manifest for all 29 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run102 (branch lean-squad-run102-24927890859-ack-ranges-sorry-closed):
-  Task 5 — close 3 AckRanges.lean sorry (loop_invariant, all_valid, bounded, first_valid)
-  Task 8 — Route-B T43 tests/ack_ranges/ 25/25 PASS
+- PR run100 (branch lean-squad-run100-...): T43 informal spec + H3Frame.lean + paper
+- PR run101 (branch lean-squad-run101-...): T43 AckRanges.lean spec + CORRESPONDENCE
+- PR run102 (branch lean-squad-run102-...): T43 AckRanges sorry closed + Route-B tests
+- PR run103 (branch lean-squad-run103-24936380941-h3frame-routeb-bytes-in-flight):
+  Task 8 — Route-B T31 H3Frame tests/h3_frame/ 25/25 PASS
+  Task 2 — T37 BytesInFlight informal spec
 
 ## Status Issue
 
@@ -97,10 +101,14 @@ Issue #4 (open)
 - OQ-FC-1 (run70): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
 - OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
+- OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
+- OQ-T37-2 (run103): open_interval_duration reset on close (confirmed correct)
+- OQ-T37-3 (run103): add(0,now) early-return is deliberate design choice
 
 ## Next Actions
 
-1. T33: write FVSquad/H3Settings.lean (Settings invariants, informal spec done run86)
-2. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-3. T37: write FVSquad/BytesInFlight.lean (~50 lines, omega)
-4. T38: write FVSquad/PathState.lean (monotone progression, ~45 lines)
+1. T37: write FVSquad/BytesInFlight.lean (informal spec done run103; ~50 lines, omega)
+2. T33: write FVSquad/H3Settings.lean (informal spec done run86)
+3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+4. T38: write informal spec / FVSquad/PathState.lean (~45 lines)
+5. Route-B: add tests for Bandwidth, RangeSet following tests/h3_frame/ pattern
