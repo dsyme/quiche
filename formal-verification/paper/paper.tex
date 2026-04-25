@@ -57,14 +57,12 @@ We present an incremental formal verification effort targeting
 \texttt{quiche}, Cloudflare's production implementation of the QUIC
 transport protocol and HTTP/3 in Rust.
 Using \emph{Lean~4} without Mathlib, we have proved
-\textbf{555 named theorems across 26 files}, covering core QUIC algorithms
+\textbf{591 named theorems across 28 files}, covering core QUIC algorithms
 from byte-level framing through congestion control (including the BBR2
 bandwidth primitive) and stream management.
-552 of these theorems are fully sorry-free; 3~\texttt{sorry} obligations
-remain: 2~for the 8-byte varint encoding case in \texttt{VarIntRoundtrip.lean}
-(awaiting a non-interference lemma for chained buffer writes), and 1~for the
-full long-header round-trip in \texttt{PacketHeader.lean} (requires a byte-list
-buffer model).
+590 of these theorems are fully sorry-free; 1~\texttt{sorry} obligation
+remains: the full byte-list roundtrip in \texttt{PacketHeader.lean}
+(requires a byte-list buffer model; all other sorry obligations closed).
 Proofs are verified continuously by CI.
 Our methodology applies a five-phase pipeline---target identification,
 informal specification, formal specification, implementation extraction,
@@ -115,10 +113,10 @@ Our contributions are:
   \item A \emph{target selection and specification methodology} adapted
     to Rust codebases, extracting functional models from imperative code
     while documenting the abstraction boundary.
-  \item \textbf{555 Lean~4 theorems} (552 sorry-free) across 26 algorithmic
+  \item \textbf{591 Lean~4 theorems} (590 sorry-free) across 28 algorithmic
     components, covering QUIC's byte framing, congestion control (including
-    BBR2 bandwidth arithmetic), flow control, packet-number arithmetic, and
-    stream management.
+    BBR2 bandwidth arithmetic and the gcongestion pacer), flow control,
+    packet-number arithmetic, stream management, and H3 frame codec.
   \item \textbf{Four concrete findings}: a formally proved $\mathtt{Ord}$
     violation; a corrected RFC~\S A.3 specification; a composition theorem
     (\texttt{encode\_decode\_pktnum}) closing the packet-number pipeline; and
@@ -284,11 +282,10 @@ Of 25 files audited, \textbf{no mismatches} were found.
 \subsection{Proof Inventory}
 
 Table~\ref{tab:theorems} summarises the 26 Lean files.
-The project totals \textbf{555 named theorems}, \textbf{238 examples},
-and \textbf{3 \texttt{sorry}} (2 in \texttt{VarIntRoundtrip.lean} for
-the 8-byte case; 1 in \texttt{PacketHeader.lean} for the full long-header
-round-trip),
-verified by Lean~4.29.0 via the Lake build system.
+The project totals \textbf{591 named theorems}, \textbf{198 examples},
+and \textbf{1 \texttt{sorry}} (in \texttt{PacketHeader.lean} for the full
+long-header round-trip),
+verified by Lean~4.30.0-rc2 via the Lake build system.
 
 \begin{table*}[t]
 \centering
@@ -305,7 +302,7 @@ verified by Lean~4.29.0 via the Lake build system.
 \texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\
 \texttt{VarIntTag.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 15  & \texttt{varint\_tag\_consistency}  & \texttt{omega} \\
 \texttt{PacketHeader.lean}      & \texttt{quiche/src/packet.rs}       & Framing  & 14  & \texttt{short\_long\_first\_byte\_differ} & \texttt{simp}, \texttt{omega} \\ \hline
-\multicolumn{6}{l}{\small $^{\dagger}$2 sorry in \texttt{VarIntRoundtrip.lean} (8-byte case); 1 sorry in \texttt{PacketHeader.lean} (\texttt{longHeader\_roundtrip}).} \\
+\multicolumn{6}{l}{\small $^{\dagger}$1 sorry in \texttt{PacketHeader.lean} (\texttt{longHeader\_roundtrip}); all other sorry closed.} \\
 \midrule
 \texttt{RangeSet.lean}          & \texttt{quiche/src/ranges.rs}       & Algorithm & 16 & \texttt{insert\_preserves\_inv}  & \texttt{simp}, \texttt{omega} \\
 \texttt{Minmax.lean}            & \texttt{quiche/src/minmax.rs}       & Algorithm & 15 & \texttt{minmax\_bounded}         & \texttt{omega} \\
@@ -323,16 +320,19 @@ verified by Lean~4.29.0 via the Lake build system.
 \texttt{Cubic.lean}             & \texttt{quiche/src/recovery/\ldots/cubic.rs} & Congestion & 26 & \texttt{wCubic\_fast\_conv} & \texttt{omega} \\
 \texttt{PRR.lean}               & \texttt{quiche/src/recovery/prr.rs} & Congestion & 20 & \texttt{prr\_send\_le\_limit}    & \texttt{omega} \\
 \texttt{Bandwidth.lean}         & \texttt{quiche/src/recovery/bandwidth.rs} & Congestion & 22 & \texttt{toBytesPerPeriod\_mono\_bw} & \texttt{omega} \\
+\texttt{Pacer.lean}             & \texttt{quiche/src/recovery/gcongestion/pacer.rs} & Congestion & 17 & \texttt{pacer\_rate\_le\_cap} & \texttt{omega} \\
 \midrule
 \texttt{RangeBuf.lean}          & \texttt{quiche/src/range\_buf.rs}   & Stream   & 19  & \texttt{maxOff\_consume}         & \texttt{omega} \\
 \texttt{RecvBuf.lean}           & \texttt{quiche/src/stream/recv\_buf.rs} & Stream & 38 & \texttt{insertAny\_inv}          & \texttt{simp}, \texttt{omega} \\
 \texttt{SendBuf.lean}           & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 26 & \texttt{emitN\_le\_maxData}      & \texttt{omega} \\
 \texttt{SendBufRetransmit.lean} & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 17 & \texttt{retransmit\_inv}         & \texttt{omega} \\
 \midrule
-\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{555} & \textbf{3 sorry}$^{\dagger}$ & \\
+\texttt{H3Frame.lean}           & \texttt{quiche/src/h3/frame.rs}    & H3       & 19  & \texttt{goAway\_rt}              & \texttt{omega}, \texttt{decide} \\
+\midrule
+\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{591} & \textbf{1 sorry}$^{\dagger}$ & \\
 \bottomrule
 \end{tabular}
-\caption{Summary of 26 Lean~4 files: Rust source, logical layer, named
+\caption{Summary of 28 Lean~4 files: Rust source, logical layer, named
 theorem count, headline result, and predominant proof tactics.
 \textbf{Bold} marks results with cross-cutting implications.}
 \label{tab:theorems}
@@ -340,8 +340,7 @@ theorem count, headline result, and predominant proof tactics.
 
 \subsection{Proof Architecture}
 
-The 26 files form four logical layers, as shown in
-Figure~\ref{fig:arch}.
+The 28 files form four logical layers (Framing, Algorithm, Congestion, Stream/H3), as shown in
 
 \begin{figure}[h]
 \centering
@@ -583,13 +582,13 @@ carefully structured inductive argument.
 No bug was found in the quiche source that invalidated a proved theorem.
 The RFC~9000~\S A.3 gap (\S\ref{sec:findings}.\ref{oq1-pktnum}) was a
 specification error, not an implementation bug.
-This is itself a positive finding: the 555 theorems provide formal
+This is itself a positive finding: the 591 theorems provide formal
 evidence that the modelled properties hold in the Lean functional model,
 with correspondences to the Rust source documented in
 \texttt{CORRESPONDENCE.md}.
-The HTTP/3 layer (H3 frame codec, Settings validation, QPACK) has not yet
-been verified; informal specifications for two H3 targets (T31, T33) are in
-progress; and four further targets (T38--T41) have been identified.
+The H3 frame codec (T31) is now verified; H3 Settings validation (T33) and
+ACK frame range bounds (T43) have informal specifications and are next in
+the pipeline.
 
 % ---------------------------------------------------------------------------
 \section{Discussion}
@@ -713,18 +712,17 @@ reassembly---in a proof assistant.
 \label{sec:conclusion}
 % ---------------------------------------------------------------------------
 
-We have presented an incremental formal verification of 26 algorithmic
+We have presented an incremental formal verification of 28 algorithmic
 components in \texttt{quiche}, Cloudflare's production QUIC implementation,
 using Lean~4 without Mathlib.
-The project has accumulated 555 machine-checked theorems; 552 are fully
-sorry-free.  Three \texttt{sorry} obligations remain: 2 in the 8-byte varint
-encoding case of \texttt{VarIntRoundtrip.lean} (awaiting a single
-non-interference lemma \texttt{putU32\_bytes\_unchanged}), and 1 in
-\texttt{PacketHeader.lean} (the full \texttt{longHeader\_roundtrip}, requiring
-a byte-list buffer model).
-The proofs cover byte framing, congestion control (including BBR2 bandwidth
-arithmetic), flow control, packet-number arithmetic, stream management, and
-packet-header encoding.
+The project has accumulated 591 machine-checked theorems; 590 are fully
+sorry-free.  One \texttt{sorry} obligation remains: the full byte-list
+round-trip in \texttt{PacketHeader.lean} (requiring a byte-list buffer model;
+all varint and framing sorry obligations are now closed).
+The proofs cover byte framing (including H3 frame codec round-trips),
+congestion control (including BBR2 bandwidth arithmetic and gcongestion
+pacing-rate invariants), flow control, packet-number arithmetic, stream
+management, and packet-header encoding.
 
 Four findings stand out: a formally proved \texttt{Ord} contract
 violation in HTTP/3 stream scheduling (intentional by design); a corrected
@@ -740,11 +738,9 @@ a substantial class of protocol-level proofs: linear arithmetic
 (\texttt{omega}) discharges the majority of obligations, and careful
 functional modelling of Rust's ownership patterns is feasible with
 explicit freeze/state-return transformations.
-Future work includes: closing the overflow gap with \texttt{UInt64}
-arithmetic; proving the H3 frame codec round-trip (T31, informal spec done);
+Future work includes: closing the byte-list buffer gap in PacketHeader;
 verifying the H3 Settings frame invariants (T33, informal spec done);
-exploring QPACK static table lookup correctness (T39, all-\texttt{decide});
-verifying the Pacer pacing-rate cap (T41, \texttt{Nat.min});
+verifying ACK frame acked-range bounds (T43, informal spec done this run);
 and exploring Aeneas extraction to mechanically bridge the Lean model to
 the Rust source.
 

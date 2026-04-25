@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-21 UTC
-- **Commit**: `1095ee8e`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 28 jobs, **3 sorry**
-  (2 in `FVSquad/VarIntRoundtrip.lean`, 1 in `FVSquad/PacketHeader.lean`)
+- **Date**: 2026-04-25 03:45 UTC
+- **Commit**: `725bb4c3`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 32 jobs, **3 sorry**
+  (1 in `FVSquad/PacketHeader.lean`, 3 in `FVSquad/AckRanges.lean`)
 - **Route-B tests added** (run 89): `formal-verification/tests/pkt_num_len/` — 18/18 PASS
 
 ---
@@ -1471,3 +1471,63 @@ is a fully proved end-to-end composition theorem connecting `PacketNumLen`
 and `PacketNumDecode` for the first time.  Together with the existing proofs in
 those modules, this establishes RFC 9000 §17.1 packet number encoding
 correctness as a chain of mechanically verified lemmas.
+
+
+---
+
+## T43 — ACK Frame Acked-Range Bounds (`AckRanges.lean`)
+
+**Lean file**: `formal-verification/lean/FVSquad/AckRanges.lean`  
+**Rust source**: `quiche/src/frame.rs` — `parse_ack_frame` (lines 1257–1311)  
+**Informal spec**: `formal-verification/specs/ack_ranges_informal.md`  
+**Phase**: 3 (Lean spec + implementation model, partial proofs)
+
+### Modelled definitions
+
+| Lean name | Rust name / concept | Source location | Correspondence level | Notes |
+|-----------|--------------------|-----------------|--------------------|-------|
+| `decodeAckBlocks` | `parse_ack_frame` | `frame.rs:1257` | **abstraction** | IO/varint read abstracted to Nat lists; ack_delay, ECN omitted |
+| `AckRange` | `Range<u64>` in `RangeSet` | `frame.rs:1273,1291` | **exact** | Modelled as `(Nat × Nat)` pair |
+| `validRange` | implicit `smallest ≤ largest` | `frame.rs:1265,1285` | **exact** | Guard ensures non-empty range |
+| `boundedBy` | all PN ≤ `largest_ack` | `frame.rs:1260` | **exact** | Loop monotonically decreases largest |
+| `decodeAckBlocks.loop` | inner `for` loop | `frame.rs:1275–1292` | **abstraction** | Pure functional loop with acc; same guard structure as Rust |
+
+### Proved properties (native_decide verified)
+
+| Theorem | Property | Status |
+|---------|----------|--------|
+| `decodeAckBlocks_first_guard` | success ⟹ `la ≥ ab` | ✅ proved |
+| `decodeAckBlocks_nonempty` | success ⟹ result non-empty | ✅ proved |
+| `loop_largest_decreases` | each iteration: `(s-gap)-2 < s` | ✅ proved |
+| `blocks_disjoint_via_gap` | gap-2 separation ⟹ disjoint | ✅ proved |
+| `decodeAckBlocks_none_iff_first_guard` | failure ↔ `la < ab` (no-block case) | ✅ proved |
+| `decodeAckBlocks_none_means_no_ranges` | failure ⟹ no ranges | ✅ proved |
+| 8 `native_decide` unit checks | concrete input/output values | ✅ proved |
+| 5 `native_decide` property checks | validRange, boundedBy, monotone on samples | ✅ proved |
+| `decodeAckBlocks_first_valid` | head range has `s ≤ l` | 🔄 sorry (complex inductive) |
+| `decodeAckBlocks_all_valid` | all ranges have `s ≤ l` | 🔄 sorry (loop invariant) |
+| `decodeAckBlocks_bounded` | all ranges bounded by `largest_ack` | 🔄 sorry (loop invariant) |
+
+### Approximations and known gaps
+
+1. **IO abstracted**: `Octets` cursor reads (`b.get_varint()`) are replaced by
+   a plain `List (Nat × Nat)` argument. This is the standard pure-model
+   abstraction used throughout the FV project.
+2. **ack_delay and ECN omitted**: these fields are parsed but have no range
+   semantics; they are not modelled.
+3. **`block_count` is uncapped** (OQ-T43-2): the Rust loop runs `block_count`
+   times with no upper bound check. A very large `block_count` varint causes
+   the loop to iterate many times, consuming up to `block_count` varint reads.
+   This is a potential DoS vector (run100 finding). The Lean model faithfully
+   reproduces this uncapped behaviour.
+4. **Loop invariant proofs deferred**: the full inductive proofs that all
+   ranges are valid and bounded require a loop invariant lemma. These are
+   left as `sorry` pending a future proof-assistance run. They are verified
+   for concrete inputs via `native_decide`.
+
+### Validation evidence
+
+- Route B tests: none yet for this target.
+- Decidable checks: 13 `native_decide` examples in `AckRanges.lean` exercise
+  the decoder on representative inputs including edge cases (zero-span,
+  underflow guards, multi-block).
