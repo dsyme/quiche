@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-25 (run 101)
+Last updated: 2026-04-25 (run 102)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 29 modules
@@ -24,9 +24,9 @@ FVSquad.lean: import manifest for all 29 modules
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (17 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
-| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 3 | run101 (29 items, 3 sorry) — in open PR run101 |
+| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | DONE run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 101)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 102)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -58,17 +58,14 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
 | FVSquad/H3Frame.lean | 19 | Done (run 99) |
-| FVSquad/AckRanges.lean | 29 | 3 sorry (loop invariant proofs) run101 |
-| **TOTAL** | **620** | **4 sorry** |
+| FVSquad/AckRanges.lean | 29 | DONE run102 (0 sorry) — loop_invariant closed 3 obligations |
+| **TOTAL** | **620** | **1 sorry** |
 
 ## Open Sorry Obligations
 
 | Theorem | File | Blocking gap |
 |---------|------|-------------|
 | longHeader_roundtrip | PacketHeader.lean | Full buffer model (byte-list encode/decode) |
-| decodeAckBlocks_first_valid | AckRanges.lean | Head-of-reversed-list identity after loop |
-| decodeAckBlocks_all_valid | AckRanges.lean | Loop invariant: acc entries have sm ≤ lg |
-| decodeAckBlocks_bounded | AckRanges.lean | Loop invariant: acc entries have lg ≤ la |
 
 ## Route-B Correspondence Tests
 
@@ -77,6 +74,7 @@ FVSquad.lean: import manifest for all 29 modules
 | T20 (PacketNumLen) | tests/pkt_num_len/ | 89 | 18 | 18/18 PASS |
 | T36 (Bandwidth) | tests/bandwidth_arithmetic/ | 90/94 | 25 | 25/25 PASS |
 | T2 (RangeSet) | tests/rangeset_insert/ | 96 | 21 | 21/21 PASS |
+| T43 (AckRanges) | tests/ack_ranges/ | 102 | 25 | 25/25 PASS |
 
 ## CI Status
 
@@ -84,9 +82,9 @@ FVSquad.lean: import manifest for all 29 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run101 (branch lean-squad-run101-24921786154-ack-ranges-correspondence):
-  Task 5 — T43 AckRanges.lean (29 items, 3 sorry)
-  Task 6 — CORRESPONDENCE.md updated with T43 section
+- PR run102 (branch lean-squad-run102-24927890859-ack-ranges-sorry-closed):
+  Task 5 — close 3 AckRanges.lean sorry (loop_invariant, all_valid, bounded, first_valid)
+  Task 8 — Route-B T43 tests/ack_ranges/ 25/25 PASS
 
 ## Status Issue
 
@@ -102,7 +100,7 @@ Issue #4 (open)
 
 ## Next Actions
 
-1. T43: close 3 remaining sorry (loop invariant for all_valid, bounded, first_valid)
-2. T33: write FVSquad/H3Settings.lean (Settings invariants)
-3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-4. Route-B: add T43 correspondence tests
+1. T33: write FVSquad/H3Settings.lean (Settings invariants, informal spec done run86)
+2. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
+3. T37: write FVSquad/BytesInFlight.lean (~50 lines, omega)
+4. T38: write FVSquad/PathState.lean (monotone progression, ~45 lines)
