@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-24 (run 99)
+Last updated: 2026-04-25 (run 101)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 28 modules
+FVSquad.lean: import manifest for all 29 modules
 
 ## FV Targets
 
@@ -14,7 +14,7 @@ FVSquad.lean: import manifest for all 28 modules
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 4 | Done run99 (19 thms, 0 sorry) |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99 (19 thms, 0 sorry) |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
@@ -23,10 +23,10 @@ FVSquad.lean: import manifest for all 28 modules
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 5 | Done run97 (12 thms, 0 sorry) |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (17 thms, 0 sorry) |
-| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) — in open PR run97 |
-| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 1 | induction; ~60 lines; HIGH |
+| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
+| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 3 | run101 (29 items, 3 sorry) — in open PR run101 |
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 99)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 101)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -58,13 +58,17 @@ FVSquad.lean: import manifest for all 28 modules
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
 | FVSquad/H3Frame.lean | 19 | Done (run 99) |
-| **TOTAL** | **591** | **1 sorry** |
+| FVSquad/AckRanges.lean | 29 | 3 sorry (loop invariant proofs) run101 |
+| **TOTAL** | **620** | **4 sorry** |
 
 ## Open Sorry Obligations
 
 | Theorem | File | Blocking gap |
 |---------|------|-------------|
 | longHeader_roundtrip | PacketHeader.lean | Full buffer model (byte-list encode/decode) |
+| decodeAckBlocks_first_valid | AckRanges.lean | Head-of-reversed-list identity after loop |
+| decodeAckBlocks_all_valid | AckRanges.lean | Loop invariant: acc entries have sm ≤ lg |
+| decodeAckBlocks_bounded | AckRanges.lean | Loop invariant: acc entries have lg ≤ la |
 
 ## Route-B Correspondence Tests
 
@@ -80,13 +84,9 @@ FVSquad.lean: import manifest for all 28 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run97 (branch lean-squad-run97-24871494942-frame-classification-qpack):
-  Task 3/4 — T42 FrameClassification.lean (25 thms, 0 sorry)
-  Task 5 — T39 QPACKStatic.lean (12 thms, 0 sorry)
-  + informal spec: frame_classification_informal.md
-- PR run99 (branch lean-squad-run99-24886334029-h3frame-report):
-  Task 3 — T31 H3Frame.lean (19 thms, 0 sorry)
-  Task 10 — REPORT.md updated (591 thms, 28 files, 1 sorry)
+- PR run101 (branch lean-squad-run101-24921786154-ack-ranges-correspondence):
+  Task 5 — T43 AckRanges.lean (29 items, 3 sorry)
+  Task 6 — CORRESPONDENCE.md updated with T43 section
 
 ## Status Issue
 
@@ -98,12 +98,11 @@ Issue #4 (open)
 - OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
 - OQ-FC-1 (run70): RESET_STREAM guard in RecvBuf not modelled
 - decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
-- RangeSet accumulator-cons-order (run96): corrected and 21/21 tests pass
+- OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
 
 ## Next Actions
 
-1. T43: write FVSquad/AckRanges.lean (induction on block list, ~60 lines) — HIGH
+1. T43: close 3 remaining sorry (loop invariant for all_valid, bounded, first_valid)
 2. T33: write FVSquad/H3Settings.lean (Settings invariants)
 3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-4. Route-B: add more targets
-5. Merge run97 PR (T42 FrameClassification + T39 QPACKStatic) if not yet merged
+4. Route-B: add T43 correspondence tests
