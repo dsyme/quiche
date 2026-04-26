@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-26 (run 104)
+Last updated: 2026-04-24 (run 105)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 29 modules
@@ -12,7 +12,7 @@ FVSquad.lean: import manifest for all 29 modules
 | 1-21 | (various done targets) | various | 5 | All Done (see prior runs)
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 0 sorry) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
-| 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry |
+| 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 5 | **Done run105** (15 thms, 0 sorry) |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
@@ -26,7 +26,7 @@ FVSquad.lean: import manifest for all 29 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 104)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 105)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -53,19 +53,17 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/SendBufRetransmit.lean | 17 | Done |
 | FVSquad/VarIntRoundtrip.lean | 8 | Done (0 sorry) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | Done |
-| FVSquad/PacketHeader.lean | 14 | 1 sorry (full RT deferred) |
+| FVSquad/PacketHeader.lean | 15 | **Done run105 (0 sorry)** |
 | FVSquad/VarIntTag.lean | 15 | Done (run 85) |
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
 | FVSquad/H3Frame.lean | 19 | Done (run 99/100) |
 | FVSquad/AckRanges.lean | 29 | Done (run 102, 0 sorry) |
-| **TOTAL** | **604** | **1 sorry** |
+| **TOTAL** | **604** | **0 sorry** 🎉 |
 
 ## Open Sorry Obligations
 
-| Theorem | File | Blocking gap |
-|---------|------|-------------|
-| longHeader_roundtrip | PacketHeader.lean | Full buffer model (byte-list encode/decode) |
+*None — all 604 theorems fully proved as of run 105.*
 
 ## Route-B Correspondence Tests
 
@@ -83,10 +81,9 @@ FVSquad.lean: import manifest for all 29 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run104 (branch lean-squad-run104-critique-correspondence):
-  Task 7 — CRITIQUE.md updated (5 new target sections, Paper Review refresh)
-  Task 6 — CORRESPONDENCE.md updated (T43 sorry→proved, H3Frame section, Route-B)
-  Applied: AckRanges.lean (29 thms, 0 sorry), tests/ack_ranges/ Route-B
+- PR run105 (branch lean-squad-run105-sorry-free-*):
+  Task 5 — longHeader_roundtrip proved (0 sorry, 15 thms in PacketHeader.lean)
+  Task 10 — REPORT.md updated (run 105, 604 thms, 0 sorry)
 
 ## Status Issue
 
