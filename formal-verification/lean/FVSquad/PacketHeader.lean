@@ -237,12 +237,21 @@ theorem short_long_first_byte_differ (ty : PacketType) (fb : Nat)
     simp [shortFirstByte, FORM_BIT, FIXED_BIT, ← h] <;> decide
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- §11 Full round-trip theorem (stated; proof deferred to future work)
---
--- Modelling the full buffer encoding requires a richer byte-list model.
--- The theorem below states the key property; the `sorry` marks the gap
--- between the first-byte model above and the full buffer model.
+-- §11 Full round-trip theorem
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- List-slicing helpers used in the round-trip proof.
+private theorem list_take_left {α : Type} (l₁ l₂ : List α) :
+    (l₁ ++ l₂).take l₁.length = l₁ := by
+  induction l₁ with
+  | nil => simp
+  | cons h t ih => simp [ih]
+
+private theorem list_drop_left {α : Type} (l₁ l₂ : List α) :
+    (l₁ ++ l₂).drop l₁.length = l₂ := by
+  induction l₁ with
+  | nil => simp
+  | cons h t ih => simp [ih]
 
 /-- A simplified header record capturing the fields relevant to the
     first-byte and type-code layer. -/
@@ -303,7 +312,47 @@ theorem longHeader_roundtrip (h : Header)
     ∃ bs, encodeLongHeader h = some bs ∧
           decodeLongHeader bs h.dcid.length =
             some ⟨h.ty, h.version, h.dcid, h.scid, none⟩ := by
-  sorry
+  -- Extract the type code; h.ty must be a long-header type.
+  obtain ⟨c, hc⟩ : ∃ c, typeCode h.ty = some c := by
+    cases htc : typeCode h.ty with
+    | none => exact absurd htc hty
+    | some c => exact ⟨c, rfl⟩
+  have hcrange : c < 4 := typeCode_in_range h.ty c hc
+  -- Long-header first byte: fb = FORM_BIT | FIXED_BIT | (c << 4)
+  have hfb : longFirstByte h.ty = some (FORM_BIT + FIXED_BIT + c * 16) := by
+    simp [longFirstByte, hc]
+  -- Decoding arithmetic: fb / 128 = 1 and (fb % 64) / 16 = c
+  have hform : (FORM_BIT + FIXED_BIT + c * 16) / 128 = 1 := by
+    simp only [FORM_BIT, FIXED_BIT]; omega
+  have htypebits : (FORM_BIT + FIXED_BIT + c * 16) % 64 / 16 = c := by
+    simp only [FORM_BIT, FIXED_BIT]; omega
+  -- Type-code roundtrip: decoding c gives back h.ty
+  have htycode : typeOfCode c = some h.ty := typeCode_roundtrip h.ty c hc
+  -- Length bounds for the if-guards in decodeLongHeader
+  have hlen :
+      ¬ h.dcid.length > (h.dcid ++ h.scid.length :: h.scid).length := by
+    simp
+  have hscid_len : ¬ h.scid.length > h.scid.length := Nat.lt_irrefl _
+  -- Version big-endian 4-byte roundtrip
+  have hv : h.version / 16777216 * 16777216 +
+            h.version / 65536 % 256 * 65536 +
+            h.version / 256 % 256 * 256 +
+            h.version % 256 = h.version := by omega
+  -- Provide the explicit encoding as the existential witness.
+  have henc : encodeLongHeader h = some ([FORM_BIT + FIXED_BIT + c * 16,
+      h.version / 16777216, (h.version / 65536) % 256,
+      (h.version / 256) % 256, h.version % 256,
+      h.dcid.length] ++ h.dcid ++ [h.scid.length] ++ h.scid) := by
+    simp [encodeLongHeader, hfb]
+  refine ⟨_, henc, ?_⟩
+  -- Prove the decode of the encoded bytes is the original header.
+  unfold decodeLongHeader
+  simp only [List.cons_append, List.nil_append, List.append_assoc,
+             if_pos hform, htypebits,
+             if_neg hlen, list_take_left, list_drop_left,
+             List.take_length, hv, if_neg hscid_len]
+  -- Reduce the Option.bind chain using the type-code roundtrip.
+  simp [htycode]
 
 /-- The version field round-trips through big-endian 4-byte encoding. -/
 theorem version_roundtrip (v : Nat) (_hv : v < 2 ^ 32) :
