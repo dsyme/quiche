@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-25 (run 103)
+Last updated: 2026-04-26 (run 104)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 29 modules
@@ -10,11 +10,11 @@ FVSquad.lean: import manifest for all 29 modules
 | # | Name | File | Phase | Status |
 |---|------|------|-------|--------|
 | 1-21 | (various done targets) | various | 5 | All Done (see prior runs)
-| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (10 thms, 0 sorry) |
+| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 0 sorry) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
 | 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 4 | 14 thms, 1 sorry |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
-| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
+| 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
@@ -24,9 +24,9 @@ FVSquad.lean: import manifest for all 29 modules
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (17 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
-| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | DONE run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
+| 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 102)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 104)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -47,7 +47,7 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/StreamPriorityKey.lean | 21 | Done |
 | FVSquad/OctetsMut.lean | 27 | Done |
 | FVSquad/Octets.lean | 48 | Done |
-| FVSquad/OctetsRoundtrip.lean | 20 | Done |
+| FVSquad/OctetsRoundtrip.lean | 21 | Done |
 | FVSquad/StreamId.lean | 35 | Done |
 | FVSquad/PacketNumLen.lean | 20 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | Done |
@@ -57,9 +57,9 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/VarIntTag.lean | 15 | Done (run 85) |
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
-| FVSquad/H3Frame.lean | 19 | Done (run 99) |
-| FVSquad/AckRanges.lean | 29 | DONE run102 (0 sorry) |
-| **TOTAL** | **620** | **1 sorry** |
+| FVSquad/H3Frame.lean | 19 | Done (run 99/100) |
+| FVSquad/AckRanges.lean | 29 | Done (run 102, 0 sorry) |
+| **TOTAL** | **604** | **1 sorry** |
 
 ## Open Sorry Obligations
 
@@ -83,12 +83,10 @@ FVSquad.lean: import manifest for all 29 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run100 (branch lean-squad-run100-...): T43 informal spec + H3Frame.lean + paper
-- PR run101 (branch lean-squad-run101-...): T43 AckRanges.lean spec + CORRESPONDENCE
-- PR run102 (branch lean-squad-run102-...): T43 AckRanges sorry closed + Route-B tests
-- PR run103 (branch lean-squad-run103-24936380941-h3frame-routeb-bytes-in-flight):
-  Task 8 — Route-B T31 H3Frame tests/h3_frame/ 25/25 PASS
-  Task 2 — T37 BytesInFlight informal spec
+- PR run104 (branch lean-squad-run104-critique-correspondence):
+  Task 7 — CRITIQUE.md updated (5 new target sections, Paper Review refresh)
+  Task 6 — CORRESPONDENCE.md updated (T43 sorry→proved, H3Frame section, Route-B)
+  Applied: AckRanges.lean (29 thms, 0 sorry), tests/ack_ranges/ Route-B
 
 ## Status Issue
 
@@ -111,4 +109,4 @@ Issue #4 (open)
 2. T33: write FVSquad/H3Settings.lean (informal spec done run86)
 3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
 4. T38: write informal spec / FVSquad/PathState.lean (~45 lines)
-5. Route-B: add tests for Bandwidth, RangeSet following tests/h3_frame/ pattern
+5. Paper: update paper.tex with run104 state (29 files, 604 thms, 1 sorry, OQ-T43-2, Route-B)
