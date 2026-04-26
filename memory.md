@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-24 (run 105)
+Last updated: 2026-04-26 (run 106)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 29 modules
@@ -12,10 +12,10 @@ FVSquad.lean: import manifest for all 29 modules
 | 1-21 | (various done targets) | various | 5 | All Done (see prior runs)
 | 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 0 sorry) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
-| 29 | QUIC packet-header first-byte | quiche/src/packet.rs | 5 | **Done run105** (15 thms, 0 sorry) |
+| 29 | QUIC packet-header first-byte + full roundtrip | quiche/src/packet.rs | 5 | **Done run105** (16 thms: 14 public + 2 private, 0 sorry); CORRESPONDENCE section added run106 |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
-| 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM |
+| 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM — next new target |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 2 | Informal spec done run103 (6 invariants, 3 OQs) |
@@ -25,6 +25,10 @@ FVSquad.lean: import manifest for all 29 modules
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (17 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
+
+## 🎉 MILESTONE: 0 SORRY
+
+As of run 105, all 604 theorems across 29 Lean files are fully proved with 0 sorry.
 
 ## Lean File Registry (verified lake build v4.30.0-rc2, run 105)
 
@@ -53,7 +57,7 @@ FVSquad.lean: import manifest for all 29 modules
 | FVSquad/SendBufRetransmit.lean | 17 | Done |
 | FVSquad/VarIntRoundtrip.lean | 8 | Done (0 sorry) |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | Done |
-| FVSquad/PacketHeader.lean | 15 | **Done run105 (0 sorry)** |
+| FVSquad/PacketHeader.lean | 16 (14+2) | Done run105 (0 sorry) |
 | FVSquad/VarIntTag.lean | 15 | Done (run 85) |
 | FVSquad/Bandwidth.lean | 22 | Done (run 90) |
 | FVSquad/Pacer.lean | 17 | Done (run 98) |
@@ -81,13 +85,12 @@ FVSquad.lean: import manifest for all 29 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run105 (branch lean-squad-run105-sorry-free-*):
-  Task 5 — longHeader_roundtrip proved (0 sorry, 15 thms in PacketHeader.lean)
-  Task 10 — REPORT.md updated (run 105, 604 thms, 0 sorry)
+- PR #85 (branch lean-squad-run105-sorry-free): Task 5 + Task 10 — close last sorry + REPORT update
+- PR #86 (branch lean-squad-run106-corr-critique): Task 6 + Task 7 — CORRESPONDENCE + CRITIQUE update (run 106)
 
 ## Status Issue
 
-Issue #4 (open)
+Issue #4 (open) — updated run 106
 
 ## Key Findings
 
@@ -98,12 +101,10 @@ Issue #4 (open)
 - OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
 - OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
 - OQ-T37-2 (run103): open_interval_duration reset on close (confirmed correct)
-- OQ-T37-3 (run103): add(0,now) early-return is deliberate design choice
 
-## Next Actions
+## Next Priority Targets
 
-1. T37: write FVSquad/BytesInFlight.lean (informal spec done run103; ~50 lines, omega)
-2. T33: write FVSquad/H3Settings.lean (informal spec done run86)
-3. T29: extend PacketHeader.lean with full byte-list model → closes 1 sorry
-4. T38: write informal spec / FVSquad/PathState.lean (~45 lines)
-5. Paper: update paper.tex with run104 state (29 files, 604 thms, 1 sorry, OQ-T43-2, Route-B)
+1. T37 (BytesInFlight) — informal spec done, write FVSquad/BytesInFlight.lean (~50 lines)
+2. T33 (H3 Settings) — informal spec done (run 86), write FVSquad/H3Settings.lean (~80 lines)
+3. T38 (PathState monotone progression) — RFC 9000 §8.2 state machine
+4. T32 (BBR2 pacing rate bounds) — gcongestion, medium difficulty
