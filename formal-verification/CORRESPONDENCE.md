@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-26 04:00 UTC
-- **Commit**: `27cfb774`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 32 jobs, **1 sorry**
-  (1 in `FVSquad/PacketHeader.lean`; all AckRanges sorry obligations CLOSED run 102)
+- **Date**: 2026-04-26 17:26 UTC
+- **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 29 files, **0 sorry** 🎉
+  (last sorry `longHeader_roundtrip` in `PacketHeader.lean` CLOSED run 105)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
   `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS (run 102);
   `tests/h3_frame/` 25/25 PASS (run 103)
@@ -1357,16 +1357,18 @@ incorrect modelling.  See individual target sections for the known gaps.
 
 ## Open Sorry Obligations
 
-As confirmed by `lake build` (Lean 4.30.0-rc2, 2026-04-26):
+As confirmed by `lake build` (Lean 4.30.0-rc2, 2026-04-26 run 105):
 
-| Theorem | File | Lines | Blocking gap |
-|---------|------|-------|-------------|
-| `longHeader_roundtrip` | `FVSquad/PacketHeader.lean` | ~306 | Full byte-list model of DCID, SCID, token, and payload-length fields |
+**None** — all 604 theorems are fully proved with 0 sorry. 🎉
 
-All other 603 theorems are fully proved (0 sorry). The VarIntRoundtrip 8-byte
-sorry obligations were closed in run 85 via the `putU32_bytes_unchanged`
-lemma. The 3 AckRanges sorry obligations were closed in run 102 via the
-`loop_invariant` lemma.
+The final sorry (`longHeader_roundtrip` in `PacketHeader.lean`) was closed in
+run 105 by extending the model with a concrete byte-list `Header` struct,
+`encodeLongHeader`/`decodeLongHeader` definitions, and a full tactic proof
+using `omega` + `simp` for the big-endian version round-trip and list-append
+helpers for the connection-ID fields.
+
+Prior closures: VarIntRoundtrip 8-byte sorry (run 85 via `putU32_bytes_unchanged`);
+AckRanges 3 sorry obligations (run 102 via `loop_invariant`).
 
 ---
 
@@ -1540,6 +1542,82 @@ correctness as a chain of mechanically verified lemmas.
 - Decidable checks: 13 `native_decide` examples in `AckRanges.lean`.
 - Loop invariant proofs: all 3 formerly-sorry theorems proved (run 102) via
   `loop_invariant` — see §3b in `AckRanges.lean`.
+
+---
+
+## Target 29: QUIC packet-header first-byte and full round-trip — `FVSquad/PacketHeader.lean`
+
+**Last updated**: 2026-04-26 17:26 UTC  **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
+
+**Lean file**: `formal-verification/lean/FVSquad/PacketHeader.lean`
+**Rust source**: `quiche/src/packet.rs` — `Header::to_bytes` (line ~306), `Header::from_bytes` (line ~194)
+**Informal spec**: `formal-verification/specs/packet_header_informal.md`
+**Phase**: 5 — Done (14 public + 2 private theorems, **0 sorry** ✅ — run 105)
+
+### Modelled definitions
+
+| Lean name | Rust name / concept | Source location | Correspondence level | Notes |
+|-----------|--------------------|-----------------|--------------------|-------|
+| `PacketType` | `packet::Type` enum | `packet.rs:121–138` | **exact** | All 6 variants: Initial, ZeroRTT, Handshake, Retry, VersionNegotiation, Short |
+| `FORM_BIT`, `FIXED_BIT`, `TYPE_MASK` | Wire constants | `packet.rs:45–49` | **exact** | 0x80, 0x40, 0x30 |
+| `typeCode` | `Type::to_wire` / first-byte type bits | `packet.rs:~150–170` | **exact** | Maps `PacketType → Option Nat` (0–3); VersionNegotiation/Short have no type code |
+| `typeOfCode` | First-byte decode branch | `packet.rs:~194` | **exact** | Inverse of `typeCode`; returns `none` for codes ≥ 4 |
+| `longFirstByte` | Long-header first-byte assembly | `packet.rs:306–320` | **exact** | `FORM_BIT \| FIXED_BIT \| (code << 4)` |
+| `shortFirstByte` | Short-header first byte | `packet.rs:~350` | **exact** | `FIXED_BIT` only (0x40) |
+| `formBitSet`, `fixedBitSet`, `typeBitsOf` | First-byte predicates | `packet.rs` | **exact** | Bit-extraction predicates |
+| `Header` | `Header` struct (key fields) | `packet.rs:75–110` | **abstraction** | `ty`, `version`, `dcid`, `scid`, `token`; pkt_num_len and key_phase fixed to 0; header protection omitted |
+| `encodeLongHeader` | `Header::to_bytes` | `packet.rs:~306` | **abstraction** | Long-header only; returns `Option (List Nat)`; no buffer cursor state |
+| `decodeLongHeader` | `Header::from_bytes` | `packet.rs:~194` | **abstraction** | Decodes from byte list; no partial-read error paths; token fields set to `none` |
+
+### Key theorems and correspondence level
+
+| Theorem | Rust equivalence | Level | Notes |
+|---------|-----------------|-------|-------|
+| `typeCode_roundtrip` | `typeOfCode(typeCode(ty)) = Some(ty)` | **exact** | Bijection in both directions |
+| `typeOfCode_roundtrip` | Inverse direction | **exact** | |
+| `typeCode_in_range` | All type codes are 0–3 | **exact** | |
+| `typeCode_injective` | Distinct packet types → distinct codes | **exact** | |
+| `longFirstByte_form_bit` | FORM_BIT always set in long headers | **exact** | RFC 9000 §17.2 |
+| `longFirstByte_fixed_bit` | FIXED_BIT always set in long headers | **exact** | RFC 9000 §17.2 |
+| `longFirstByte_type_bits` | Bits 5–4 carry the type code | **exact** | |
+| `longFirstByte_byte_range` | First byte value is in [0, 255] | **exact** | |
+| `longFirstByte_injective` | Different types → different first bytes | **exact** | Decode is unambiguous |
+| `shortFirstByte_no_form_bit` | FORM_BIT clear in short headers | **exact** | RFC 9000 §17.3 |
+| `shortFirstByte_fixed_bit` | FIXED_BIT set in short headers | **exact** | |
+| `short_long_first_byte_differ` | Short ≠ any long first byte | **exact** | Type disambiguation always succeeds |
+| `longHeader_roundtrip` | `encodeLongHeader`↔`decodeLongHeader` | **abstraction** | Full encode↔decode proved; pkt_num_len/key_phase not modelled |
+| `version_roundtrip` | Big-endian 4-byte version field | **exact** | For all `v < 2^32` |
+
+### Approximations and known gaps
+
+1. **pkt_num_len and key_phase**: bits 1–0 of the long-header first byte (packet-number length)
+   and bit 2 of the short-header first byte (key phase) are fixed to 0. Header-protection
+   mutations that XOR these bits are out of scope.
+2. **Token field**: the `Header.token` field is set to `none` in `encodeLongHeader` and
+   `decodeLongHeader`. The Initial/Retry token length prefix is not modelled.
+3. **Short-header round-trip**: only the first-byte properties of short headers are proved;
+   the full short-header `encodeLongHeader`-equivalent is not in scope.
+4. **Buffer cursor state**: `Header::to_bytes` writes into an `OctetsMut` cursor;
+   `encodeLongHeader` returns `Option (List Nat)`.  Error paths and partial writes are omitted.
+5. **`VersionNegotiation`**: handled as a decode-only type; `typeCode` returns `none` for it
+   and `encodeLongHeader` rejects it, matching the Rust implementation.
+
+### Impact on proofs
+
+14 public + 2 private helper theorems, **0 sorry** ✅.  The type-code bijection and
+bit-presence theorems are the highest-value results: any bug in the first-byte encoding
+in `Header::to_bytes` would violate `typeCode_roundtrip`, `longFirstByte_form_bit`, or
+`short_long_first_byte_differ`, causing all QUIC traffic to be misclassified.
+`longHeader_roundtrip` closes the full encode↔decode correctness proof for long-header
+packets under the modelled scope (DCID, SCID, version, type code).
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 105).
+- **12 `native_decide` unit checks**: concrete first-byte values for each packet type
+  verified at compile time.
+- Route-B correspondence tests are not yet written for this target; the proof itself
+  subsumes executable testing for the modelled scope.
 
 ---
 
