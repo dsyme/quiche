@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-27 (run 108)
+Last updated: 2026-04-27 (run 109)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 31 modules
@@ -18,19 +18,19 @@ FVSquad.lean: import manifest for all 31 modules
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM — next new target |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run108 (28 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
-| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry) |
-| 38 | PathState monotone progression | quiche/src/path.rs | 1 | RFC 9000 §8.2; ~45 lines; MEDIUM |
+| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry); open PR |
+| 38 | PathState monotone progression | quiche/src/path.rs | 5 | Done run109 (24 thms, 0 sorry); open PR |
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 5 | Done run97 (12 thms, 0 sorry) |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (17 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
 
-## 🎉 MILESTONE: 0 SORRY (as of run 105, maintained in run 108)
+## 🎉 MILESTONE: 0 SORRY (as of run 105, maintained run 109)
 
-All 649 theorems across 31 Lean files are fully proved with 0 sorry.
+All ~673 theorems across 31 Lean files are fully proved with 0 sorry.
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 108)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 109)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -64,8 +64,8 @@ All 649 theorems across 31 Lean files are fully proved with 0 sorry.
 | FVSquad/H3Frame.lean | 19 | Done run99/100 |
 | FVSquad/AckRanges.lean | 29 | Done run102 |
 | FVSquad/BytesInFlight.lean | 17 | Done run107 |
-| FVSquad/H3Settings.lean | 28 | Done run108 |
-| **TOTAL** | **649** | **0 sorry** 🎉 |
+| FVSquad/PathState.lean | 24 | Done run109 |
+| **TOTAL** | **~673** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -84,11 +84,11 @@ All 649 theorems across 31 Lean files are fully proved with 0 sorry.
 ## Open PRs (lean-squad label)
 
 - PR run107 (branch lean-squad-run107-24976389936-bytes-in-flight): T37 BytesInFlight.lean (17 thms, 0 sorry)
-- PR run108 (branch lean-squad-run108-24990021034-h3settings): T33 H3Settings.lean (28 thms, 0 sorry)
+- PR run109 (branch lean-squad-run109-25010820444-pathstate-correspondence): T38 PathState.lean (24 thms, 0 sorry) + CORRESPONDENCE update
 
 ## Status Issue
 
-Issue #4 (open) — updated run108
+Issue #4 (open) — updated run109
 
 ## Key Findings
 
@@ -99,11 +99,13 @@ Issue #4 (open) — updated run108
 - OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
 - OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
 - OQ-T37-2 (run103): open_interval_duration reset on close (confirmed correct)
-- T33 note (run108): SETTINGS_FRAME_TYPE_ID (0x4) is in the reserved set — would be rejected if it appeared as a setting identifier inside a SETTINGS payload
+- T33 note (run108): SETTINGS_FRAME_TYPE_ID (0x4) is in the reserved set
+- T38 note (run109): PathState proves no typeclass LE/LT (causes simp loops in pure Lean 4 without Mathlib); use State.rank directly
 
 ## Next Priority Targets
 
-1. T38 (PathState monotone progression) — RFC 9000 §8.2 state machine, ~45 lines
-2. T32 (BBR2 pacing rate bounds) — gcongestion, medium difficulty
-3. Route-B tests for T37 (BytesInFlight) — would complete correspondence evidence
+1. T32 (BBR2 pacing rate bounds) — gcongestion, medium difficulty
+2. Route-B tests for T37 (BytesInFlight) — correspondence evidence
+3. Route-B tests for T38 (PathState) — state machine transition tests
 4. Route-B tests for T33 (H3Settings) — validate against Rust parse_settings_frame
+5. T40 (QPACK decode_int prefix-mask) — fuel model, ~50 lines
