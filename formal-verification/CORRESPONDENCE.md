@@ -4,11 +4,13 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-21 UTC
-- **Commit**: `1095ee8e`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 28 jobs, **3 sorry**
-  (2 in `FVSquad/VarIntRoundtrip.lean`, 1 in `FVSquad/PacketHeader.lean`)
-- **Route-B tests added** (run 89): `formal-verification/tests/pkt_num_len/` — 18/18 PASS
+- **Date**: 2026-04-26 04:00 UTC
+- **Commit**: `27cfb774`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 32 jobs, **1 sorry**
+  (1 in `FVSquad/PacketHeader.lean`; all AckRanges sorry obligations CLOSED run 102)
+- **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
+  `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS (run 102);
+  `tests/h3_frame/` 25/25 PASS (run 103)
 
 ---
 
@@ -1355,15 +1357,16 @@ incorrect modelling.  See individual target sections for the known gaps.
 
 ## Open Sorry Obligations
 
-As confirmed by `lake build` (Lean 4.29.0, 2026-04-18):
+As confirmed by `lake build` (Lean 4.30.0-rc2, 2026-04-26):
 
 | Theorem | File | Lines | Blocking gap |
 |---------|------|-------|-------------|
-| `putVarint_freeze_getVarint_8byte` | `FVSquad/VarIntRoundtrip.lean` | 244–251 | `putU32_bytes_unchanged` non-interference lemma missing from `OctetsMut.lean` |
-| `putVarint_first_byte_tag` (8-byte branch) | `FVSquad/VarIntRoundtrip.lean` | 375–418 | Same: `putU32_bytes_unchanged` needed to prove second `putU32` doesn't overwrite first byte |
+| `longHeader_roundtrip` | `FVSquad/PacketHeader.lean` | ~306 | Full byte-list model of DCID, SCID, token, and payload-length fields |
 
-Both sorry obligations are in the 8-byte varint case (values ≥ 2^30).  All
-other 502 theorems are fully proved (0 sorry).
+All other 603 theorems are fully proved (0 sorry). The VarIntRoundtrip 8-byte
+sorry obligations were closed in run 85 via the `putU32_bytes_unchanged`
+lemma. The 3 AckRanges sorry obligations were closed in run 102 via the
+`loop_invariant` lemma.
 
 ---
 
@@ -1471,3 +1474,127 @@ is a fully proved end-to-end composition theorem connecting `PacketNumLen`
 and `PacketNumDecode` for the first time.  Together with the existing proofs in
 those modules, this establishes RFC 9000 §17.1 packet number encoding
 correctness as a chain of mechanically verified lemmas.
+
+
+---
+
+## T43 — ACK Frame Acked-Range Bounds (`AckRanges.lean`)
+
+**Lean file**: `formal-verification/lean/FVSquad/AckRanges.lean`  
+**Rust source**: `quiche/src/frame.rs` — `parse_ack_frame` (lines 1257–1311)  
+**Informal spec**: `formal-verification/specs/ack_ranges_informal.md`  
+**Phase**: 3 (Lean spec + implementation model, partial proofs)
+
+### Modelled definitions
+
+| Lean name | Rust name / concept | Source location | Correspondence level | Notes |
+|-----------|--------------------|-----------------|--------------------|-------|
+| `decodeAckBlocks` | `parse_ack_frame` | `frame.rs:1257` | **abstraction** | IO/varint read abstracted to Nat lists; ack_delay, ECN omitted |
+| `AckRange` | `Range<u64>` in `RangeSet` | `frame.rs:1273,1291` | **exact** | Modelled as `(Nat × Nat)` pair |
+| `validRange` | implicit `smallest ≤ largest` | `frame.rs:1265,1285` | **exact** | Guard ensures non-empty range |
+| `boundedBy` | all PN ≤ `largest_ack` | `frame.rs:1260` | **exact** | Loop monotonically decreases largest |
+| `decodeAckBlocks.loop` | inner `for` loop | `frame.rs:1275–1292` | **abstraction** | Pure functional loop with acc; same guard structure as Rust |
+
+### Proved properties (native_decide verified)
+
+| Theorem | Property | Status |
+|---------|----------|--------|
+| `decodeAckBlocks_first_guard` | success ⟹ `la ≥ ab` | ✅ proved |
+| `decodeAckBlocks_nonempty` | success ⟹ result non-empty | ✅ proved |
+| `loop_largest_decreases` | each iteration: `(s-gap)-2 < s` | ✅ proved |
+| `blocks_disjoint_via_gap` | gap-2 separation ⟹ disjoint | ✅ proved |
+| `decodeAckBlocks_none_iff_first_guard` | failure ↔ `la < ab` (no-block case) | ✅ proved |
+| `decodeAckBlocks_none_means_no_ranges` | failure ⟹ no ranges | ✅ proved |
+| 8 `native_decide` unit checks | concrete input/output values | ✅ proved |
+| 5 `native_decide` property checks | validRange, boundedBy, monotone on samples | ✅ proved |
+| `decodeAckBlocks_first_valid` | head range has `s ≤ l` | ✅ proved (run 102) |
+| `decodeAckBlocks_all_valid` | all ranges have `s ≤ l` | ✅ proved (run 102) |
+| `decodeAckBlocks_bounded` | all ranges bounded by `largest_ack` | ✅ proved (run 102) |
+
+### Approximations and known gaps
+
+1. **IO abstracted**: `Octets` cursor reads (`b.get_varint()`) are replaced by
+   a plain `List (Nat × Nat)` argument. This is the standard pure-model
+   abstraction used throughout the FV project.
+2. **ack_delay and ECN omitted**: these fields are parsed but have no range
+   semantics; they are not modelled.
+3. **`block_count` is uncapped** (OQ-T43-2): the Rust loop runs `block_count`
+   times with no upper bound check. A very large `block_count` varint causes
+   the loop to iterate many times, consuming up to `block_count` varint reads.
+   This is a potential DoS vector (run100 finding). The Lean model faithfully
+   reproduces this uncapped behaviour.
+4. **Loop invariant proofs**: the full inductive proofs that all ranges are
+   valid and bounded were completed in run 102 via `loop_invariant` (§3b in
+   `AckRanges.lean`). All 3 sorry obligations are closed. The 29 theorems
+   in `AckRanges.lean` have 0 sorry. The loop invariant (induction over block
+   list, maintaining `sm ≤ lg` and `lg ≤ ub` for all accumulated entries) is
+   the key structural insight: every new entry satisfies `sm' ≤ lg` (from the
+   `¬ lg < blk` guard) and `lg ≤ ub` (Nat subtraction is monotone below `sm ≤ ub`).
+
+### Validation evidence
+
+- **Route-B tests**: `formal-verification/tests/ack_ranges/` — **25/25 PASS** (run 102).
+  Tests exercise single/multi-block decoding, all underflow guards, boundary
+  values, and property checks (`allValid`, `boundedBy`, monotone separation).
+  Run: `lean --run formal-verification/tests/ack_ranges/lean_eval.lean`
+- Decidable checks: 13 `native_decide` examples in `AckRanges.lean`.
+- Loop invariant proofs: all 3 formerly-sorry theorems proved (run 102) via
+  `loop_invariant` — see §3b in `AckRanges.lean`.
+
+---
+
+## `FVSquad/H3Frame.lean` (T31) ↔ `quiche/src/h3/frame.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/H3Frame.lean`
+**Rust source**: `quiche/src/h3/frame.rs` — `Frame::to_bytes`, `Frame::from_bytes`
+**Informal spec**: `formal-verification/specs/h3_frame_informal.md`
+**Phase**: 5 — Done (19 theorems, 0 sorry, run 99/100)
+
+### Modelled definitions
+
+| Lean name | Rust name / concept | Source location | Correspondence level | Notes |
+|-----------|--------------------|-----------------|--------------------|-------|
+| `H3FrameType` | `Frame` enum variants | `frame.rs:~40–90` | **abstraction** | Only GoAway, MaxPushId, CancelPush modelled |
+| `h3f_varint_encode` | `OctetsMut::put_varint` | `octets/src/lib.rs:499` | **approximation** | Inline copy of Varint.lean model; arithmetic not bitwise |
+| `h3f_varint_decode` | `Octets::get_varint` | `octets/src/lib.rs:187` | **approximation** | Inline; same correspondence notes as Varint.lean |
+| `h3f_encode` | `Frame::to_bytes` | `frame.rs:~200–350` | **abstraction** | Encodes type + length + payload as byte list; buffer state omitted |
+| `h3f_decode` | `Frame::from_bytes` | `frame.rs:~400–550` | **abstraction** | Decodes from byte list; `payload_length` precondition not enforced |
+| `h3f_goaway_roundtrip` | GoAway encode↔decode | `frame.rs:GoAway branch` | **exact** (in scope) | Proved for all `v ≤ MAX_VAR_INT` |
+| `h3f_max_push_id_roundtrip` | MaxPushId encode↔decode | `frame.rs:MaxPushId branch` | **exact** (in scope) | Proved |
+| `h3f_cancel_push_roundtrip` | CancelPush encode↔decode | `frame.rs:CancelPush branch` | **exact** (in scope) | Proved |
+
+### Approximations and known gaps
+
+1. **Scope**: Only the three single-varint-payload frame types (GoAway,
+   MaxPushId, CancelPush) are modelled. Settings (key-value varint pairs),
+   Data/Headers (raw byte arrays), PushPromise, and PriorityUpdate are
+   not modelled.
+
+2. **Buffer cursor state**: `Frame::to_bytes` writes to an `OctetsMut` cursor;
+   `h3f_encode` returns `Option (List Nat)`. The cursor offset and error paths
+   are not modelled.
+
+3. **`payload_length` not enforced** (OQ-T31-4 from informal spec): The Rust
+   API takes a separate `payload_length` argument that must equal
+   `bytes.len()`. The Lean model uses `bytes.length` directly, avoiding the
+   mismatch. A caller that passes an incorrect `payload_length` in Rust would
+   get different behaviour from the model.
+
+4. **Varint inline vs imported**: The varint encode/decode is duplicated
+   inline rather than imported from `Varint.lean` (to avoid import ordering
+   issues). The inline model is confirmed equivalent to `Varint.lean` by
+   the Route-B tests, which run both.
+
+### Impact on proofs
+
+19 theorems, 0 sorry. The three round-trip theorems are the highest-value
+results. They cover the encode↔decode correctness for all single-varint
+HTTP/3 frame types that affect stream and push lifecycle management. Route-B
+tests provide independent executable evidence of correspondence.
+
+### Validation evidence
+
+- **Route-B tests**: `formal-verification/tests/h3_frame/` — **25/25 PASS** (run 103).
+  Tests cover all three frame types, all four varint size classes, edge values,
+  and property checks. Run: `lean --run formal-verification/tests/h3_frame/lean_eval.lean`
+- 7 `native_decide` unit checks in `H3Frame.lean` confirm concrete encoding examples.
