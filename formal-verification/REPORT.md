@@ -2,13 +2,13 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 591 named theorems + 238+ examples, **1 `sorry`**
-(PacketHeader full-roundtrip ×1), 28 Lean files (Lean 4.30.0-rc2, no Mathlib).
+**Status**: ✅ ACTIVE — 604 named theorems + 238+ examples, **0 `sorry`**
+(all proofs complete), 29 Lean files (Lean 4.30.0-rc2, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-24 11:30 UTC
-- **Commit**: `cc8f98da`
+- **Date**: 2026-04-24 12:30 UTC
+- **Commit**: `85ebb69e`
 
 ---
 
@@ -24,16 +24,18 @@ formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
 violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); cross-module
 write-then-read round-trips for all integer widths (`OctetsRoundtrip`); RFC
-9000 §2.1 stream-ID classification laws (`StreamId`); **14 theorems covering
-QUIC packet-header first-byte encoding** (`PacketHeader`); **15 theorems for
+9000 §2.1 stream-ID classification laws (`StreamId`); **15 theorems covering
+QUIC packet-header first-byte encoding and full buffer round-trip**
+(`PacketHeader`, now with 0 sorry); **15 theorems for
 varint 2-bit tag consistency** (`VarIntTag`); **22 theorems for bandwidth
 arithmetic invariants** (`Bandwidth.lean`); **17 theorems for the Pacer
 pacing-rate cap** (`Pacer.lean`); and — new in run 99 — **19 theorems for the
 HTTP/3 frame type codec** (`H3Frame.lean`, T31), covering type-ID distinctness,
 varint-payload round-trips for GoAway, CancelPush, and MaxPushId, encoding-
-length consistency, and the RFC 9114 type-ID-to-varint-range property. Only
-1 sorry remains: the full buffer round-trip in PacketHeader (deferred to a
-richer byte-buffer model).
+length consistency, and the RFC 9114 type-ID-to-varint-range property. **Run 105
+closed the last remaining `sorry`**: the full long-header buffer round-trip
+`longHeader_roundtrip` in `PacketHeader.lean`, achieving 0 sorry across all
+604 named theorems.
 
 ---
 
@@ -49,7 +51,7 @@ graph TD
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
         OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
-        PacketHeader["PacketHeader.lean<br/>14 theorems"]
+        PacketHeader["PacketHeader.lean<br/>15 theorems"]
     end
     subgraph L2["Layer 2 — Protocol algorithms"]
         RangeSet["RangeSet.lean<br/>16 theorems"]
@@ -92,7 +94,7 @@ graph LR
     O["Octets.lean<br/>48 theorems<br/>getU16_split ✅"]
     OM["OctetsMut.lean<br/>27 theorems<br/>putU8_getU8_roundtrip ✅"]
     ORT["OctetsRoundtrip.lean<br/>20 theorems<br/>putU16_freeze_getU16 ✅"]
-    PH["PacketHeader.lean<br/>14 theorems<br/>typeCode_roundtrip ✅"]
+    PH["PacketHeader.lean<br/>15 theorems<br/>longHeader_roundtrip ✅"]
 ```
 
 **Key results**:
@@ -115,6 +117,11 @@ graph LR
 - `typeCode_roundtrip` (PacketHeader): encoding the type code then decoding
   it returns the original `PacketType` — the 2-bit long-header type field is
   a lossless bijection on `{Initial, ZeroRTT, Handshake, Retry}`
+- `longHeader_roundtrip` (PacketHeader, **new run 105**): full buffer
+  round-trip — encode then decode returns the original `Header` for all valid
+  long-header packet types; proof uses `typeCode_roundtrip`, big-endian version
+  arithmetic (`omega`), and list-slicing helpers (`list_take_left`,
+  `list_drop_left`); **closes the last `sorry` in the project**
 - `longFirstByte_form_bit`, `longFirstByte_fixed_bit` (PacketHeader):
   FORM_BIT (0x80) and FIXED_BIT (0x40) are always set in long-header packets
 - `shortFirstByte_no_form_bit` (PacketHeader): FORM_BIT is always clear in
