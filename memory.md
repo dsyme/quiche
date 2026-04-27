@@ -1,24 +1,24 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-26 (run 106)
+Last updated: 2026-04-27 (run 108)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 29 modules
+FVSquad.lean: import manifest for all 31 modules
 
 ## FV Targets
 
 | # | Name | File | Phase | Status |
 |---|------|------|-------|--------|
 | 1-21 | (various done targets) | various | 5 | All Done (see prior runs)
-| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (8 thms, 0 sorry) |
+| 23 | put_varint→get_varint roundtrip | octets/src/lib.rs | 5 | Done (10 thms, 0 sorry) |
 | 24 | encode_pkt_num→decode_pkt_num | quiche/src/packet.rs | 5 | Done (10 thms, 0 sorry) |
-| 29 | QUIC packet-header first-byte + full roundtrip | quiche/src/packet.rs | 5 | **Done run105** (16 thms: 14 public + 2 private, 0 sorry); CORRESPONDENCE section added run106 |
+| 29 | QUIC packet-header first-byte + full roundtrip | quiche/src/packet.rs | 5 | Done run105 (16 thms, 0 sorry) |
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 pacing rate bounds | quiche/src/recovery/gcongestion/bbr2.rs | 0 | MEDIUM — next new target |
-| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86) |
+| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run108 (28 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
-| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 2 | Informal spec done run103 (6 invariants, 3 OQs) |
+| 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry) |
 | 38 | PathState monotone progression | quiche/src/path.rs | 1 | RFC 9000 §8.2; ~45 lines; MEDIUM |
 | 39 | QPACK lookup_static bounds | quiche/src/h3/qpack/ | 5 | Done run97 (12 thms, 0 sorry) |
 | 40 | QPACK decode_int prefix-mask | quiche/src/h3/qpack/decoder.rs | 1 | fuel model; ~50 lines; MEDIUM |
@@ -26,11 +26,11 @@ FVSquad.lean: import manifest for all 29 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (29 thms, 0 sorry); Route-B 25/25 PASS |
 
-## 🎉 MILESTONE: 0 SORRY
+## 🎉 MILESTONE: 0 SORRY (as of run 105, maintained in run 108)
 
-As of run 105, all 604 theorems across 29 Lean files are fully proved with 0 sorry.
+All 649 theorems across 31 Lean files are fully proved with 0 sorry.
 
-## Lean File Registry (verified lake build v4.30.0-rc2, run 105)
+## Lean File Registry (verified lake build v4.30.0-rc2, run 108)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -55,19 +55,17 @@ As of run 105, all 604 theorems across 29 Lean files are fully proved with 0 sor
 | FVSquad/StreamId.lean | 35 | Done |
 | FVSquad/PacketNumLen.lean | 20 | Done |
 | FVSquad/SendBufRetransmit.lean | 17 | Done |
-| FVSquad/VarIntRoundtrip.lean | 8 | Done (0 sorry) |
+| FVSquad/VarIntRoundtrip.lean | 8 | Done |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | Done |
-| FVSquad/PacketHeader.lean | 16 (14+2) | Done run105 (0 sorry) |
-| FVSquad/VarIntTag.lean | 15 | Done (run 85) |
-| FVSquad/Bandwidth.lean | 22 | Done (run 90) |
-| FVSquad/Pacer.lean | 17 | Done (run 98) |
-| FVSquad/H3Frame.lean | 19 | Done (run 99/100) |
-| FVSquad/AckRanges.lean | 29 | Done (run 102, 0 sorry) |
-| **TOTAL** | **604** | **0 sorry** 🎉 |
-
-## Open Sorry Obligations
-
-*None — all 604 theorems fully proved as of run 105.*
+| FVSquad/PacketHeader.lean | 16 | Done run105 (0 sorry) |
+| FVSquad/VarIntTag.lean | 15 | Done run85 |
+| FVSquad/Bandwidth.lean | 22 | Done run90 |
+| FVSquad/Pacer.lean | 17 | Done run98 |
+| FVSquad/H3Frame.lean | 19 | Done run99/100 |
+| FVSquad/AckRanges.lean | 29 | Done run102 |
+| FVSquad/BytesInFlight.lean | 17 | Done run107 |
+| FVSquad/H3Settings.lean | 28 | Done run108 |
+| **TOTAL** | **649** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -85,12 +83,12 @@ As of run 105, all 604 theorems across 29 Lean files are fully proved with 0 sor
 
 ## Open PRs (lean-squad label)
 
-- PR #85 (branch lean-squad-run105-sorry-free): Task 5 + Task 10 — close last sorry + REPORT update
-- PR #86 (branch lean-squad-run106-corr-critique): Task 6 + Task 7 — CORRESPONDENCE + CRITIQUE update (run 106)
+- PR run107 (branch lean-squad-run107-24976389936-bytes-in-flight): T37 BytesInFlight.lean (17 thms, 0 sorry)
+- PR run108 (branch lean-squad-run108-24990021034-h3settings): T33 H3Settings.lean (28 thms, 0 sorry)
 
 ## Status Issue
 
-Issue #4 (open) — updated run 106
+Issue #4 (open) — updated run108
 
 ## Key Findings
 
@@ -101,10 +99,11 @@ Issue #4 (open) — updated run 106
 - OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
 - OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
 - OQ-T37-2 (run103): open_interval_duration reset on close (confirmed correct)
+- T33 note (run108): SETTINGS_FRAME_TYPE_ID (0x4) is in the reserved set — would be rejected if it appeared as a setting identifier inside a SETTINGS payload
 
 ## Next Priority Targets
 
-1. T37 (BytesInFlight) — informal spec done, write FVSquad/BytesInFlight.lean (~50 lines)
-2. T33 (H3 Settings) — informal spec done (run 86), write FVSquad/H3Settings.lean (~80 lines)
-3. T38 (PathState monotone progression) — RFC 9000 §8.2 state machine
-4. T32 (BBR2 pacing rate bounds) — gcongestion, medium difficulty
+1. T38 (PathState monotone progression) — RFC 9000 §8.2 state machine, ~45 lines
+2. T32 (BBR2 pacing rate bounds) — gcongestion, medium difficulty
+3. Route-B tests for T37 (BytesInFlight) — would complete correspondence evidence
+4. Route-B tests for T33 (H3Settings) — validate against Rust parse_settings_frame
