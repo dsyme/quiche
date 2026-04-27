@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-26 17:26 UTC
-- **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 29 files, **0 sorry** 🎉
-  (last sorry `longHeader_roundtrip` in `PacketHeader.lean` CLOSED run 105)
+- **Date**: 2026-04-27 18:30 UTC
+- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 31 files, **0 sorry** 🎉
+  (PathState.lean added run 109; BytesInFlight.lean run 107)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
   `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS (run 102);
   `tests/h3_frame/` 25/25 PASS (run 103)
@@ -1676,3 +1676,142 @@ tests provide independent executable evidence of correspondence.
   Tests cover all three frame types, all four varint size classes, edge values,
   and property checks. Run: `lean --run formal-verification/tests/h3_frame/lean_eval.lean`
 - 7 `native_decide` unit checks in `H3Frame.lean` confirm concrete encoding examples.
+
+---
+
+## `FVSquad/BytesInFlight.lean` (T37) ↔ `quiche/src/recovery/bytes_in_flight.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/BytesInFlight.lean`
+**Rust source**: `quiche/src/recovery/bytes_in_flight.rs`
+**Phase**: 5 — Done (17 theorems, 0 sorry, run 107)
+
+### Purpose
+
+Models the `BytesInFlight` struct, which tracks the current number of bytes
+in flight and the total duration the connection has had bytes in flight.
+The struct maintains an "open interval" (bytes > 0) and accumulates
+"closed intervals" (transitions back to 0) for congestion-control diagnostics.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `State` | `structure` | `BytesInFlight` | `struct` | **abstraction** — `Instant`→`Nat`, `Duration`→`Nat` |
+| `State.bytes` | `Nat` | `bytes_in_flight` | `usize` | **abstraction** — no overflow |
+| `State.startTime` | `Option Nat` | `bytes_in_flight_interval_start` | `Option<Instant>` | **abstraction** — abstract clock |
+| `State.openDur` | `Nat` | `open_interval_duration` | `Duration` | **abstraction** — Nat ticks |
+| `State.closedDur` | `Nat` | `closed_interval_duration` | `Duration` | **abstraction** — Nat ticks |
+| `add` | `State → Nat → Nat → State` | `BytesInFlight::add` | `(&mut self, usize, Instant)` | **abstraction** |
+| `saturating_subtract` | `State → Nat → Nat → State` | `BytesInFlight::subtract` | `(&mut self, usize, Instant)` | **abstraction** |
+| `wf` | `State → Prop` | *(invariant)* | *(implicit)* | **exact** — `bytes=0 ↔ startTime=none` |
+
+### Approximations and known gaps
+
+1. **Time abstraction**: `Instant` is replaced by `Nat` (monotone ticks).
+   Duration arithmetic becomes `Nat` subtraction. The monotonicity of the
+   clock (`now ≥ startTime`) is a precondition on theorems that need it but
+   is not globally enforced.
+
+2. **Mutation → pure functions**: `add` and `subtract` return a new `State`
+   rather than mutating in place. This is a standard functional model; the
+   semantics are equivalent for pure input/output behaviour.
+
+3. **`usize` → `Nat`**: no overflow modelling. The `saturating_subtract`
+   uses `Nat.sub` (which saturates at 0), matching the Rust `saturating_sub`.
+
+4. **OQ-T37-1** (run 103): clock-monotonicity (`now ≥ startTime`) is not
+   asserted as a global invariant — callers must supply the precondition.
+
+5. **OQ-T37-2** (run 103): `open_interval_duration` resets to 0 on interval
+   close — confirmed correct by inspection of the Rust source.
+
+### Impact on proofs
+
+17 theorems, 0 sorry. Key results: well-formedness preservation under
+`add`/`subtract`, `bytes = 0 ↔ startTime = none` invariant, duration
+accumulation correctness, and monotone growth of `closedDur`. The time
+abstraction is the main approximation; it does not affect the byte-counting
+invariants but means duration-overflow corner cases are not covered.
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 107).
+- Route-B correspondence tests not yet written for this target (noted as
+  next priority in memory).
+
+---
+
+## `FVSquad/PathState.lean` (T38) ↔ `quiche/src/path.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/PathState.lean`
+**Rust source**: `quiche/src/path.rs` — `PathState`, `Path::promote_to`,
+  `Path::on_challenge_sent`, `Path::on_response_received`,
+  `Path::on_failed_validation`, `Path::working`
+**Phase**: 5 — Done (24 theorems, 0 sorry, run 109)
+
+### Purpose
+
+Models the RFC 9000 §8.2 path-validation state machine. A QUIC path
+progresses through five states: `Failed < Unknown < Validating <
+ValidatingMTU < Validated`. The key operation `promote_to` is
+monotone — it never moves the state backward. `on_failed_validation`
+is the only intentional regression (hard reset to `Failed`).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `State` | `inductive` | `PathState` | `enum` | **exact** — same five variants in same order |
+| `State.rank` | `State → Nat` | *(derived `Ord`)* | `isize` via `to_c` | **exact** — same ordering: Failed=0…Validated=4 |
+| `promote_to` | `State → State → State` | `Path::promote_to` (L340) | `&mut self` | **abstraction** — pure, returns new state |
+| `on_challenge_sent` | `State → State` | `Path::on_challenge_sent` (L392) | `&mut self` | **abstraction** — pure; challenge queue side-effects omitted |
+| `on_response_received` | `State → Bool → State` | `Path::on_response_received` (L421) | `&mut self, [u8;8] → bool` | **abstraction** — `mtu_ok` abstracts the MTU size test |
+| `on_failed_validation` | `State` | `Path::on_failed_validation` (L455) | `&mut self` | **exact** — hard reset to Failed |
+| `working` | `State → Bool` | `Path::working` (L308) | `bool` | **exact** — `state > Failed` |
+
+### Approximations and known gaps
+
+1. **Pure functional model**: all operations take a `State` argument and
+   return a new `State` instead of mutating `self`. The surrounding `Path`
+   struct (timers, in-flight challenges, PMTUD, recovery) is entirely
+   omitted.
+
+2. **`mtu_ok` abstraction**: `on_response_received` takes a `Bool` that
+   abstracts `self.max_challenge_size >= crate::MIN_CLIENT_INITIAL_LEN`.
+   The specific threshold (`MIN_CLIENT_INITIAL_LEN = 1200`) and
+   `max_challenge_size` accumulation logic are not modelled.
+
+3. **No typeclass `LE`/`LT`**: theorems are stated in terms of `State.rank`
+   (a `Nat`) rather than the `≤`/`<` typeclass instances, to avoid
+   `simp` recursion loops in plain Lean 4 (no Mathlib). The `rank`
+   function faithfully mirrors Rust's derived `PartialOrd`.
+
+4. **Scope**: Only the state-machine aspect of `Path` is modelled.
+   Properties such as "if a path is validated, its DCID sequence is set"
+   require modelling the full `Path` struct and are out of scope.
+
+### Impact on proofs
+
+24 theorems, 0 sorry. Key results:
+
+| Theorem | Property | Value |
+|---------|----------|-------|
+| `promote_to_ge_current` | `promote_to` never lowers state | High — key safety property |
+| `promote_to_idempotent` | Repeated promotion is a no-op | Medium — guards redundant calls |
+| `challenge_sent_ge_validating` | After challenge, state ≥ Validating | High — RFC 9000 §8.2 |
+| `response_mtu_ok_validated` | MTU-OK response reaches Validated | High — validation completeness |
+| `full_validation_path` | Unknown → Validating → Validated (2 steps) | High — normal path end-to-end |
+| `challenge_sent_working` | After challenge, path is always working | High — no regression to Failed |
+| `promote_to_not_lower` | `promote_to` cannot decrease rank | High — core invariant |
+
+The `on_failed_validation` hard-reset is correctly modelled as the one
+operation that bypasses monotonicity — it is used only as a terminal
+failure state.
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 109).
+- 9 `rfl`/concrete `example` checks verify each operation on specific
+  states at build time.
+- Route-B correspondence tests are not yet written; the proof subsumes
+  executable testing for the pure state-machine behaviour.
