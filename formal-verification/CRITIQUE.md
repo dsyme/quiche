@@ -4,23 +4,26 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-26 04:00 UTC
-- **Commit**: `27cfb774`
+- **Date**: 2026-04-26 17:26 UTC
+- **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
 
 ---
 
 ## Overall Assessment
 
 The formal verification suite for `quiche` now covers **29 Lean files with
-604 theorems (+ examples), 1 sorry** (Lean 4.30.0-rc2, no Mathlib). Runs 85–104
-closed the 2 VarInt sorry obligations (`VarIntRoundtrip.lean`, run 85), added
-`VarIntTag.lean` (T30, 15 thms, run 85), `Bandwidth.lean` (T36, 22 thms, run 90),
-`Pacer.lean` (T41, 17 thms, run 98), `H3Frame.lean` (T31, 19 thms, run 99/100),
-and `AckRanges.lean` (T43, 29 thms, 0 sorry after run 102). Route-B
+604 theorems (+ examples), 0 sorry** 🎉 (Lean 4.30.0-rc2, no Mathlib). Run 105
+closed the **last remaining sorry** (`longHeader_roundtrip` in `PacketHeader.lean`)
+by extending the Header model with DCID/SCID byte-list fields and proving the
+full encode↔decode round-trip via `omega` + `simp`. Runs 85–105 added `VarIntTag.lean`
+(T30, 15 thms), `Bandwidth.lean` (T36, 22 thms), `Pacer.lean` (T41, 17 thms),
+`H3Frame.lean` (T31, 19 thms), and `AckRanges.lean` (T43, 29 thms). Route-B
 correspondence tests now cover 5 targets (pkt_num_len/18, bandwidth/25,
-rangeset/21, ack_ranges/25, h3_frame/25 — all PASS). The sole remaining sorry
-(`longHeader_roundtrip` in `PacketHeader.lean`) is the full QUIC header
-encode↔decode round-trip, blocked on a richer byte-buffer model.
+rangeset/21, ack_ranges/25, h3_frame/25 — all PASS).
+
+This is a significant milestone: **the entire FV suite of 604 theorems across 29
+Lean files is fully proved with zero outstanding sorry obligations.** Every
+theorem has been mechanically verified by `lake build`.
 
 The most notable results span the full QUIC stack: **`encode_decode_pktnum`**
 (end-to-end packet-number encode↔decode composition for all four lengths);
@@ -756,21 +759,19 @@ not explicitly proved.
 | `putVarint_freeze_getVarint_1byte` | high | **high** | `put_varint` (1-byte) → `freeze` → `get_varint` = identity for v < 64 |
 | `putVarint_freeze_getVarint_2byte` | high | **high** | 2-byte round-trip for 64 ≤ v < 16384 |
 | `putVarint_freeze_getVarint_4byte` | high | **high** | 4-byte round-trip for 16384 ≤ v < 1073741824 |
-| `putVarint_freeze_getVarint_8byte` | high | **high** | 8-byte round-trip for v ≥ 1073741824 — **sorry** (blocked on `putU32_bytes_unchanged`) |
-| `putVarint_freeze_getVarint` | high | **high** | Combined round-trip for all valid QUIC varint values — **sorry** (inherits 8-byte sorry) |
+| `putVarint_freeze_getVarint_8byte` | high | **high** | 8-byte round-trip for v ≥ 1073741824 — **proved run 85** via `putU32_bytes_unchanged` |
+| `putVarint_freeze_getVarint` | high | **high** | Combined round-trip for all valid QUIC varint values — **proved run 85** |
 | `putVarint_off` | mid | medium | Cursor advances by `varintLen(v)` after `put_varint` |
 | `putVarint_len` | mid | medium | `putVarint` places exactly `varintLen(v)` bytes |
-| `putVarint_first_byte_tag` | mid | medium | First-byte tag bits equal `varintParseLen(first_byte) - 1` — partially sorry for 8-byte |
+| `putVarint_first_byte_tag` | mid | medium | First-byte tag bits equal `varintParseLen(first_byte) - 1` — **proved** for all 4 encoding sizes |
 | 16 examples | low | low | Concrete put→freeze→get at each encoding length verified by `decide` |
 
-**Assessment**: The three completed round-trip theorems (1-byte, 2-byte,
-4-byte) directly verify that the varint codec correctly encodes and decodes 75%
-of the QUIC varint value space. The 2 sorry for the 8-byte path are a known gap:
-the proof requires `putU32_bytes_unchanged` (a lemma about non-aliasing of two
-sequential `putU32` calls in `OctetsMut`), which was identified as a pending
-addition to `OctetsMut.lean`. Resolving these 2 sorry is a low-effort,
-high-value next step. **Gap**: `putVarint_first_byte_tag` is partly proved but
-has a sorry for the 8-byte encoding path for the same reason.
+**Assessment**: All 8 theorems are fully proved (0 sorry ✅ — run 85 closed the
+8-byte path via `putU32_bytes_unchanged`). The four round-trip theorems collectively
+verify that the varint codec correctly encodes and decodes the entire QUIC varint
+value space (all values 0 to 2^62−1). `putVarint_first_byte_tag` confirms the
+2-bit tag in the first byte is correctly set for all encoding sizes. These are
+among the highest-value results in the codec layer.
 
 ---
 
@@ -806,7 +807,9 @@ this case is not modelled.
 
 ---
 
-### Target 29: QUIC packet-header first-byte (`FVSquad/PacketHeader.lean`) — 14 theorems 🔄 *(1 sorry — run 81)*
+### Target 29: QUIC packet-header first-byte (`FVSquad/PacketHeader.lean`) — 16 theorems ✅ *(0 sorry — run 105)*
+
+> **Status**: Phase 5 Done. 14 public + 2 private theorems, 0 sorry. `lake build` passes.
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
@@ -822,21 +825,23 @@ this case is not modelled.
 | `shortFirstByte_no_form_bit` | high | **high** | FORM_BIT is always clear in short-header first byte — type disambiguation is correct |
 | `shortFirstByte_fixed_bit` | high | **high** | FIXED_BIT is always set in short-header first byte — RFC 9000 §17.3 |
 | `short_long_first_byte_differ` | high | **high** | Short-header and long-header first bytes are always distinct — endpoint can always identify packet type |
-| `version_roundtrip` | high | **high** | QUIC version field (32-bit big-endian) round-trips correctly via `putU32`/`getU32` |
-| `longHeader_roundtrip` | high | **high** | Full Header encode↔decode round-trip — **sorry** (requires richer byte-list buffer model) |
-| 12 examples | low | low | Concrete first-byte values for each packet type verified by `decide` |
+| `longHeader_roundtrip` | high | **high** | **FULLY PROVED (run 105)** — Full Header encode↔decode round-trip for all long-header types with well-formed DCID/SCID byte lists and a 32-bit version field |
+| `version_roundtrip` | high | **high** | QUIC version field (32-bit big-endian) round-trips correctly for all `v < 2^32` |
+| 2 private helpers | low | low | `list_take_left`, `list_drop_left` — list-append slicing lemmas for the round-trip proof |
+| 12 examples | low | low | Concrete first-byte values for each packet type verified by `native_decide` |
 
 **Assessment**: The type-code bijection and bit-presence theorems are
 high-value: a bug in the `to_bytes`/`from_bytes` first-byte encoding would
 violate `typeCode_roundtrip`, `longFirstByte_form_bit`, or `short_long_first_byte_differ`,
-causing all QUIC traffic to be misclassified. The `version_roundtrip` theorem
-closes the version-field correctness proof via the existing `OctetsRoundtrip`
-infrastructure. The 1 remaining sorry (`longHeader_roundtrip`) represents the
-full buffer encode↔decode round-trip, which requires extending the model to
-include DCID, SCID, token, and payload-length fields. This is the key remaining
-gap for this target. **Approximations**: only the first-byte layer and the
-version field are modelled; pkt_num_len (bits 1–0) and key_phase (bit 2) are
-fixed to 0; header protection is out of scope.
+causing all QUIC traffic to be misclassified. The `longHeader_roundtrip` theorem
+(the last sorry in the entire suite, closed in run 105) is the highest-value
+result: it formally proves that for any well-formed long-header — with DCID/SCID
+byte lists up to 255 bytes, version field fitting in 32 bits, and a valid
+packet type — `encodeLongHeader` followed by `decodeLongHeader` returns exactly
+the original header. **Approximations**: only the first-byte layer and DCID/SCID/
+version fields are modelled; pkt_num_len (bits 1–0) and key_phase (bit 2) are
+fixed to 0; header protection, token field, and short-header full round-trip are
+out of scope.
 
 ---
 
@@ -987,11 +992,10 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 
 ### Highest-priority gaps (most likely to catch real bugs)
 
-1. **PacketHeader full round-trip sorry** — Extend `PacketHeader.lean` with
-   a byte-list model of DCID, SCID, token, and payload-length fields. This
-   would close the `longHeader_roundtrip` sorry and formally verify the entire
-   QUIC header serialisation path. Medium effort, very high value. (Was #2 on
-   prior list; the VarIntRoundtrip and T30/T31 gaps are now closed.)
+1. ~~**PacketHeader full round-trip sorry**~~ ✅ **CLOSED run 105** — `longHeader_roundtrip`
+   proved: for all long-header packets with well-formed DCID/SCID (≤255 bytes) and a
+   32-bit version field, `encodeLongHeader` → `decodeLongHeader` is the identity.
+   This was the **last sorry** in the entire suite.
 
 2. **BytesInFlight counter invariant (T37)** — Informal spec completed (run
    103). Next step: write `FVSquad/BytesInFlight.lean` (~50 lines, all `omega`).
@@ -1060,9 +1064,8 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 - The **OQ-T43-2 finding** (uncapped `block_count` in `parse_ack_frame`) is a
   real DoS vector discovered via formal verification. Unlike OQ-1 (confirmed
   intentional), this was a genuine discovery that a maintainer should address.
-- The **1 sorry** (in PacketHeader.lean) is identified with a clear resolution:
-  the full byte-list round-trip requires a richer buffer model for DCID/SCID/token
-  fields.
+- ~~The **1 sorry** (in PacketHeader.lean)~~ → **CLOSED run 105**: `longHeader_roundtrip`
+  is now fully proved (16 theorems, 0 sorry). The suite is completely sorry-free.
 
 
 
@@ -1070,26 +1073,28 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 
 ## Paper Review
 
-> *Assessment of `formal-verification/paper/paper.tex` as of run 104
+> *Assessment of `formal-verification/paper/paper.tex` as of run 106
 > (2026-04-26). Paper is an ACM sigconf LaTeX draft.*
 
 ### Accuracy Issues (require correction before submission)
 
 1. **Stale theorem/file/sorry counts**: The abstract and introduction figures
-   are significantly out of date. Current state: **29 files, 604 theorems,
-   1 sorry** (Lean 4.30.0-rc2). The paper should update all counts throughout
-   (abstract, §1, Table 1, §5 conclusion).
+   are out of date. Current state: **29 files, 604 theorems,
+   0 sorry** 🎉 (Lean 4.30.0-rc2). The paper should update all counts throughout
+   (abstract, §1, Table 1, §5 conclusion). The suite is now completely sorry-free
+   following run 105.
 
 2. **Missing files in Table 1**: At minimum, the following files added since
    the last paper update are absent: `VarIntTag.lean` (T30, 15 thms),
    `Bandwidth.lean` (T36, 22 thms), `Pacer.lean` (T41, 17 thms),
-   `H3Frame.lean` (T31, 19 thms), `AckRanges.lean` (T43, 29 thms).
-   Together these add 102 theorems and 5 new files covering gcongestion, HTTP/3,
-   and ACK frame safety — major additions to the Framing and Congestion layers.
+   `H3Frame.lean` (T31, 19 thms), `AckRanges.lean` (T43, 29 thms),
+   `PacketHeader.lean` (T29, 14+2 thms, now with `longHeader_roundtrip` proved).
+   Together these add 116 theorems and 6 new/completed files covering gcongestion,
+   HTTP/3, ACK frame safety, and full QUIC header round-trip.
 
-3. **Sorry count**: Must be updated to "1 sorry" (down from 3 at run 84).
+3. **Sorry count**: Must be updated to **"0 sorry"** (closed run 105).
    The VarIntRoundtrip 8-byte sorry was closed (run 85); all 3 AckRanges sorry
-   were closed (run 102). Only `longHeader_roundtrip` remains.
+   were closed (run 102); `longHeader_roundtrip` was closed (run 105).
 
 4. **OQ-T43-2 finding not mentioned**: The ACK frame `block_count` DoS vector
    (run 100) is a concrete security-relevant finding from formal verification —
@@ -1138,12 +1143,12 @@ be described as independent (executable) correspondence validation.
 
 | Issue | Priority | Fix |
 |-------|----------|-----|
-| Theorem/file/sorry counts | **High** | Update to 29/604/1 throughout |
-| Missing 5 files in Table 1 | **High** | Add VarIntTag, Bandwidth, Pacer, H3Frame, AckRanges rows |
+| Theorem/file/sorry counts | **High** | Update to 29/604/**0** throughout; note sorry-free milestone |
+| Missing 6 files in Table 1 | **High** | Add VarIntTag, Bandwidth, Pacer, H3Frame, AckRanges, PacketHeader rows |
 | OQ-T43-2 finding | **High** | Add to §3 Findings; describe the DoS vector and model fidelity |
 | Route-B tests | **High** | Add to §3 Methodology as independent correspondence evidence |
 | gcongestion layer | **Medium** | Add or expand congestion layer to cover Bandwidth + Pacer |
 | HTTP/3 layer | **Medium** | Add section describing H3Frame.lean scope and limitations |
-| Sorry count "3" → "1" | **Medium** | Correct abstract and conclusion |
+| Sorry count "3" → "0" | **Medium** | Correct abstract and conclusion; highlight 0-sorry milestone |
 | Lean version | **Low** | Align with 4.30.0-rc2 |
 
