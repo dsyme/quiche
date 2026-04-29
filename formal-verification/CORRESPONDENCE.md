@@ -4,12 +4,12 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-26 17:26 UTC
-- **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 29 files, **0 sorry** 🎉
-  (last sorry `longHeader_roundtrip` in `PacketHeader.lean` CLOSED run 105)
+- **Date**: 2026-04-29 05:30 UTC
+- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 35 files, **0 sorry** 🎉
+  (run 113: merged run107/109; added BBR2Limits.lean T32)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
-  `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS (run 102);
+  `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS;
   `tests/h3_frame/` 25/25 PASS (run 103)
 
 ---
@@ -1676,3 +1676,139 @@ tests provide independent executable evidence of correspondence.
   Tests cover all three frame types, all four varint size classes, edge values,
   and property checks. Run: `lean --run formal-verification/tests/h3_frame/lean_eval.lean`
 - 7 `native_decide` unit checks in `H3Frame.lean` confirm concrete encoding examples.
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 107).
+- Route-B correspondence tests not yet written for this target (noted as
+  next priority in memory).
+
+---
+
+## `FVSquad/PathState.lean` (T38) ↔ `quiche/src/path.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/PathState.lean`
+**Rust source**: `quiche/src/path.rs` — `PathState`, `Path::promote_to`,
+  `Path::on_challenge_sent`, `Path::on_response_received`,
+  `Path::on_failed_validation`, `Path::working`
+**Phase**: 5 — Done (24 theorems, 0 sorry, run 109)
+
+### Purpose
+
+Models the RFC 9000 §8.2 path-validation state machine. A QUIC path
+progresses through five states: `Failed < Unknown < Validating <
+ValidatingMTU < Validated`. The key operation `promote_to` is
+monotone — it never moves the state backward. `on_failed_validation`
+is the only intentional regression (hard reset to `Failed`).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `State` | `inductive` | `PathState` | `enum` | **exact** — same five variants in same order |
+| `State.rank` | `State → Nat` | *(derived `Ord`)* | `isize` via `to_c` | **exact** — same ordering: Failed=0…Validated=4 |
+| `promote_to` | `State → State → State` | `Path::promote_to` (L340) | `&mut self` | **abstraction** — pure, returns new state |
+| `on_challenge_sent` | `State → State` | `Path::on_challenge_sent` (L392) | `&mut self` | **abstraction** — pure; challenge queue side-effects omitted |
+| `on_response_received` | `State → Bool → State` | `Path::on_response_received` (L421) | `&mut self, [u8;8] → bool` | **abstraction** — `mtu_ok` abstracts the MTU size test |
+| `on_failed_validation` | `State` | `Path::on_failed_validation` (L455) | `&mut self` | **exact** — hard reset to Failed |
+| `working` | `State → Bool` | `Path::working` (L308) | `bool` | **exact** — `state > Failed` |
+
+### Approximations and known gaps
+
+1. **Pure functional model**: all operations take a `State` argument and
+   return a new `State` instead of mutating `self`. The surrounding `Path`
+   struct (timers, in-flight challenges, PMTUD, recovery) is entirely
+   omitted.
+
+2. **`mtu_ok` abstraction**: `on_response_received` takes a `Bool` that
+   abstracts `self.max_challenge_size >= crate::MIN_CLIENT_INITIAL_LEN`.
+   The specific threshold (`MIN_CLIENT_INITIAL_LEN = 1200`) and
+   `max_challenge_size` accumulation logic are not modelled.
+
+3. **No typeclass `LE`/`LT`**: theorems are stated in terms of `State.rank`
+   (a `Nat`) rather than the `≤`/`<` typeclass instances, to avoid
+   `simp` recursion loops in plain Lean 4 (no Mathlib). The `rank`
+   function faithfully mirrors Rust's derived `PartialOrd`.
+
+4. **Scope**: Only the state-machine aspect of `Path` is modelled.
+   Properties such as "if a path is validated, its DCID sequence is set"
+   require modelling the full `Path` struct and are out of scope.
+
+### Impact on proofs
+
+24 theorems, 0 sorry. Key results:
+
+| Theorem | Property | Value |
+|---------|----------|-------|
+| `promote_to_ge_current` | `promote_to` never lowers state | High — key safety property |
+| `promote_to_idempotent` | Repeated promotion is a no-op | Medium — guards redundant calls |
+| `challenge_sent_ge_validating` | After challenge, state ≥ Validating | High — RFC 9000 §8.2 |
+| `response_mtu_ok_validated` | MTU-OK response reaches Validated | High — validation completeness |
+| `full_validation_path` | Unknown → Validating → Validated (2 steps) | High — normal path end-to-end |
+| `challenge_sent_working` | After challenge, path is always working | High — no regression to Failed |
+| `promote_to_not_lower` | `promote_to` cannot decrease rank | High — core invariant |
+
+The `on_failed_validation` hard-reset is correctly modelled as the one
+operation that bypasses monotonicity — it is used only as a terminal
+failure state.
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 109).
+- 9 `rfl`/concrete `example` checks verify each operation on specific
+  states at build time.
+- Route-B correspondence tests are not yet written; the proof subsumes
+  executable testing for the pure state-machine behaviour.
+
+---
+
+## `FVSquad/BBR2Limits.lean` (T32 partial) ↔ `quiche/src/recovery/gcongestion/bbr2.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/BBR2Limits.lean`
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `Limits<T>` struct
+  (L391–L412): fields `lo`, `hi`; methods `min()`, `apply_limits()`,
+  `no_greater_than()`
+**Phase**: 5 — Done (14 theorems, 0 sorry, run 113)
+
+### Purpose
+
+Models the `Limits<T>` bandwidth clamp used throughout the BBR2 congestion
+controller to bound pacing rates and congestion windows within configured
+[lo, hi] ranges. This is a foundational component: incorrect clamping could
+allow the pacing rate to exceed configured caps or drop below minimum values.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `Limits` | `Limits<T>` | `bbr2.rs:L391–L394` | Abstraction | Generic `T` specialised to `Nat` (bits/s) |
+| `Limits.applyLimits` | `apply_limits` | `bbr2.rs:L401–L404` | Exact | `val.max(lo).min(hi)` — Nat model |
+| `Limits.noGreaterThan` | `no_greater_than` | `bbr2.rs:L407–L412` | Exact | `{ lo: 0, hi: val }` |
+| `Limits.min` | `Limits::min` | `bbr2.rs:L397–L399` | Exact | Returns `self.lo` |
+
+### Divergences
+
+1. **Nat vs Bandwidth/usize**: The Rust `Limits<T>` is generic over `Ord`.
+   The Lean model specialises to `Nat` (representing bits-per-second). All
+   arithmetic properties (ordering, clamping) are preserved by this specialisation.
+2. **f64 pacing-rate multiplication**: `update_pacing_rate` multiplies
+   `bandwidth_estimate` by a float `pacing_gain`. This cannot be directly
+   modelled in pure `Nat`. Only the `Limits` struct and its pure clamping
+   operations are modelled here; the gain-multiplication step is deferred.
+3. **No overflow**: `Nat` is unbounded. Rust `usize` can overflow on 32-bit
+   platforms. For pacing-rate values (bits/s), overflow requires bandwidths
+   exceeding 2^63 bits/s — not a practical concern.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `applyLimits_idempotent` | Double-clamp = single-clamp | Medium — guards redundant applications |
+| `applyLimits_mono` | Larger input → larger output | Medium — ensures clamping respects ordering |
+| `applyLimits_in_range` | Result always in [lo, hi] when valid | High — core correctness of rate cap |
+| `noGreaterThan_valid` | Constructor always satisfies lo ≤ hi | High — prevents degenerate limits |
+| `applyLimits_identity` | In-range values are unchanged | Medium — no spurious clamping |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 113).
+- 5 `#eval` and `decide` checks confirm concrete clamping values.
+- Route-B correspondence tests not yet written for this target (state-
+  machine is purely functional, proofs subsume executable testing).

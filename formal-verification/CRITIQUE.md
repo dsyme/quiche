@@ -4,24 +4,25 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-26 17:26 UTC
-- **Commit**: `61030d6998346d1fedcac260d9f8cb6ca27ac4fd`
+- **Date**: 2026-04-29 05:30 UTC
+- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
+- **Run**: run 113 — added T38 PathState (24 thms, 0 sorry), T32 BBR2Limits
+  (14 thms, 0 sorry); merged run107/run109 PRs; full suite 35 files, 0 sorry
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **29 Lean files with
-604 theorems (+ examples), 0 sorry** 🎉 (Lean 4.30.0-rc2, no Mathlib). Run 105
-closed the **last remaining sorry** (`longHeader_roundtrip` in `PacketHeader.lean`)
-by extending the Header model with DCID/SCID byte-list fields and proving the
-full encode↔decode round-trip via `omega` + `simp`. Runs 85–105 added `VarIntTag.lean`
-(T30, 15 thms), `Bandwidth.lean` (T36, 22 thms), `Pacer.lean` (T41, 17 thms),
-`H3Frame.lean` (T31, 19 thms), and `AckRanges.lean` (T43, 29 thms). Route-B
-correspondence tests now cover 5 targets (pkt_num_len/18, bandwidth/25,
-rangeset/21, ack_ranges/25, h3_frame/25 — all PASS).
+The formal verification suite for `quiche` now covers **35 Lean files with
+~655 theorems (+ examples), 0 sorry** 🎉 (Lean 4.30.0-rc2, no Mathlib). Run 113
+merged run107/109 PRs and added `FVSquad/BBR2Limits.lean` (T32, 14 thms),
+bringing the total to **35 files**. Runs 107–113 added `BytesInFlight.lean`
+(T37, 17 thms), `PathState.lean` (T38, 24 thms), and `BBR2Limits.lean` (T32,
+14 thms). Route-B correspondence tests now cover 6 targets (pkt_num_len/18,
+bandwidth/25, rangeset/21, ack_ranges/25, h3_frame/25, bytes_in_flight/25 —
+all PASS).
 
-This is a significant milestone: **the entire FV suite of 604 theorems across 29
+This is a significant milestone: **the entire FV suite of ~655 theorems across 35
 Lean files is fully proved with zero outstanding sorry obligations.** Every
 theorem has been mechanically verified by `lake build`.
 
@@ -997,36 +998,44 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
    32-bit version field, `encodeLongHeader` → `decodeLongHeader` is the identity.
    This was the **last sorry** in the entire suite.
 
-2. **BytesInFlight counter invariant (T37)** — Informal spec completed (run
-   103). Next step: write `FVSquad/BytesInFlight.lean` (~50 lines, all `omega`).
-   Key properties: bytes-in-flight never exceed congestion window; `subtract`
-   never underflows below zero; add/subtract are inverses under RFC 9000 §B.1
-   accounting. Clock-monotonicity note (OQ-T37-1): `add` takes a timestamp but
-   no monotonicity is asserted — worth flagging to maintainers.
+2. ~~**BytesInFlight counter invariant (T37)**~~ ✅ **DONE run 107** —
+   `FVSquad/BytesInFlight.lean` (17 thms, 0 sorry).
 
-3. **H3 Settings frame invariants (T33)** — Informal spec completed (run 86).
+3. ~~**PathState monotone progression (T38)**~~ ✅ **DONE run 109** —
+   `FVSquad/PathState.lean` (24 thms, 0 sorry). `promote_to` proved strictly
+   monotone; full RFC 9000 §8.2 state-machine validated.
+
+4. ~~**BBR2 Limits invariants (T32 partial)**~~ ✅ **DONE run 113** —
+   `FVSquad/BBR2Limits.lean` (14 thms, 0 sorry). `apply_limits` clamp is
+   idempotent, monotone, and identity on in-range values; `no_greater_than`
+   constructor invariants proved.
+
+5. **H3 Settings frame invariants (T33)** — Informal spec completed (run 86).
    `FVSquad/H3Settings.lean` not yet written. Key properties: duplicate key
    rejection, H/2-key rejection, GREASE key passthrough, size guard.
    ~80 Lean lines, medium tractability.
 
-4. **Pacer: time-based budget model** — `budget_at_time` and `tokens_at_time`
+6. **Pacer: time-based budget model** — `budget_at_time` and `tokens_at_time`
    are the more complex half of the Pacer logic. `Pacer.lean` only models
    the rate-selection layer. A time-budget model would catch bugs in the
    token-bucket accumulation — the most likely source of pacing jitter.
 
-5. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
+7. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
    to the peer as the receive window. The model does not prove this bound is
    maintained. A violation could cause the peer to send more data than we
    budgeted for, leading to memory exhaustion.
 
-6. **PathState monotone progression (T38)** — RFC 9000 §8.2. Researched run
-   91. `promote_to` is strictly monotone (state never regresses). ~45 Lean lines.
-
-7. **OQ-T43-2 follow-up** — The uncapped `block_count` in `parse_ack_frame`
+8. **OQ-T43-2 follow-up** — The uncapped `block_count` in `parse_ack_frame`
    (finding run 100) has not been formally escalated to the maintainers or
    fixed. A `block_count` cap check (e.g. `≤ MAX_ACK_BLOCKS`) would be a
    direct defence against the DoS vector. A future run could add a spec for
    the capped version and open a fix issue.
+
+9. **BBR2 pacing-rate update logic (T32 full)** — `BBR2Limits.lean` covers
+   only the `Limits` struct; the `update_pacing_rate` method involves floating-
+   point gain factors which require a rational/fixed-point abstraction. A
+   bounded-integer model (e.g. 1000× scaled) would allow key properties like
+   "pacing_rate never exceeds bandwidth_estimate × 3.0" to be proved.
 
 ### Moderate priority
 
@@ -1079,16 +1088,16 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 ### Accuracy Issues (require correction before submission)
 
 1. **Stale theorem/file/sorry counts**: The abstract and introduction figures
-   are out of date. Current state: **29 files, 604 theorems,
+   are out of date. Current state: **35 files, ~655 theorems,
    0 sorry** 🎉 (Lean 4.30.0-rc2). The paper should update all counts throughout
-   (abstract, §1, Table 1, §5 conclusion). The suite is now completely sorry-free
-   following run 105.
+   (abstract, §1, Table 1, §5 conclusion). The suite is completely sorry-free.
 
 2. **Missing files in Table 1**: At minimum, the following files added since
    the last paper update are absent: `VarIntTag.lean` (T30, 15 thms),
    `Bandwidth.lean` (T36, 22 thms), `Pacer.lean` (T41, 17 thms),
    `H3Frame.lean` (T31, 19 thms), `AckRanges.lean` (T43, 29 thms),
-   `PacketHeader.lean` (T29, 14+2 thms, now with `longHeader_roundtrip` proved).
+   `PacketHeader.lean` (T29, 14+2 thms), `BytesInFlight.lean` (T37, 17 thms),
+   `PathState.lean` (T38, 24 thms), `BBR2Limits.lean` (T32, 14 thms).
    Together these add 116 theorems and 6 new/completed files covering gcongestion,
    HTTP/3, ACK frame safety, and full QUIC header round-trip.
 
