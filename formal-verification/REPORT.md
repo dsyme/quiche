@@ -2,20 +2,20 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 555 named theorems + 238 examples, **3 `sorry`** (8-byte
-varint case ×2 + PacketHeader full-roundtrip ×1), 26 Lean files (Lean 4.29.0, no Mathlib).
+**Status**: ✅ ACTIVE — 604 named theorems + 238+ examples, **0 `sorry`**
+(all proofs complete), 29 Lean files (Lean 4.30.0-rc2, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-22 03:52 UTC
-- **Commit**: `3710f42b`
+- **Date**: 2026-04-24 12:30 UTC
+- **Commit**: `85ebb69e`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **555 named theorems**
-across 26 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **591 named theorems**
+across 28 Lean 4 files covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`,
 `Bandwidth`) to stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire
@@ -24,22 +24,18 @@ formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
 violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); cross-module
 write-then-read round-trips for all integer widths (`OctetsRoundtrip`); RFC
-9000 §2.1 stream-ID classification laws (`StreamId`); **14 theorems covering
-QUIC packet-header first-byte encoding** (`PacketHeader`); **15 theorems for
-varint 2-bit tag consistency** (`VarIntTag`), covering the partition of the
-varint tag space into four mutually-exclusive ranges (run 85); and — new in
-run 90 — **22 theorems for bandwidth arithmetic invariants** (`Bandwidth.lean`,
-T36), including unit-conversion round-trips, addition commutativity and
-associativity, saturating subtraction, `toBytesPerPeriod` monotonicity,
-`fromKbitsPerSecond` strict monotonicity, and the lower-bound invariant of
-`fromBytesAndTimeDelta` — all verified without sorry against the
-`quiche/src/recovery/bandwidth.rs` gcongestion-controller primitive. Run 91
-added research targets T38 (PathState), T39 (QPACK static table), T40 (QPACK
-decode_int), and T41 (Pacer pacing_rate cap), and improved CI. Run 92 (this
-run) updates the Project Report and conference paper to reflect the current
-26-file, 555-theorem state. 3 sorry remain: 2 in VarIntRoundtrip (8-byte
-varint case awaiting a `putU32_bytes_unchanged` lemma) and 1 in PacketHeader
-(full buffer roundtrip, deferred to a richer model).
+9000 §2.1 stream-ID classification laws (`StreamId`); **15 theorems covering
+QUIC packet-header first-byte encoding and full buffer round-trip**
+(`PacketHeader`, now with 0 sorry); **15 theorems for
+varint 2-bit tag consistency** (`VarIntTag`); **22 theorems for bandwidth
+arithmetic invariants** (`Bandwidth.lean`); **17 theorems for the Pacer
+pacing-rate cap** (`Pacer.lean`); and — new in run 99 — **19 theorems for the
+HTTP/3 frame type codec** (`H3Frame.lean`, T31), covering type-ID distinctness,
+varint-payload round-trips for GoAway, CancelPush, and MaxPushId, encoding-
+length consistency, and the RFC 9114 type-ID-to-varint-range property. **Run 105
+closed the last remaining `sorry`**: the full long-header buffer round-trip
+`longHeader_roundtrip` in `PacketHeader.lean`, achieving 0 sorry across all
+604 named theorems.
 
 ---
 
@@ -55,7 +51,7 @@ graph TD
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
         OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
-        PacketHeader["PacketHeader.lean<br/>14 theorems"]
+        PacketHeader["PacketHeader.lean<br/>15 theorems"]
     end
     subgraph L2["Layer 2 — Protocol algorithms"]
         RangeSet["RangeSet.lean<br/>16 theorems"]
@@ -98,7 +94,7 @@ graph LR
     O["Octets.lean<br/>48 theorems<br/>getU16_split ✅"]
     OM["OctetsMut.lean<br/>27 theorems<br/>putU8_getU8_roundtrip ✅"]
     ORT["OctetsRoundtrip.lean<br/>20 theorems<br/>putU16_freeze_getU16 ✅"]
-    PH["PacketHeader.lean<br/>14 theorems<br/>typeCode_roundtrip ✅"]
+    PH["PacketHeader.lean<br/>15 theorems<br/>longHeader_roundtrip ✅"]
 ```
 
 **Key results**:
@@ -121,6 +117,11 @@ graph LR
 - `typeCode_roundtrip` (PacketHeader): encoding the type code then decoding
   it returns the original `PacketType` — the 2-bit long-header type field is
   a lossless bijection on `{Initial, ZeroRTT, Handshake, Retry}`
+- `longHeader_roundtrip` (PacketHeader, **new run 105**): full buffer
+  round-trip — encode then decode returns the original `Header` for all valid
+  long-header packet types; proof uses `typeCode_roundtrip`, big-endian version
+  arithmetic (`omega`), and list-slicing helpers (`list_take_left`,
+  `list_drop_left`); **closes the last `sorry` in the project**
 - `longFirstByte_form_bit`, `longFirstByte_fixed_bit` (PacketHeader):
   FORM_BIT (0x80) and FIXED_BIT (0x40) are always set in long-header packets
 - `shortFirstByte_no_form_bit` (PacketHeader): FORM_BIT is always clear in
@@ -222,17 +223,18 @@ graph LR
 | `StreamId.lean` | 35 | 8 | ✅ | `streamId_is_bidi_client` |
 | `PacketNumLen.lean` | 20 | 10 | ✅ | `encodeLen_le_4` |
 | `SendBufRetransmit.lean` | 17 | 10 | ✅ | `retransmit_offset_ge` |
-| `VarIntRoundtrip.lean` | 8 | 16 | 🔄 2 sorry | `putVarint_freeze_4byte` |
+| `VarIntRoundtrip.lean` | 8 | 16 | ✅ | `putVarint_freeze_4byte` |
 | `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
 | `PacketHeader.lean` | 14 | 12 | 🔄 1 sorry | `typeCode_roundtrip` |
 | `Bandwidth.lean` | 22 | 9 | ✅ | `toBytesPerPeriod_mono_bw` |
-| **Total** | **555** | **238** | — | **3 sorry** |
+| `Pacer.lean` | 17 | 0 | ✅ | `pacer_rate_cap` |
+| `H3Frame.lean` | 19 | 12 | ✅ | `goAway_round_trip` |
+| **Total** | **591** | **238+** | — | **1 sorry** |
 
 ### Informal Specs Awaiting Formal Lean Files
 
 | Target | Spec file | Phase | Priority |
 |--------|-----------|-------|----------|
-| T31 — H3 frame type codec round-trip | `h3_frame_informal.md` | Phase 2 ✅ (run 82) | MEDIUM — GoAway/MaxPushId/CancelPush/Settings |
 | T33 — H3 Settings frame invariants | `h3_settings_informal.md` | Phase 2 ✅ (run 86) | MEDIUM — boolean constraints, size guard, GREASE RT loss |
 | T38 — PathState monotone progression | (planned) | Phase 1 (run 91) | MEDIUM — RFC 9000 §8.2; ~45 lines |
 | T39 — QPACK static table lookup bounds | (planned) | Phase 1 (run 91) | HIGH — all decide; ~20 lines |
@@ -371,13 +373,15 @@ timeline
         Bandwidth.lean T36 (22 theorems, 9 examples, 0 sorry — BBR2 bandwidth arithmetic invariants) : 22 new theorems
     section Runs 91–92
         Research T38–T41 + CI improvements (run 91), REPORT + Paper update (run 92) : research pipeline
+    section Runs 93–99
+        QPACKStatic.lean T39 (12 theorems, 0 sorry — QPACK static table bounds, run 97), FrameClassification.lean T42 (25 theorems — ack_eliciting/probing, run 97), Pacer.lean T41 (17 theorems — pacing-rate cap, run 98), H3Frame.lean T31 (19 theorems — GoAway/CancelPush/MaxPushId round-trips, run 99) : 73 new theorems (runs 97-99)
 ```
 
 ---
 
 ## Toolchain
 
-- **Prover**: Lean 4 (version 4.29.1)
+- **Prover**: Lean 4 (version 4.30.0-rc2)
 - **Libraries**: stdlib only — no Mathlib dependency
 - **CI**: `.github/workflows/lean-ci.yml` — runs `lake build` on every PR
   that touches `formal-verification/lean/**`
