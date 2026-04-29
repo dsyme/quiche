@@ -4,31 +4,38 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-19 09:30 UTC
-- **Commit**: `14c1694a`
+- **Date**: 2026-04-29 05:30 UTC
+- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
+- **Run**: run 113 — added T38 PathState (24 thms, 0 sorry), T32 BBR2Limits
+  (14 thms, 0 sorry); merged run107/run109 PRs; full suite 35 files, 0 sorry
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **24 Lean files with
-518 theorems + 187 examples, 3 sorry** (Lean 4.29.1, no Mathlib), and two
-further targets at Phase 2 (informal spec done, awaiting Lean formalisation):
-T30 (Varint 2-bit tag structural properties) and T31 (H3 frame codec round-trip).
-Runs 68–84 added `SendBufRetransmit.lean` (run 68), `VarIntRoundtrip.lean`
-(runs 75–77, 2 sorry for 8-byte case), `PacketNumEncodeDecode.lean` (run 76,
-0 sorry), `PacketHeader.lean` (run 81, 1 sorry for full round-trip), the H3
-frame informal spec T31 (run 82), and the Varint tag informal spec T30 (run 83).
-The most notable results are: a **formal proof of an Ord law violation (OQ-1)**
-in `StreamPriorityKey::cmp`; the **end-to-end encode↔decode composition theorem**
-`encode_decode_pktnum` for all four QUIC packet-number encoding lengths; the
-**QUIC packet-header first-byte theorems** (type-code bijection, FORM_BIT and
-FIXED_BIT invariants, short/long distinguishability); and the foundational byte-
-cursor round-trips (`putU32_freeze_getU32` etc.). Key results include
-`emitN_le_maxData` (RFC 9000 §4.1 flow-control safety), `decode_pktnum_correct`
-(RFC 9000 §A.3), `newScid_seq_fresh` (CID uniqueness), and `insertAny_inv`
-(out-of-order stream reassembly). Run 84 (this run) adds T30 and T31 critique
-sections and a Paper Review.
+The formal verification suite for `quiche` now covers **35 Lean files with
+~655 theorems (+ examples), 0 sorry** 🎉 (Lean 4.30.0-rc2, no Mathlib). Run 113
+merged run107/109 PRs and added `FVSquad/BBR2Limits.lean` (T32, 14 thms),
+bringing the total to **35 files**. Runs 107–113 added `BytesInFlight.lean`
+(T37, 17 thms), `PathState.lean` (T38, 24 thms), and `BBR2Limits.lean` (T32,
+14 thms). Route-B correspondence tests now cover 6 targets (pkt_num_len/18,
+bandwidth/25, rangeset/21, ack_ranges/25, h3_frame/25, bytes_in_flight/25 —
+all PASS).
+
+This is a significant milestone: **the entire FV suite of ~655 theorems across 35
+Lean files is fully proved with zero outstanding sorry obligations.** Every
+theorem has been mechanically verified by `lake build`.
+
+The most notable results span the full QUIC stack: **`encode_decode_pktnum`**
+(end-to-end packet-number encode↔decode composition for all four lengths);
+**`short_long_first_byte_differ`** (type disambiguation); **`emitN_le_maxData`**
+(RFC 9000 §4.1 flow-control safety); **`decode_pktnum_correct`** (RFC §A.3);
+**`decodeAckBlocks_all_valid` + `decodeAckBlocks_bounded`** (ACK frame range
+safety); **`pacing_rate_le_cap`** (gcongestion pacing-rate cap invariant);
+**`h3f_goaway_roundtrip`/`h3f_cancel_push_roundtrip`/`h3f_max_push_id_roundtrip`**
+(HTTP/3 single-varint frame codec round-trips). Key findings include OQ-1
+(StreamPriorityKey antisymmetry, confirmed intentional) and OQ-T43-2 (uncapped
+ACK block_count — potential DoS vector, filed as finding).
 
 ---
 
@@ -746,28 +753,26 @@ not explicitly proved.
 
 ---
 
-### Target 23: VarInt cross-module round-trip (`FVSquad/VarIntRoundtrip.lean`) — 8 theorems 🔄 *(2 sorry — run 75–77)*
+### Target 23: VarInt cross-module round-trip (`FVSquad/VarIntRoundtrip.lean`) — 8 theorems ✅ *(0 sorry — run 85)*
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
 | `putVarint_freeze_getVarint_1byte` | high | **high** | `put_varint` (1-byte) → `freeze` → `get_varint` = identity for v < 64 |
 | `putVarint_freeze_getVarint_2byte` | high | **high** | 2-byte round-trip for 64 ≤ v < 16384 |
 | `putVarint_freeze_getVarint_4byte` | high | **high** | 4-byte round-trip for 16384 ≤ v < 1073741824 |
-| `putVarint_freeze_getVarint_8byte` | high | **high** | 8-byte round-trip for v ≥ 1073741824 — **sorry** (blocked on `putU32_bytes_unchanged`) |
-| `putVarint_freeze_getVarint` | high | **high** | Combined round-trip for all valid QUIC varint values — **sorry** (inherits 8-byte sorry) |
+| `putVarint_freeze_getVarint_8byte` | high | **high** | 8-byte round-trip for v ≥ 1073741824 — **proved run 85** via `putU32_bytes_unchanged` |
+| `putVarint_freeze_getVarint` | high | **high** | Combined round-trip for all valid QUIC varint values — **proved run 85** |
 | `putVarint_off` | mid | medium | Cursor advances by `varintLen(v)` after `put_varint` |
 | `putVarint_len` | mid | medium | `putVarint` places exactly `varintLen(v)` bytes |
-| `putVarint_first_byte_tag` | mid | medium | First-byte tag bits equal `varintParseLen(first_byte) - 1` — partially sorry for 8-byte |
+| `putVarint_first_byte_tag` | mid | medium | First-byte tag bits equal `varintParseLen(first_byte) - 1` — **proved** for all 4 encoding sizes |
 | 16 examples | low | low | Concrete put→freeze→get at each encoding length verified by `decide` |
 
-**Assessment**: The three completed round-trip theorems (1-byte, 2-byte,
-4-byte) directly verify that the varint codec correctly encodes and decodes 75%
-of the QUIC varint value space. The 2 sorry for the 8-byte path are a known gap:
-the proof requires `putU32_bytes_unchanged` (a lemma about non-aliasing of two
-sequential `putU32` calls in `OctetsMut`), which was identified as a pending
-addition to `OctetsMut.lean`. Resolving these 2 sorry is a low-effort,
-high-value next step. **Gap**: `putVarint_first_byte_tag` is partly proved but
-has a sorry for the 8-byte encoding path for the same reason.
+**Assessment**: All 8 theorems are fully proved (0 sorry ✅ — run 85 closed the
+8-byte path via `putU32_bytes_unchanged`). The four round-trip theorems collectively
+verify that the varint codec correctly encodes and decodes the entire QUIC varint
+value space (all values 0 to 2^62−1). `putVarint_first_byte_tag` confirms the
+2-bit tag in the first byte is correctly set for all encoding sizes. These are
+among the highest-value results in the codec layer.
 
 ---
 
@@ -803,7 +808,9 @@ this case is not modelled.
 
 ---
 
-### Target 29: QUIC packet-header first-byte (`FVSquad/PacketHeader.lean`) — 14 theorems 🔄 *(1 sorry — run 81)*
+### Target 29: QUIC packet-header first-byte (`FVSquad/PacketHeader.lean`) — 16 theorems ✅ *(0 sorry — run 105)*
+
+> **Status**: Phase 5 Done. 14 public + 2 private theorems, 0 sorry. `lake build` passes.
 
 | Theorem | Level | Bug-catching potential | Notes |
 |---------|-------|----------------------|-------|
@@ -819,114 +826,166 @@ this case is not modelled.
 | `shortFirstByte_no_form_bit` | high | **high** | FORM_BIT is always clear in short-header first byte — type disambiguation is correct |
 | `shortFirstByte_fixed_bit` | high | **high** | FIXED_BIT is always set in short-header first byte — RFC 9000 §17.3 |
 | `short_long_first_byte_differ` | high | **high** | Short-header and long-header first bytes are always distinct — endpoint can always identify packet type |
-| `version_roundtrip` | high | **high** | QUIC version field (32-bit big-endian) round-trips correctly via `putU32`/`getU32` |
-| `longHeader_roundtrip` | high | **high** | Full Header encode↔decode round-trip — **sorry** (requires richer byte-list buffer model) |
-| 12 examples | low | low | Concrete first-byte values for each packet type verified by `decide` |
+| `longHeader_roundtrip` | high | **high** | **FULLY PROVED (run 105)** — Full Header encode↔decode round-trip for all long-header types with well-formed DCID/SCID byte lists and a 32-bit version field |
+| `version_roundtrip` | high | **high** | QUIC version field (32-bit big-endian) round-trips correctly for all `v < 2^32` |
+| 2 private helpers | low | low | `list_take_left`, `list_drop_left` — list-append slicing lemmas for the round-trip proof |
+| 12 examples | low | low | Concrete first-byte values for each packet type verified by `native_decide` |
 
 **Assessment**: The type-code bijection and bit-presence theorems are
 high-value: a bug in the `to_bytes`/`from_bytes` first-byte encoding would
 violate `typeCode_roundtrip`, `longFirstByte_form_bit`, or `short_long_first_byte_differ`,
-causing all QUIC traffic to be misclassified. The `version_roundtrip` theorem
-closes the version-field correctness proof via the existing `OctetsRoundtrip`
-infrastructure. The 1 remaining sorry (`longHeader_roundtrip`) represents the
-full buffer encode↔decode round-trip, which requires extending the model to
-include DCID, SCID, token, and payload-length fields. This is the key remaining
-gap for this target. **Approximations**: only the first-byte layer and the
-version field are modelled; pkt_num_len (bits 1–0) and key_phase (bit 2) are
-fixed to 0; header protection is out of scope.
+causing all QUIC traffic to be misclassified. The `longHeader_roundtrip` theorem
+(the last sorry in the entire suite, closed in run 105) is the highest-value
+result: it formally proves that for any well-formed long-header — with DCID/SCID
+byte lists up to 255 bytes, version field fitting in 32 bits, and a valid
+packet type — `encodeLongHeader` followed by `decodeLongHeader` returns exactly
+the original header. **Approximations**: only the first-byte layer and DCID/SCID/
+version fields are modelled; pkt_num_len (bits 1–0) and key_phase (bit 2) are
+fixed to 0; header protection, token field, and short-header full round-trip are
+out of scope.
 
 ---
 
-### Target 30: Varint 2-bit tag structural properties (`specs/varint_tag_informal.md`) — Phase 2 *(informal spec complete — run 83)*
+### Target 30: Varint 2-bit tag structural properties (`FVSquad/VarIntTag.lean`) — 15 theorems ✅ *(run 85)*
 
-> **Status**: Informal spec done. No Lean file yet. Assessment of forthcoming Lean file.
+> **Status**: Phase 5 Done. 15 theorems, 0 sorry. `lake build` passes.
 
-The T30 informal spec (`specs/varint_tag_informal.md`) covers the *structural*
-layer of the QUIC varint codec, independently of the full round-trip (T1, T23):
-the relationship between the 2-bit tag in the first byte, the `varint_len`
-function, and `varint_parse_len`. Five property groups are specified:
+`VarIntTag.lean` proves the structural relationship between the 2-bit tag in
+the first byte of a QUIC varint, the `varint_len` encoding-length function,
+and `varint_parse_len`. Five property groups:
 
-| Property group | Lean type | Expected difficulty | Bug-catching potential |
-|---------------|-----------|--------------------|-----------------------|
-| §1 — `varint_parse_len` range biconditionals | 4 iff theorems | trivial (`omega`) | **high** |
-| §2 — `varint_len` value-range biconditionals | 4 iff theorems | trivial (`omega`) | **high** |
-| §3 — Tag–value non-overlap proofs | 4 inequality lemmas | low (`omega`) | medium |
-| §4 — Tag consistency (universal) | 1 universal theorem | low (cases+simp+omega) | **high** |
-| §5 — `varint_parse_len` completeness/partition | 1 theorem | low (omega/decide) | medium |
+| Theorem group | Theorems | Level | Bug-catching potential |
+|---------------|----------|-------|----------------------|
+| `varint_parse_len` range biconditionals (§1) | 4 iff theorems | high | **high** |
+| `varint_len` value-range biconditionals (§2) | 4 iff theorems | high | **high** |
+| Tag–value non-overlap proofs (§3) | 4 inequality lemmas | mid | medium |
+| Tag consistency universal theorem (§4) | 1 universal theorem | high | **high** |
+| `varint_parse_len` completeness/partition (§5) | 2 theorems | mid | medium |
 
-**Assessment**: The §1 and §4 theorems are the highest-value results in this
-target. The biconditional form of `varint_parse_len` range theorems (§1) is a
-strictly stronger statement than the one-directional lemmas already in
-`Varint.lean`. A receiver that misreads the 2-bit tag would fail these
-theorems. The universal tag consistency theorem (§4) upgrades the existential
-`varint_first_byte_tag` in `Varint.lean` to a universally quantified form,
-directly stating that `varint_parse_len(first_byte) = varint_len(v)` for *all*
-encoding outputs — this is the key structural invariant of the QUIC varint wire
-format.
+**Assessment**: The §1 biconditional theorems (e.g. `varint_parse_len_one_iff:
+varint_parse_len b = 1 ↔ b &&& 0xC0 = 0`) are a strictly stronger statement
+than the one-directional lemmas in `Varint.lean`. The §4 universal tag
+consistency theorem (`varint_tag_consistency`) upgrades the existential form:
+for *all* inputs `v` and any encoding output `bs`, the first byte's top 2 bits
+encode exactly `varint_len(v)`. A receiver that misread the 2-bit tag would
+fail these theorems immediately. The §3 non-overlap lemmas self-validate the
+arithmetic-in-lieu-of-bitwise approximation used throughout the FV project.
 
-**Bug-catching potential**: Medium-to-high. An implementation that set the wrong
-tag bits (e.g. set `0x80` when encoding a 2-byte varint) would fail §1 and §4
-immediately. The non-overlap proofs (§3) rule out a class of implementation
-errors where the tag and the value bits are accidentally combined in a
-conflicting way.
-
-**Approximations**: The model uses the same arithmetic-in-lieu-of-bitwise
-approach as T1 and T23. The proof that bitwise OR is equivalent to addition
-when the bits do not overlap is exactly the content of §3, so these proofs are
-self-validating: they prove the approximation assumption that T1 and T23 took
-for granted.
-
-**Effort estimate**: ~120 Lean lines, all closed by `omega` or `simp`+`omega`.
-No sorry expected. This is a low-effort, high-value next step (Task 3 in the
-next run).
+**Approximations**: Same arithmetic model as T1 and T23; bitwise operations
+approximated by arithmetic using the §3 non-overlap proofs.
 
 ---
 
-### Target 31: HTTP/3 frame codec round-trip (`specs/h3_frame_informal.md`) — Phase 2 *(informal spec complete — run 82)*
+### Target 31: HTTP/3 frame codec round-trip (`FVSquad/H3Frame.lean`) — 19 theorems ✅ *(run 99/100)*
 
-> **Status**: Informal spec done. No Lean file yet. Assessment of forthcoming Lean file.
+> **Status**: Phase 5 Done. 19 theorems, 0 sorry. Route-B tests 25/25 PASS (run 103).
 
-The T31 informal spec (`specs/h3_frame_informal.md`) covers `Frame::to_bytes` and
-`Frame::from_bytes` in `quiche/src/h3/frame.rs` — the HTTP/3 frame serialisation
-layer. The key correctness property is the round-trip invariant: for a frame `f`,
-`from_bytes(type, payload_length, to_bytes(f)) = f`.
+`H3Frame.lean` proves the encode↔decode round-trips for the three HTTP/3
+frame types that carry a single QUIC varint payload: GoAway, MaxPushId, and
+CancelPush. The model mirrors `Frame::to_bytes` and `Frame::from_bytes` in
+`quiche/src/h3/frame.rs`.
 
-| Frame type | Round-trip difficulty | Bug-catching potential |
-|------------|----------------------|----------------------|
-| `GoAway` (single varint `id`) | low (`omega`) | **high** |
-| `MaxPushId` (single varint `push_id`) | low (`omega`) | **high** |
-| `CancelPush` (single varint `push_id`) | low (`omega`) | **high** |
-| `Settings` (key-value varint pairs) | medium (partial round-trip) | **high** |
-| `PushPromise` / `PriorityUpdate*` (varint + raw bytes) | medium | medium |
-| `Data` / `Headers` (raw byte arrays) | trivial (identity) | low |
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `h3f_goaway_roundtrip` | high | **high** | GoAway frame: encode then decode recovers original stream ID |
+| `h3f_max_push_id_roundtrip` | high | **high** | MaxPushId frame: encode then decode recovers push ID |
+| `h3f_cancel_push_roundtrip` | high | **high** | CancelPush frame: encode then decode recovers push ID |
+| `h3f_*_type_tag` (×3) | mid | medium | Each frame type emits the correct varint type code |
+| `h3f_*_len_correct` (×3) | mid | medium | Encoded frame has correct byte count |
+| `h3f_*_payload_range` (×3) | mid | medium | Payload value preserved within `MAX_VAR_INT` bounds |
+| 7 `native_decide` unit checks | low | low | Concrete encoding examples |
 
-**Assessment**: The recommended Lean scope (GoAway, MaxPushId, CancelPush) covers
-the three pure-varint frame types, which are the most tractable and
-security-relevant. A bug in encoding `GoAway` (which carries the stream ID of the
-last processed stream) could cause a receiver to prematurely terminate streams.
-A `CancelPush` encoding error would fail to cancel promised resources. These
-are non-trivial correctness properties that QUIC interoperability tests exercise.
+**Assessment**: The three round-trip theorems are high-value: encoding errors
+in GoAway (which carries the last processed stream ID) would cause receivers
+to prematurely close or mis-sequence HTTP/3 streams. The Route-B tests
+(25/25 PASS, covering all varint size classes, edge values, and property checks)
+independently confirm model-to-Rust correspondence. **Gap**: Settings,
+PushPromise, and PriorityUpdate frames are not modelled; those are more complex
+(key-value maps, partial round-trips) and deferred. Data and Headers frames
+carry raw byte arrays with trivial round-trips and are also deferred.
 
-**Open questions from the informal spec** that affect the Lean model:
-- **OQ-T31-1**: `from_bytes` behaviour when `payload_length > bytes.len()` —
-  unclear whether an error or a truncated read. The Lean model must decide which
-  to model.
-- **OQ-T31-2**: 0-length frames — a TODO in the code; the model may need to
-  treat this as out-of-scope.
-- **OQ-T31-3**: Settings GREASE round-trip — settings with unknown keys are
-  silently dropped; the round-trip can only be partial. This should be explicitly
-  scoped out.
-- **OQ-T31-4**: `payload_length` vs `bytes.len()` precondition not enforced in
-  the Rust API.
+**Approximations**: Buffer cursor state abstracted to byte lists; `payload_length`
+precondition not modelled (OQ-T31-4 from informal spec). The varint
+encode/decode is inlined (not imported from Varint.lean) to keep the file
+self-contained. The inline model is confirmed equivalent to `Varint.lean` by
+the Route-B tests.
 
-**Bug-catching potential**: **High** for GoAway/MaxPushId/CancelPush. A varint
-encoding error in any of these frame types would directly affect HTTP/3 stream
-and push lifecycle management.
+---
 
-**Effort estimate**: ~150–200 Lean lines for the three simple frame types. The
-proof will require the varint round-trip lemmas from T23/VarIntRoundtrip.lean
-(or their 1–4-byte sorry-free versions). No sorry expected for the in-scope
-types. This is a clear Task 3 target for a future run.
+### Target 36: Bandwidth arithmetic invariants (`FVSquad/Bandwidth.lean`) — 22 theorems ✅ *(run 90)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `bandwidth_zero` | low | low | `Bandwidth{bits:0}` is the zero value |
+| `bandwidth_add_comm` | mid | medium | `a + b = b + a` for bandwidth values |
+| `bandwidth_add_assoc` | mid | medium | `(a + b) + c = a + (b + c)` |
+| `bandwidth_mul_comm` | mid | medium | `a * k = k * a` |
+| `bandwidth_mul_add` | mid | medium | Distributive law |
+| `bandwidth_from_kbps_le` | high | **high** | `from_kbps(k).bits ≤ k * 1000` — conversion never overestimates |
+| `bandwidth_scale` | mid | medium | Scaling invariant |
+| `bandwidth_max_comm` | mid | medium | `max(a,b) = max(b,a)` |
+| `bandwidth_max_le_left/right` | mid | medium | `max(a,b) ≥ a` and `≥ b` |
+| `bandwidth_send_quantum_ge` | high | **high** | `send_quantum(bw) ≥ min_datagram_size` — pacing always allows at least one datagram |
+| 12 unit checks | low | low | Concrete bandwidth conversions and comparisons |
+
+**Assessment**: `bandwidth_from_kbps_le` and `bandwidth_send_quantum_ge` are
+the highest-value results. Congestion control bugs that cause the pacing rate
+to be overestimated (more aggressive than actual) could starve the network.
+The arithmetic laws provide a solid algebraic foundation for reasoning about
+bandwidth composition in the BBR2 and pacing code. Route-B correspondence
+tests: 25/25 PASS.
+
+---
+
+### Target 41: Pacer pacing-rate cap invariant (`FVSquad/Pacer.lean`) — 17 theorems ✅ *(run 98)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `pacing_rate_le_cap` | high | **high** | When `max_pacing_rate = Some(cap)`, the returned rate ≤ cap |
+| `pacing_rate_disabled` | mid | medium | When `enabled = false`, pacing_rate returns `sender_rate` unchanged |
+| `pacing_rate_uncapped` | mid | medium | When `max_pacing_rate = None`, pacing_rate = sender_rate |
+| `pacing_rate_nonneg` | low | low | Pacing rate is always ≥ 0 |
+| `set_rate_updates` | mid | medium | `set_pacing_rate` updates the sender_rate field |
+| `pacer_mk_valid` | low | low | Constructor postconditions |
+| 11 unit/property checks | low | low | Representative pacing scenarios |
+
+**Assessment**: `pacing_rate_le_cap` is the central result: it formally
+proves the rate-limiting invariant for the gcongestion pacing subsystem.
+A bug that allowed `pacing_rate` to exceed `max_pacing_rate` would cause
+the sender to burst above the configured ceiling, breaking any shaping
+contract. This is the first theorem that directly targets the `gcongestion`
+module. **Gap**: The time-based budget accumulation (`budget_at_time`,
+`tokens_at_time`) is not modelled — this is the more complex half of the
+Pacer logic and the most likely source of subtle bugs.
+
+---
+
+### Target 43: ACK frame acked-range bounds (`FVSquad/AckRanges.lean`) — 29 theorems ✅ *(run 102)*
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `decodeAckBlocks_first_guard` | high | **high** | success ⟹ `la ≥ ab` (no underflow) |
+| `decodeAckBlocks_nonempty` | high | **high** | success ⟹ result non-empty |
+| `loop_largest_decreases` | high | **high** | Each iteration strictly decreases `smallest` — no infinite accumulation |
+| `blocks_disjoint_via_gap` | high | **high** | Gap-2 separation ⟹ disjoint ranges |
+| `decodeAckBlocks_all_valid` | high | **high** | All decoded ranges have `sm ≤ lg` — no inverted ranges |
+| `decodeAckBlocks_bounded` | high | **high** | All decoded ranges have `lg ≤ largest_ack` — no out-of-bound PNs |
+| `decodeAckBlocks_first_valid` | high | **high** | Head range `sm ≤ lg` (structural correctness) |
+| `decodeAckBlocks_none_iff_first_guard` | mid | medium | Failure ↔ `la < ab` for no-block case |
+| `decodeAckBlocks_none_means_no_ranges` | mid | medium | Failure ⟹ no ranges |
+| `loop_invariant` | high | **high** | Loop invariant: acc entries maintain `sm ≤ lg` and `lg ≤ ub` — key inductive lemma |
+| 8 `native_decide` unit checks | low | low | Single/multi-block decoding examples |
+| 5 `native_decide` property checks | low | low | allValid, boundedBy, monotone on samples |
+
+**Assessment**: The three major invariant theorems (`all_valid`, `bounded`,
+`loop_invariant`) are the highest-value results in this target. They collectively
+guarantee that `parse_ack_frame` never produces inverted ranges or ranges
+referencing packet numbers beyond `largest_ack`, which are the two preconditions
+for `RangeSet::insert` to maintain its `sorted_disjoint` invariant. The proofs
+were completed via a shared `loop_invariant` lemma (run 102) using an inductive
+argument over the block list. **Finding OQ-T43-2**: `block_count` is parsed as
+a raw varint with no upper bound — a very large value causes the loop to run
+that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 
 ---
 
@@ -934,59 +993,76 @@ types. This is a clear Task 3 target for a future run.
 
 ### Highest-priority gaps (most likely to catch real bugs)
 
-1. **VarIntRoundtrip 8-byte sorry** — Add `putU32_bytes_unchanged` lemma to
-   `OctetsMut.lean`, which directly closes 2 sorry in `VarIntRoundtrip.lean`
-   (the 8-byte encode↔decode round-trip and first-byte tag consistency).
-   Low effort (~25 Lean lines), high value.
+1. ~~**PacketHeader full round-trip sorry**~~ ✅ **CLOSED run 105** — `longHeader_roundtrip`
+   proved: for all long-header packets with well-formed DCID/SCID (≤255 bytes) and a
+   32-bit version field, `encodeLongHeader` → `decodeLongHeader` is the identity.
+   This was the **last sorry** in the entire suite.
 
-2. **PacketHeader full round-trip sorry** — Extend `PacketHeader.lean` with
-   a byte-list model of DCID, SCID, token, and payload-length fields. This
-   would close the `longHeader_roundtrip` sorry and formally verify the entire
-   QUIC header serialisation path. Medium effort, very high value.
+2. ~~**BytesInFlight counter invariant (T37)**~~ ✅ **DONE run 107** —
+   `FVSquad/BytesInFlight.lean` (17 thms, 0 sorry).
 
-3. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
+3. ~~**PathState monotone progression (T38)**~~ ✅ **DONE run 109** —
+   `FVSquad/PathState.lean` (24 thms, 0 sorry). `promote_to` proved strictly
+   monotone; full RFC 9000 §8.2 state-machine validated.
+
+4. ~~**BBR2 Limits invariants (T32 partial)**~~ ✅ **DONE run 113** —
+   `FVSquad/BBR2Limits.lean` (14 thms, 0 sorry). `apply_limits` clamp is
+   idempotent, monotone, and identity on in-range values; `no_greater_than`
+   constructor invariants proved.
+
+5. **H3 Settings frame invariants (T33)** — Informal spec completed (run 86).
+   `FVSquad/H3Settings.lean` not yet written. Key properties: duplicate key
+   rejection, H/2-key rejection, GREASE key passthrough, size guard.
+   ~80 Lean lines, medium tractability.
+
+6. **Pacer: time-based budget model** — `budget_at_time` and `tokens_at_time`
+   are the more complex half of the Pacer logic. `Pacer.lean` only models
+   the rate-selection layer. A time-budget model would catch bugs in the
+   token-bucket accumulation — the most likely source of pacing jitter.
+
+7. **RecvBuf: flow-control enforcement** — `highMark ≤ max_data` is advertised
    to the peer as the receive window. The model does not prove this bound is
    maintained. A violation could cause the peer to send more data than we
    budgeted for, leading to memory exhaustion.
 
-4. **Write `FVSquad/VarIntTag.lean` for T30** — The informal spec is
-   complete (`specs/varint_tag_informal.md`, run 83). Next step is Task 3:
-   write the Lean file with 4 biconditional `varint_parse_len` range theorems,
-   4 `varint_len` biconditionals, the universal tag consistency theorem, and
-   non-overlap lemmas. ~120 lines, all `omega` proofs. No sorry expected.
-   This also upgrades the existing one-directional `Varint.lean` lemmas to iff.
+8. **OQ-T43-2 follow-up** — The uncapped `block_count` in `parse_ack_frame`
+   (finding run 100) has not been formally escalated to the maintainers or
+   fixed. A `block_count` cap check (e.g. `≤ MAX_ACK_BLOCKS`) would be a
+   direct defence against the DoS vector. A future run could add a spec for
+   the capped version and open a fix issue.
 
-5. **Write `FVSquad/H3Frame.lean` for T31** — The informal spec is complete
-   (`specs/h3_frame_informal.md`, run 82). Next step is Task 3: write the Lean
-   file covering GoAway, MaxPushId, and CancelPush round-trips. ~150–200 lines;
-   uses `VarIntRoundtrip.lean` lemmas. No sorry expected for in-scope types.
-   Scope excludes Settings (partial round-trip) and 0-length frames (code TODO).
-
-6. **StreamId↔StreamDo guard** — The `is_bidi && is_local` guard in
-   `stream_do_send` (`quiche/src/lib.rs`) is not proved correct relative to
-   RFC 9000 §2.1 stream-type classification.
+9. **BBR2 pacing-rate update logic (T32 full)** — `BBR2Limits.lean` covers
+   only the `Limits` struct; the `update_pacing_rate` method involves floating-
+   point gain factors which require a rational/fixed-point abstraction. A
+   bounded-integer model (e.g. 1000× scaled) would allow key properties like
+   "pacing_rate never exceeds bandwidth_estimate × 3.0" to be proved.
 
 ### Moderate priority
 
-7. **CUBIC: Reno-friendly transition** — W_cubic vs W_est comparison
+8. **CUBIC: Reno-friendly transition** — W_cubic vs W_est comparison
    (RFC 8312bis §5.8) is unmodelled. This determines CUBIC's fairness to
    coexisting Reno flows.
 
-8. **CidMgmt: retire_if_needed** — The auto-retire path for excess SCIDs
+9. **CidMgmt: retire_if_needed** — The auto-retire path for excess SCIDs
    is not modelled. Prove it maintains `activeCids ≤ active_connection_id_limit`
    (RFC 9000 §5.1.1).
 
-9. **NewReno: AIMD composition** — Repeated ACK+loss cycles are not proved
-   to converge. A multi-event induction would confirm AIMD steady-state.
+10. **NewReno: AIMD composition** — Repeated ACK+loss cycles are not proved
+    to converge. A multi-event induction would confirm AIMD steady-state.
+
+11. **QPACK decode_int prefix-mask (T40)** — HPACK/QPACK integer decoding
+    (RFC 7541 §5.1): mask formula `2^n - 1`, single-byte vs multi-byte
+    accumulation. ~50 Lean lines, fuel-bounded recursion model.
 
 ### Observations on proof strength
 
 - The **strongest** results (highest bug-catching potential): `decode_pktnum_correct`,
   `encode_decode_pktnum`, `emitN_le_maxData`, `newScid_seq_fresh`,
   `insertAny_inv`, `streamType_add_mul4`, `putU16_freeze_getU16`/
-  `putU32_freeze_getU32`, `pktNumLen_k_coverage`, `retransmit_inv`, and
-  `short_long_first_byte_differ`. These directly prove properties that, if
-  violated, would cause protocol errors or data corruption.
+  `putU32_freeze_getU32`, `pktNumLen_k_coverage`, `retransmit_inv`,
+  `short_long_first_byte_differ`, `decodeAckBlocks_all_valid`/`_bounded`,
+  `pacing_rate_le_cap`, `h3f_goaway_roundtrip`. These directly prove properties
+  that, if violated, would cause protocol errors or data corruption.
 - The **weakest** results are the `trivial` structural theorems (e.g., `new_*`
   postconditions checking struct field initialisation). Useful for baseline
   consistency but low bug-catching value.
@@ -994,9 +1070,11 @@ types. This is a clear Task 3 target for a future run.
   formal finding that diverges from a standard contract. Its impact is unclear
   without understanding whether the scheduler relies on antisymmetry; a
   maintainer response would be valuable.
-- The **3 sorry** (2 in VarIntRoundtrip, 1 in PacketHeader) are all identified
-  with clear resolutions: adding one lemma to OctetsMut.lean closes 2 of them;
-  the third requires a richer buffer model.
+- The **OQ-T43-2 finding** (uncapped `block_count` in `parse_ack_frame`) is a
+  real DoS vector discovered via formal verification. Unlike OQ-1 (confirmed
+  intentional), this was a genuine discovery that a maintainer should address.
+- ~~The **1 sorry** (in PacketHeader.lean)~~ → **CLOSED run 105**: `longHeader_roundtrip`
+  is now fully proved (16 theorems, 0 sorry). The suite is completely sorry-free.
 
 
 
@@ -1004,83 +1082,82 @@ types. This is a clear Task 3 target for a future run.
 
 ## Paper Review
 
-> *Assessment of `formal-verification/paper/paper.tex` as of run 84
-> (2026-04-19). Paper is a 632-line ACM sigconf LaTeX draft.*
+> *Assessment of `formal-verification/paper/paper.tex` as of run 106
+> (2026-04-26). Paper is an ACM sigconf LaTeX draft.*
 
 ### Accuracy Issues (require correction before submission)
 
-1. **Stale theorem count**: The abstract and Introduction claim **504
-   theorems, 23 files, 2 sorry**. The current project state is **518
-   theorems, 24 files, 3 sorry** (PacketHeader.lean added in run 81;
-   VarIntRoundtrip.lean gained a third sorry). The theorem table in
-   §3.1 does not include `PacketHeader.lean` at all.
+1. **Stale theorem/file/sorry counts**: The abstract and introduction figures
+   are out of date. Current state: **35 files, ~655 theorems,
+   0 sorry** 🎉 (Lean 4.30.0-rc2). The paper should update all counts throughout
+   (abstract, §1, Table 1, §5 conclusion). The suite is completely sorry-free.
 
-2. **Missing `PacketHeader.lean` in Table 1**: The paper's proof-inventory
-   table lists 23 files and totals 504 theorems. `PacketHeader.lean` (14
-   theorems, run 81) is not present. It should be added to the Framing
-   layer with key result `typeCode_roundtrip` / `short_long_first_byte_differ`.
+2. **Missing files in Table 1**: At minimum, the following files added since
+   the last paper update are absent: `VarIntTag.lean` (T30, 15 thms),
+   `Bandwidth.lean` (T36, 22 thms), `Pacer.lean` (T41, 17 thms),
+   `H3Frame.lean` (T31, 19 thms), `AckRanges.lean` (T43, 29 thms),
+   `PacketHeader.lean` (T29, 14+2 thms), `BytesInFlight.lean` (T37, 17 thms),
+   `PathState.lean` (T38, 24 thms), `BBR2Limits.lean` (T32, 14 thms).
+   Together these add 116 theorems and 6 new/completed files covering gcongestion,
+   HTTP/3, ACK frame safety, and full QUIC header round-trip.
 
-3. **`PacketNumEncodeDecode.lean` key result mis-labelled**: Table 1 shows
-   `encode_decode_inv` as the key result, but the actual theorem name in
-   the code is `encode_decode_pktnum`. The abstract and Introduction mention
-   the composition theorem but do not name it; §3 findings should add a
-   `encode_decode_pktnum` highlight (parallel to the §A.3 decode result).
+3. **Sorry count**: Must be updated to **"0 sorry"** (closed run 105).
+   The VarIntRoundtrip 8-byte sorry was closed (run 85); all 3 AckRanges sorry
+   were closed (run 102); `longHeader_roundtrip` was closed (run 105).
 
-4. **Sorry count in abstract**: "502 of these theorems are fully sorry-free;
-   2 sorry obligations remain" — should be "515 are sorry-free; 3 sorry remain"
-   (2 in VarIntRoundtrip, 1 in PacketHeader).
+4. **OQ-T43-2 finding not mentioned**: The ACK frame `block_count` DoS vector
+   (run 100) is a concrete security-relevant finding from formal verification —
+   the type of result that motivates this entire effort. It should appear in
+   §3 Findings alongside OQ-1. It is more actionable than OQ-1 (which was
+   confirmed intentional).
 
-5. **Conclusion future work**: "proving the QUIC packet-header encode/decode
-   round-trip (T29, the next highest-priority target)" — T29 is now partially
-   done (14 theorems in PacketHeader.lean). This sentence should be updated
-   to describe what remains: the full byte-list round-trip sorry
-   (`longHeader_roundtrip`), which requires a richer buffer model.
+5. **Route-B correspondence tests not described**: The paper describes the
+   correspondence model in §3 but does not mention the runnable test harnesses.
+   Five targets now have Route-B tests (pkt_num_len/18, bandwidth/25,
+   rangeset/21, ack_ranges/25, h3_frame/25 — all PASS). This is independent
+   validation evidence that strengthens the correspondence claim and belongs in
+   the Methodology section.
 
-6. **Lean version**: Abstract and §2 say "Lean 4.29.0". The actual installed
-   version (as reported by elan/CI) is **Lean 4.29.1**. Minor but should
-   be consistent.
+6. **Lean version**: Should reference Lean 4.30.0-rc2 (the version used by CI
+   and confirmed by `lake build`).
 
 ### Completeness Issues
 
-7. **`encode_decode_pktnum` is a headline result** — The §3 findings section
-   does not mention this theorem, even though it is arguably the second most
-   important result in the project (it formally closes the encode↔decode
-   composition for all four QUIC packet-number encoding lengths). It should
-   be added as a named finding, parallel to the RFC §A.3 decode result.
+7. **gcongestion layer not represented**: `Bandwidth.lean` and `Pacer.lean`
+   are the first formally verified components of the `gcongestion` (BBR2)
+   module. The paper should add a "gcongestion" layer (or expand the congestion
+   control layer) to cover these additions. The `pacing_rate_le_cap` theorem is
+   among the highest-value results.
 
-8. **No pipeline metrics**: The paper describes a "five-phase pipeline" but
-   gives no data on how many targets are in each phase, how long the pipeline
-   takes, or what fraction of targets stall at which phase. A brief table
-   in §3 would strengthen the methodology contribution.
+8. **HTTP/3 layer now exists**: `H3Frame.lean` brings formal verification to
+   the HTTP/3 codec layer for the first time. The paper should acknowledge this
+   and describe what is and is not covered (GoAway/MaxPushId/CancelPush
+   round-trips; Settings/Data/Headers deferred).
 
-9. **T30 and T31 informal specs not mentioned**: Runs 82–83 completed
-   informal specs for T30 (Varint 2-bit tag) and T31 (H3 frame codec).
-   The paper's §5 (Conclusion / Future Work) could mention these as the
-   next verification targets, strengthening the forward-looking narrative.
+9. **ACK frame safety**: `AckRanges.lean` closes a key security-critical gap:
+   no inverted ranges, no out-of-bounds PN references. This should be described
+   in the Framing layer section.
+
+10. **Pipeline metrics still missing**: A brief table showing how many targets
+    are in each phase (1–5) would strengthen the methodology narrative.
 
 ### Intellectual Honesty Assessment
 
-The paper is generally honest about its limitations (§4.2 Limitations
-section is comprehensive). The correspondence audit result ("no mismatches
-found") is accurately presented. The OQ-1 finding is correctly described
-as intentional design.
-
-One concern: the abstract says the proofs "cover core QUIC algorithms from
-byte-level framing through congestion control and stream management" — this
-is accurate for the proved targets, but neither HTTP/3 nor the async/tokio
-layer is mentioned as out-of-scope. A single sentence clarifying that the
-HTTP/3 layer is not yet covered (only the H3 frame informal spec exists)
-would improve precision.
+The paper is generally honest about limitations. The OQ-T43-2 finding should
+be added to demonstrate that formal verification found a real (unfixed) issue,
+not just confirmed already-known invariants. The Route-B test evidence should
+be described as independent (executable) correspondence validation.
 
 ### Specific Actionable Fixes
 
 | Issue | Priority | Fix |
 |-------|----------|-----|
-| Theorem/file/sorry counts | **High** | Update abstract, intro, table, conclusion to 518/24/3 |
-| Missing PacketHeader.lean row | **High** | Add row to Table 1; update figure |
-| `encode_decode_pktnum` finding | **High** | Add §3 subsection (analogous to RFC §A.3 subsection) |
-| Sorry count "502/2" | **High** | Correct to "515/3" |
-| Future work on T29 | **Medium** | Update to describe the `longHeader_roundtrip` sorry gap |
-| Lean version "4.29.0" vs "4.29.1" | **Low** | Align with CI-reported version |
-| HTTP/3 out-of-scope | **Low** | Add one sentence in §1 or §4.2 |
+| Theorem/file/sorry counts | **High** | Update to 29/604/**0** throughout; note sorry-free milestone |
+| Missing 6 files in Table 1 | **High** | Add VarIntTag, Bandwidth, Pacer, H3Frame, AckRanges, PacketHeader rows |
+| OQ-T43-2 finding | **High** | Add to §3 Findings; describe the DoS vector and model fidelity |
+| Route-B tests | **High** | Add to §3 Methodology as independent correspondence evidence |
+| gcongestion layer | **Medium** | Add or expand congestion layer to cover Bandwidth + Pacer |
+| HTTP/3 layer | **Medium** | Add section describing H3Frame.lean scope and limitations |
+| Sorry count "3" → "0" | **Medium** | Correct abstract and conclusion; highlight 0-sorry milestone |
+| Lean version | **Low** | Align with 4.30.0-rc2 |
 
