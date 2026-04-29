@@ -4,13 +4,13 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-29 05:30 UTC
-- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 35 files, **0 sorry** 🎉
-  (run 113: merged run107/109; added BBR2Limits.lean T32)
+- **Date**: 2026-04-29 11:00 UTC
+- **Commit**: `bb0b42483356fdf09be9f44e3dbeb914a2b33554`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 36 files, **0 sorry** 🎉
+  (run 114: added H3Settings.lean T33; BytesInFlight correspondence added)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
   `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS;
-  `tests/h3_frame/` 25/25 PASS (run 103)
+  `tests/h3_frame/` 25/25 PASS (run 103); `tests/bytes_in_flight/` 25/25 PASS (run 112)
 
 ---
 
@@ -1812,3 +1812,139 @@ allow the pacing rate to exceed configured caps or drop below minimum values.
 - 5 `#eval` and `decide` checks confirm concrete clamping values.
 - Route-B correspondence tests not yet written for this target (state-
   machine is purely functional, proofs subsume executable testing).
+
+---
+
+## `FVSquad/BytesInFlight.lean` (T37) ↔ `quiche/src/recovery/bytes_in_flight.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/BytesInFlight.lean`
+**Rust source**: `quiche/src/recovery/bytes_in_flight.rs` — `BytesInFlight` struct
+  (L38–L137): fields `bytes_in_flight`, `bytes_in_flight_interval_start`,
+  `open_interval_duration`, `closed_interval_duration`; methods `add`,
+  `saturating_subtract`, `get`, `is_zero`, `get_duration`
+**Phase**: 5 — Done (17 theorems, 0 sorry, run 107); Route-B 25/25 PASS (run 112)
+
+### Purpose
+
+Models the `BytesInFlight` interval tracker used by the BBR2 congestion
+controller to measure the duration during which bytes are in flight.  A
+correctness bug here could cause the controller to overestimate available
+bandwidth or fail to detect congestion epochs.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `State` | `BytesInFlight` | `bytes_in_flight.rs:L38–L53` | Abstraction | `Instant`/`Duration` → `Nat` (monotone clock) |
+| `State.initial` | `BytesInFlight::default()` | `bytes_in_flight.rs:L54` | Exact | Zero-initialised; `startTime = none` ↔ `bytes_in_flight_interval_start = None` |
+| `add` | `BytesInFlight::add` | `bytes_in_flight.rs:L57–L71` | Abstraction | delta=0 guard preserved; `startTime` opened on first nonzero add |
+| `saturating_subtract` | `BytesInFlight::saturating_subtract` | `bytes_in_flight.rs:L73–L77` | Abstraction | Saturating sub preserved; `updateDuration` called unconditionally |
+| `updateDuration` | `BytesInFlight::update_in_flight_duration` | `bytes_in_flight.rs:L89–L99` | Exact | Moves open duration to closed when bytes → 0 |
+| `get` | `BytesInFlight::get` | `bytes_in_flight.rs:L79–L81` | Exact | Returns `bytes` field |
+| `is_zero` | `BytesInFlight::is_zero` | `bytes_in_flight.rs:L83–L85` | Exact | `bytes == 0` |
+| `get_duration` | `BytesInFlight::get_duration` | `bytes_in_flight.rs:L87–L89` | Exact | `closedDur + openDur` |
+
+### Divergences
+
+1. **`Instant` → `Nat`**: Rust `Instant` is abstracted to monotone `Nat` ticks.
+   The model does NOT enforce clock monotonicity as a precondition.  Theorem
+   `OQ-T37-1` (memory, run 103) notes that passing a decreasing `now` to
+   `add` or `saturating_subtract` produces a valid-looking but misleading
+   state where `openDur` wraps (since `Nat` subtraction saturates to 0).
+   This is a known limitation; real clocks are monotone so the scenario
+   does not arise in practice.
+2. **`Duration` → `Nat`**: `Duration::ZERO` = 0, `Duration` addition =
+   `Nat` addition.  No overflow concern (Nat is unbounded).
+3. **`usize` → `Nat`**: bytes quantities use `Nat` (unbounded). Rust
+   `usize` saturating-sub matches `Nat.sub` (saturates at 0), so the
+   semantics are preserved.
+4. **`Default` derive**: the Rust `Default` gives the same zero-initialised
+   struct as `State.initial`.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `sub_nonneg` | `bytes` never goes negative after sub | High — saturation correctness |
+| `add_increases_bytes` | `add delta` increases `bytes` by `delta` | High — core counter invariant |
+| `sub_to_zero` | Over-subtract clamps `bytes` to 0 | Medium — saturation clamp |
+| `add_sub_cancel` | `add n` then `subtract n` on an initially-idle state restores `bytes = 0` | Medium — round-trip |
+| `add_wf_idle` / `add_wf_active` | `wf` is preserved by `add` | Medium — interval invariant |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 107).
+- **Route-B**: `formal-verification/tests/bytes_in_flight/` — 25/25 PASS (run 112).
+  The harness is a Rust `#[test]` module that exercises `add`, `saturating_subtract`,
+  and `get_duration` on 25 hand-crafted fixture sequences and records expected outputs
+  matching the Lean model values.
+
+---
+
+## `FVSquad/H3Settings.lean` (T33) ↔ `quiche/src/h3/frame.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/H3Settings.lean`
+**Rust source**: `quiche/src/h3/frame.rs` — `parse_settings_frame` (L557–L636),
+  `Frame::Settings` variant (L64–L74), constants (L42–L50)
+**RFC**: RFC 9114 §7.2.4
+**Phase**: 5 — Done (20 theorems, 0 sorry, run 114)
+
+### Purpose
+
+Models the HTTP/3 SETTINGS frame identifier-dispatch logic — specifically the
+validation rules: reserved identifiers (HTTP/2 overlap) must be rejected,
+boolean-constrained fields (`connect_protocol_enabled`, `h3_datagram`) must
+have value ≤ 1, and unknown identifiers are accumulated.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `isReserved` | reserved-id check in `parse_settings_frame` | `frame.rs:L608–L613` | Exact | Same five IDs: 0x0, 0x2, 0x3, 0x4, 0x5 |
+| `requiresBool` | value-range guard in `parse_settings_frame` | `frame.rs:L596–L607` | Exact | Three IDs: 0x8, 0x276, 0x33 |
+| `applyEntry` | `parse_settings_frame` dispatch loop body | `frame.rs:L575–L630` | Abstraction | `octets::Octets` IO abstracted; list-of-pairs model |
+| `parse` | `parse_settings_frame` | `frame.rs:L557–L636` | Abstraction | Byte-level codec abstracted; list of pairs replaces buffer |
+| `Settings` | `Frame::Settings` variant fields | `frame.rs:L64–L74` | Abstraction | `grease`, `raw` fields omitted; `additionalSettings` merges unknown entries |
+
+### Divergences
+
+1. **Byte-buffer IO abstracted**: `parse_settings_frame` reads from an
+   `octets::Octets` buffer; the model takes a pre-decoded list of
+   `(UInt64, UInt64)` pairs.  The varint codec is modelled separately in
+   `Varint.lean` / `VarIntRoundtrip.lean`.
+2. **`MAX_SETTINGS_PAYLOAD_SIZE` = 256**: the byte-size check is omitted.
+   The model would need to bound the list length separately to model this
+   constraint exactly.
+3. **`grease` field omitted**: the `grease: Option<(u64, u64)>` field of
+   `Frame::Settings` is not present in the model — it is emitted during
+   `to_bytes` but always `None` after parsing.  This is a known, bounded
+   divergence that does not affect the parsed-field invariants.
+4. **`raw` field omitted**: the `raw: Option<Vec<(u64, u64)>>` accumulator
+   that records every identifier-value pair is not modelled.  It is
+   advisory metadata and does not affect the field-invariant theorems.
+5. **`to_bytes` not modelled**: only parsing is modelled.  The double-write
+   property for `h3_datagram` (writing both 0x276 and 0x33 for one field)
+   would require a serialisation model.  Deferred.
+6. **Duplicate handling**: last-value wins (matching Rust); modelled but no
+   explicit theorem yet.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `isReserved_{0,2,3,4,5}_true` | Reserved IDs are flagged | High — HTTP/2 overlap guard |
+| `applyEntry_reserved_none` | Reserved IDs always yield `none` | High — rejects HTTP/2 settings |
+| `applyEntry_connect_gt1_none` | `connect_protocol_enabled > 1` yields `none` | High — boolean validation |
+| `applyEntry_datagram_gt1_none` | `h3_datagram > 1` yields `none` | High — boolean validation |
+| `parse_empty` | Empty input → default Settings | Medium — base case |
+| `parse_reserved_id_err` | Any reserved id in the list → error | High — safety property |
+| `parse_connect_gt1_err` | `connect_protocol_enabled > 1` → error | High — boolean guard |
+| `parse_single_qpack_ok` | Single QPACK_MAX entry sets correct field | Medium — happy path |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 114).
+- Route-B correspondence tests not yet written for this target.
+  The `#eval` examples in the Lean file confirm correct behaviour on
+  concrete inputs (reserved 0x0 → err, reserved 0x4 → err, boolean
+  violation → err, valid settings → ok, unknown → additionalSettings).
