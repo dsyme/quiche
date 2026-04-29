@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-29 (run 113)
+Last updated: 2026-04-29 (run 114)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 35 modules
+FVSquad.lean: import manifest for all 36 modules
 
 ## FV Targets
 
@@ -16,7 +16,7 @@ FVSquad.lean: import manifest for all 35 modules
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 Limits struct invariants | quiche/src/recovery/gcongestion/bbr2.rs | 5 | Done run113 (14 thms, 0 sorry) |
-| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 2 | Informal spec done (run86); Lean file not yet written |
+| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run114 (20 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry); Route-B 25/25 PASS run112 |
 | 38 | PathState monotone progression | quiche/src/path.rs | 5 | Done run109 (24 thms, 0 sorry) |
@@ -26,11 +26,9 @@ FVSquad.lean: import manifest for all 35 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 
-## MILESTONE: 35 Lean files, 0 sorry (run 113)
+## MILESTONE: 36 Lean files, ~675 theorems, 0 sorry (run 114)
 
-Note: run111 added QPACKDecodeInt (T40) but that PR is not yet merged to master. The merged state has 35 files including PathState and BBR2Limits.
-
-## Lean File Registry (merged state as of run 113)
+## Lean File Registry (merged state as of run 114)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -57,7 +55,7 @@ Note: run111 added QPACKDecodeInt (T40) but that PR is not yet merged to master.
 | FVSquad/SendBufRetransmit.lean | 17 | Done |
 | FVSquad/VarIntRoundtrip.lean | 8 | Done |
 | FVSquad/PacketNumEncodeDecode.lean | 10 | Done |
-| FVSquad/PacketHeader.lean | 14 | Done |
+| FVSquad/PacketHeader.lean | 14 | Done run105 (0 sorry) |
 | FVSquad/VarIntTag.lean | 15 | Done run85 |
 | FVSquad/Bandwidth.lean | 22 | Done run90 |
 | FVSquad/Pacer.lean | 16 | Done run98 |
@@ -66,7 +64,10 @@ Note: run111 added QPACKDecodeInt (T40) but that PR is not yet merged to master.
 | FVSquad/BytesInFlight.lean | 17 | Done run107 |
 | FVSquad/PathState.lean | 24 | Done run109 |
 | FVSquad/BBR2Limits.lean | 14 | Done run113 |
-| **TOTAL** | **~655** | **0 sorry** 🎉 |
+| FVSquad/H3Settings.lean | 20 | Done run114 |
+| **TOTAL** | **~675** | **0 sorry** 🎉 |
+
+Note: run111 (QPACKDecodeInt T40) is not yet merged; not counted above.
 
 ## Route-B Correspondence Tests
 
@@ -82,19 +83,20 @@ Note: run111 added QPACKDecodeInt (T40) but that PR is not yet merged to master.
 ## CI Status
 
 - lean-ci.yml: exists, healthy, path-triggered on formal-verification/lean/**
-- CI audit (run112): lean-ci.yml has unnecessary `lake update` step but functional
 
 ## Open PRs (lean-squad label)
 
 - PR run113 (branch lean-squad-run113-25090720485-proof-assistance-critique):
   Task 5 — T32 BBR2Limits.lean (14 thms, 0 sorry)
-  Task 5 — T38 PathState.lean merge from run109 (24 thms, 0 sorry)
-  Task 7 — CRITIQUE.md update (35 files, ~655 thms)
-  CORRESPONDENCE.md: BBR2Limits entry added
+  Task 5 — T38 PathState.lean (24 thms, 0 sorry)
+  Task 7 — CRITIQUE.md update
+- PR run114 (branch lean-squad-run114-25103800849-correspondence-h3settings):
+  Task 3 — T33 H3Settings.lean (20 thms, 0 sorry)
+  Task 6 — CORRESPONDENCE.md BytesInFlight + H3Settings entries
 
 ## Status Issue
 
-Issue #4 (open) — updated run112; will be updated run113
+Issue #4 (open) — updated run114
 
 ## Key Findings
 
@@ -108,8 +110,8 @@ Issue #4 (open) — updated run112; will be updated run113
 
 ## Next Priority Targets
 
-1. T33 (H3Settings) — informal spec done run86; write FVSquad/H3Settings.lean
+1. Merge/track run113 and run114 PRs once open
 2. Route-B tests for T38 (PathState) — state machine transition tests
 3. T32 full (BBR2 pacing-rate update) — requires fixed-point gain model
-4. Merge/track run111 (QPACKDecodeInt) PR once open
+4. Merge run111 (QPACKDecodeInt) PR once open
 5. RecvBuf flow-control bound: highMark ≤ max_data
