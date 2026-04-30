@@ -40,7 +40,7 @@
 | 32 | BBR2 pacing rate bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 0 | ⬜ Identified | Pacing rate ≤ btl_bw * gain; first FV of gcongestion module; see RESEARCH.md T32 |
 | 33 | H3 Settings frame invariants | `quiche/src/h3/frame.rs` | 5 | ✅ Done (run 114) | `specs/h3_settings_informal.md` (run 86); boolean constraints, size guard, GREASE RT loss, H3_DATAGRAM double-emit; open questions OQ-T33-1 to OQ-T33-4 |
 | 34 | QPACK static table lookup | `quiche/src/h3/qpack/` | 1 | 🔬 Researched | Pure lookup table ~30 Lean lines; all `decide`; run 87 research added |
-| 35 | H3 `parse_settings_frame` RFC compliance | `quiche/src/h3/frame.rs` | 1 | 🔬 Researched | H2-key rejection + size guard; builds on T33 informal spec; run 87 research |
+| 35 | H3 `parse_settings_frame` RFC compliance | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/parse_settings_frame_informal.md` (run 115); reserved-ID rejection, boolean validation, size guard; OQ-T35-1 to OQ-T35-4 |
 | 36 | `Bandwidth` arithmetic invariants | `quiche/src/recovery/bandwidth.rs` | 1 | 🔬 Researched | gcongestion module; all `omega`; ~40 Lean lines; run 88/89 research |
 | 37 | `BytesInFlight` counter state-machine invariant | `quiche/src/recovery/bytes_in_flight.rs` | 1 | 🔬 Researched | `bytes > 0 ↔ interval_start.is_some()`; MEDIUM; run 88/89 research |
 
