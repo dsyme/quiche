@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-29 18:30 UTC
-- **Commit**: `c889721b890c210a722a9dfd5b3d52dd634ad473`
+- **Date**: 2026-04-30 18:00 UTC
+- **Commit**: `5bc48a9747b75988c95fd010335242b230a96abb`
 - **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 36 files, **0 sorry** 🎉
   (run 115: added 17 missing correspondence entries for Bandwidth, AckRanges, Pacer, Octets, OctetsRoundtrip, Cubic, StreamId, PacketHeader, PacketNumDecode, RangeBuf, RecvBuf, SendBuf, SendBufRetransmit, StreamPriorityKey, VarIntRoundtrip, VarIntTag, CidMgmt)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
@@ -1754,8 +1754,12 @@ failure state.
 - **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 109).
 - 9 `rfl`/concrete `example` checks verify each operation on specific
   states at build time.
-- Route-B correspondence tests are not yet written; the proof subsumes
-  executable testing for the pure state-machine behaviour.
+- **Route-B tests**: `formal-verification/tests/path_state/` — 75/75 PASS
+  (run 118, 2026-04-30). Covers all 5×5 `promote_to` pairs, all 5 states
+  for `on_challenge_sent`, all 10 (state, mtu_ok) pairs for
+  `on_response_received`, `on_failed_validation`, `working` predicate,
+  4 concrete sequences, and 25 idempotency checks.
+  Run: `rustc formal-verification/tests/path_state/path_state_test.rs -o /tmp/path_state_test && /tmp/path_state_test`
 
 ---
 
@@ -2627,3 +2631,61 @@ the active CID list length is bounded by `active_conn_id_limit`; the `path_id`
 - **`lake build`**: passed with Lean 4.30.0-rc2 — 21 theorems, 0 sorry (run ~70).
 - Route-B correspondence tests not yet written for this target.
 
+
+---
+
+## `FVSquad/FrameAckEliciting.lean` (T42) ↔ `quiche/src/frame.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/FrameAckEliciting.lean`
+**Rust source**: `quiche/src/frame.rs` — `Frame::ack_eliciting` (L814),
+  `Frame::probing` (L825)
+**Phase**: 5 — Done (15 theorems, 0 sorry, run 118)
+
+### Purpose
+
+Models the two Boolean predicates that classify QUIC frames by their
+role in acknowledgement and path-probing protocols.
+
+- `ackEliciting`: true for all frame kinds except Padding, ACK,
+  ApplicationClose, ConnectionClose (mirrors the `!matches!` pattern).
+- `probing`: true for Padding, NewConnectionId, PathChallenge,
+  PathResponse only.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `FrameKind` | `inductive` (23 variants) | `Frame` | `enum` (23 variants) | **exact** — same set of variants; payload fields omitted |
+| `ackEliciting` | `FrameKind → Bool` | `Frame::ack_eliciting` (L814) | `&self → bool` | **exact** — same logic; `!matches!` on four non-eliciting kinds |
+| `probing` | `FrameKind → Bool` | `Frame::probing` (L825) | `&self → bool` | **exact** — same four probing kinds |
+
+### Approximations and known gaps
+
+1. **Payload fields omitted**: `FrameKind` carries no data; correspondence
+   holds only at the dispatch level (which enum constructor), not at the
+   payload level.
+
+2. **`CryptoHeader` / `StreamHeader` / `DatagramHeader` / `DatagramLen`**:
+   not present in the QUIC public API enum; the model uses the same 23
+   variants present in the stable `Frame` enum.
+
+### Impact on proofs
+
+15 theorems, 0 sorry. Key results:
+
+| Theorem | Property | Value |
+|---------|----------|-------|
+| `ackEliciting_false_iff` | Exact 4-element characterisation of non-ack-eliciting frames | High |
+| `probing_true_iff` | Exact 4-element characterisation of probing frames | High |
+| `count_non_ack_eliciting` | Exactly 4 non-ack-eliciting frame kinds | Medium |
+| `count_probing` | Exactly 4 probing frame kinds | Medium |
+| `non_ack_eliciting_and_probing_intersection` | Only Padding is both non-ack-eliciting AND probing | High |
+| `padding_both_non_ack_and_probing` | Padding: both non-ack-eliciting and probing | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 118).
+- All frame-kind predicates verified by `decide` / `rfl` / `simp` — fully
+  decidable enumeration.
+- Route-B correspondence tests not yet written (the exhaustive `decide`
+  proofs cover all 23 frame kinds; executable tests would add no new coverage).
