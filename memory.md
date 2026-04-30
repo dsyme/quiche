@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-30 (run 116)
+Last updated: 2026-04-30 (run 117)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 34 modules
@@ -17,7 +17,7 @@ FVSquad.lean: import manifest for all 34 modules
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 Limits struct invariants | quiche/src/recovery/gcongestion/bbr2.rs | 5 | Done run113 (14 thms, 0 sorry) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run114 (20 thms, 0 sorry) |
-| 34 | QPACK static table lookup | quiche/src/h3/qpack/ | 1 | Researched (run87); ~30 lines, all decide |
+| 34 | QPACK static table lookup | quiche/src/h3/qpack/static_table.rs | 5 | Done run117 (17 thms, 0 sorry) |
 | 35 | parse_settings_frame RFC compliance | quiche/src/h3/frame.rs | 5 | Done run116 (21 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry); Route-B 25/25 PASS run112 |
@@ -28,12 +28,12 @@ FVSquad.lean: import manifest for all 34 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run97 (25 thms, 0 sorry) — file not confirmed |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 
-## MILESTONE: 34 Lean files confirmed in repo, ~696 theorems, 0 sorry (run 116)
+## MILESTONE: 35 Lean files, ~713 theorems, 0 sorry (run 117)
 
 NOTE: T39/T40/T42 memory shows Done but Lean files NOT present in repo.
 Future run should re-create these files.
 
-## Lean File Registry (confirmed in repo as of run 116)
+## Lean File Registry (confirmed in repo as of run 117)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -71,7 +71,8 @@ Future run should re-create these files.
 | FVSquad/BBR2Limits.lean | 14 | Done run113 |
 | FVSquad/H3Settings.lean | 20 | Done run114 |
 | FVSquad/H3ParseSettings.lean | 21 | Done run116 |
-| **TOTAL** | **~696** | **0 sorry** 🎉 |
+| FVSquad/QPACKStaticTable.lean | 17 | Done run117 |
+| **TOTAL** | **~713** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -90,11 +91,9 @@ Future run should re-create these files.
 
 ## Open PRs (lean-squad label)
 
-- PR run115 (branch lean-squad-run115-25125450647-correspondence-informal):
-  Task 6 — 17 missing correspondence entries added to CORRESPONDENCE.md
-  Task 2 — T35 informal spec (parse_settings_frame RFC compliance)
-- PR run116 (branch lean-squad-run116-25147228393-h3parsesettings):
-  Task 3+5 — T35 H3ParseSettings.lean (21 thms, 0 sorry)
+- PR run117 (branch lean-squad-run117-25160469639-qpack-static-table):
+  Task 5 — T34 QPACKStaticTable.lean (17 thms, 0 sorry)
+  Task 9 — CI audit: healthy, no changes needed
 
 ## Status Issue
 
@@ -112,7 +111,7 @@ Issue #4 (open) — updated run115, to update run116
 
 ## Next Priority Targets
 
-1. T34: write FVSquad/QPACKStaticTable.lean (~30 lines, all decide) — easiest
-2. Recreate T39 (QPACKStaticTable bounds), T42 (FrameAckEliciting) — lost in unmerged PRs
+1. T39: recreate QPACKStaticTable bounds (was lost) — now done as T34 run117
+2. Recreate T42 (FrameAckEliciting) — lost in unmerged PRs
 3. Route-B tests for T38 (PathState) — state machine transition tests
 4. RecvBuf flow-control bound: highMark ≤ max_data
