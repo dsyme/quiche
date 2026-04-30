@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-29 11:00 UTC
-- **Commit**: `bb0b42483356fdf09be9f44e3dbeb914a2b33554`
+- **Date**: 2026-04-29 18:30 UTC
+- **Commit**: `c889721b890c210a722a9dfd5b3d52dd634ad473`
 - **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 36 files, **0 sorry** 🎉
-  (run 114: added H3Settings.lean T33; BytesInFlight correspondence added)
+  (run 115: added 17 missing correspondence entries for Bandwidth, AckRanges, Pacer, Octets, OctetsRoundtrip, Cubic, StreamId, PacketHeader, PacketNumDecode, RangeBuf, RecvBuf, SendBuf, SendBufRetransmit, StreamPriorityKey, VarIntRoundtrip, VarIntTag, CidMgmt)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
   `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS;
   `tests/h3_frame/` 25/25 PASS (run 103); `tests/bytes_in_flight/` 25/25 PASS (run 112)
@@ -1948,3 +1948,682 @@ have value ≤ 1, and unknown identifiers are accumulated.
   The `#eval` examples in the Lean file confirm correct behaviour on
   concrete inputs (reserved 0x0 → err, reserved 0x4 → err, boolean
   violation → err, valid settings → ok, unknown → additionalSettings).
+
+---
+
+## `FVSquad/Bandwidth.lean` (T36) ↔ `quiche/src/recovery/bandwidth.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/Bandwidth.lean`
+**Rust source**: `quiche/src/recovery/bandwidth.rs` — `Bandwidth` struct and arithmetic impls
+
+### Purpose
+
+Models the `Bandwidth` wrapper type used throughout the BBR2/gcongestion
+module to represent network bandwidth as bits-per-second.  Key operations
+modelled: constructors (`from_kbits_per_second`, `from_mbits_per_second`,
+`from_bytes_per_second`, `from_bytes_and_time_delta`), ordering, and
+arithmetic lemmas.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `Bandwidth` | `structure { bits_per_second : Nat }` | `Bandwidth` | `struct Bandwidth(u64)` | **abstraction** — Nat unbounded |
+| `Nanos` | `Nat` | `Duration` | `std::time::Duration` | **abstraction** — nanos extracted |
+| `fromBytesAndTimeDelta` | `Nat → Nat → Bandwidth` | `Bandwidth::from_bytes_and_time_delta` | `fn(u64, Duration) → Self` | **abstraction** — Duration.as_nanos() clamped to 1 |
+| `fromKbitsPerSecond` | `Nat → Bandwidth` | `from_kbits_per_second` | `fn(u64) → Self` | **exact** |
+| `fromBytesPerSecond` | `Nat → Bandwidth` | `from_bytes_per_second` | `fn(u64) → Self` | **exact** |
+
+### Known divergences
+
+1. **u64 overflow**: Rust `Bandwidth` wraps at 2^64; the Lean model uses `Nat`
+   (unbounded).  All 22 theorems hold in the overflow-free regime.
+2. **`Mul<f64>` / `Mul<f32>`**: floating-point multiplication impls are not
+   modelled; not needed for the arithmetic invariants.
+3. **`transfer_time`**: bandwidth/duration inversion is omitted.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `bandwidth_bytes_roundtrip` | `fromBytesPerSecond (b * 8) = fromBitsPerSecond (b * 8)` | Medium |
+| `bandwidth_add_bits` | `(b₁ + b₂).bits = b₁.bits + b₂.bits` | High |
+| `bandwidth_zero_le` | `zero ≤ b` for all `b` | Medium |
+| `fromBytesAndTimeDelta_zero` | `bytes = 0 → result = 0` | High |
+| `fromBytesAndTimeDelta_positive` | `bytes > 0 → result > 0` | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 22 theorems, 0 sorry (run 90).
+- **Route-B tests**: `formal-verification/tests/bandwidth_arithmetic/` — 25/25 PASS (run 90/94).
+
+---
+
+## `FVSquad/AckRanges.lean` (T43) ↔ `quiche/src/frame.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/AckRanges.lean`
+**Rust source**: `quiche/src/frame.rs` — `parse_ack_frame` (lines 1257–1311),
+RFC 9000 §19.3 (ACK Frames)
+
+### Purpose
+
+Models the wire-level decoding of ACK frame range blocks.  The function
+`decodeAckBlocks` mirrors the loop in `parse_ack_frame` that reconstructs
+packet-number ranges from (gap, ack_block) pairs.  Properties proved include
+no-underflow, range validity (`smallest ≤ largest` for every range), and
+bounded coverage of the largest-acknowledged value.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `AckRange` | `Nat × Nat` | entry in `RangeSet` | `(u64, u64)` | **abstraction** — only bounds, no RangeSet internals |
+| `decodeAckBlocks` | `Nat → Nat → List (Nat × Nat) → Option (List AckRange)` | `parse_ack_frame` inner loop | imperative cursor | **abstraction** — IO abstracted away |
+
+### Known divergences
+
+1. **I/O cursor** (`octets::Octets`) is abstracted away; decoded varint values
+   are provided directly as `Nat` pairs.
+2. **`ack_delay` and ECN counts** are omitted — they carry no range semantics.
+3. **RangeSet insertion order** is modelled as a plain `List (Nat × Nat)` rather
+   than the `BTreeMap`-backed `RangeSet`.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `decodeAckBlocks_valid_ranges` | every range has `sm ≤ lg` | High — wire parse safety |
+| `decodeAckBlocks_first_range_correct` | first range spans `[largest - ack_block, largest]` | High |
+| `decodeAckBlocks_nonempty` | success → at least one range | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 13 theorems, 0 sorry (run 102).
+- **Route-B tests**: `formal-verification/tests/ack_ranges/` — 25/25 PASS (run 102).
+
+---
+
+## `FVSquad/Pacer.lean` (T41) ↔ `quiche/src/recovery/gcongestion/pacer.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/Pacer.lean`
+**Rust source**: `quiche/src/recovery/gcongestion/pacer.rs` — `Pacer::pacing_rate`
+
+### Purpose
+
+Models the `Pacer::pacing_rate` function that returns the effective pacing
+rate after applying an optional ceiling cap.  Key invariant: the effective
+rate never exceeds the sender rate (no acceleration); when capped, the result
+is bounded by the cap.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `pacing_rate` | `Nat → Option Nat → Bool → Nat` | `Pacer::pacing_rate` | `fn(&self) → Bandwidth` | **abstraction** — Pacer state collapsed to three params |
+
+### Known divergences
+
+1. **BBRv2 internals**: `sender_rate` and RTT state are collapsed to a single
+   `Nat` parameter — the Lean model is a pure function over the final value.
+2. **`Mul<f32>` burst cap** (`max_rate = cap * 1.25`): the float cap is not
+   modelled; only the exact `min(cap, sender_rate)` semantics are proved.
+3. **`enabled` flag semantics**: when `enabled = false` the Rust method may
+   return a different value (implementation-defined); the Lean model takes
+   `enabled` as an opaque `Bool`.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `pacing_rate_no_cap` | no cap → result = sender rate | Medium |
+| `pacing_rate_cap_le_sender` | capped result ≤ sender rate | High |
+| `pacing_rate_cap_le_cap` | capped result ≤ cap | High |
+| `pacing_rate_disabled` | disabled → result = sender rate regardless of cap | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 16 theorems, 0 sorry (run 98).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/Octets.lean` ↔ `octets/src/lib.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/Octets.lean`
+**Rust source**: `octets/src/lib.rs` — `Octets<'a>` (lines 135–385)
+
+### Purpose
+
+Models the read-only cursor-based byte buffer `Octets<'a>`.  The Lean
+`OctetsState` is a `(buf : List Nat, off : Nat)` pair; `get_u8`, `get_u16`,
+`get_u32`, `get_u64`, and `get_bytes` are modelled as pure functions returning
+`Option` values.  Properties proved: get advances cursor by the correct byte
+count; two successive reads are order-independent when the buffer is large
+enough; `off_invariant` (cursor never exceeds buf length) is maintained.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `OctetsState` | `{ buf : List Nat, off : Nat }` | `Octets<'a>` | `struct { buf: &'a [u8], off: usize }` | **abstraction** — slice as List |
+| `getU8` | `OctetsState → Option (Nat × OctetsState)` | `Octets::get_u8` | `fn(&mut self) → Result<u8>` | **exact** — semantics identical |
+| `getBytes` | `OctetsState → Nat → Option (List Nat × OctetsState)` | `Octets::get_bytes` | `fn(&mut self, len) → Result<Octets<'a>>` | **abstraction** — returns List, not slice |
+
+### Known divergences
+
+1. **Lifetimes / zero-copy slices**: the `&'a [u8]` slice is modelled as a
+   `List Nat` copy; aliasing and lifetime constraints are not captured.
+2. **Error variant**: `BufferTooShortError` is collapsed to `Option.none`.
+3. **`get_varint`**: modelled in `Varint.lean`, not here.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `getU8_advances_off` | `getU8 s = some (_, s') → s'.off = s.off + 1` | High |
+| `getU32_advances_off` | similar for 4-byte reads | High |
+| `getBytes_advances_off` | `getBytes s n = some (_, s') → s'.off = s.off + n` | High |
+| `getU8_preserves_buf` | buf unchanged after read | Medium |
+| `off_invariant_init` | freshly constructed cursor has `off = 0` | Low |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 48 theorems, 0 sorry (run ~65).
+- Route-B correspondence tests not yet written for this target (varint tests
+  in `VarIntRoundtrip.lean` cover the most critical operations).
+
+---
+
+## `FVSquad/OctetsRoundtrip.lean` ↔ `octets/src/lib.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/OctetsRoundtrip.lean`
+**Rust source**: `octets/src/lib.rs` — cross-module read/write round-trips
+(see also `FVSquad/OctetsMut.lean`)
+
+### Purpose
+
+Proves cross-module round-trip theorems that span both `Octets` (read) and
+`OctetsMut` (write): specifically that `putU8 ∘ getU8` and `putU32 ∘ getU32`
+are identity round-trips.  These are the formal analogues of property-based
+tests for the octets library.
+
+### Type mapping
+
+| Lean name | Lean type | Rust names | Correspondence |
+|-----------|-----------|------------|----------------|
+| `roundtrip_u8` | `∀ b s, ...` | `OctetsMut::put_u8` + `Octets::get_u8` | **abstraction** — composition of two models |
+
+### Known divergences
+
+None beyond those of `Octets.lean` and `OctetsMut.lean` individually.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `roundtrip_u8` | `put_u8 b` then `get_u8` returns `b` | High — codec safety |
+| `roundtrip_u32` | similar for 4-byte big-endian values | High |
+| `roundtrip_varint` | in `VarIntRoundtrip.lean` — put then get recovers the value | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 21 theorems, 0 sorry (run ~65).
+
+---
+
+## `FVSquad/Cubic.lean` ↔ `quiche/src/recovery/congestion/cubic.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/Cubic.lean`
+**Rust source**: `quiche/src/recovery/congestion/cubic.rs`
+
+### Purpose
+
+Models the CUBIC TCP congestion controller.  Key modelled components:
+constants (`BETA_CUBIC = 7/10`, `C = 4/10`, `ALPHA_AIMD = 9/17`), ssthresh
+computation, W_cubic formula, fast convergence, and the combined congestion
+event state transformation.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `betaNum/betaDen` | `Nat` | `BETA_CUBIC = 0.7_f64` | `f64` | **exact** — exact rational |
+| `ssthreshCubic` | `Nat → Nat` | `on_congestion_event` ssthresh update | `fn(&mut self, ...)` | **abstraction** — pure function over cwnd |
+| `wCubicNat` | `Nat → Nat → Nat → Nat` | `W_cubic(t)` | `f64` calculation | **approximation** — cube root axiomatised |
+
+### Known divergences
+
+1. **Floating-point**: all `f64` constants are modelled as exact rational
+   fractions.  Float rounding not captured.
+2. **`cube_root` (cbrt)**: the cube root is axiomatised via its defining property
+   `C * K^3 = w_max - cwnd`; the actual computation is not verified.
+3. **`usize` / overflow**: modelled as `Nat` (unbounded).
+4. **`MINIMUM_WINDOW_PACKETS = 2` clamp** on ssthresh: noted but not modelled.
+5. **HyStart++, PRR, rollback**: elided.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `alphaAimd_lt_one` | ALPHA_AIMD < 1 (bounded rate increase) | High — safety bound |
+| `ssthresh_le_cwnd` | ssthresh ≤ cwnd after congestion | High — invariant |
+| `ssthresh_lt_cwnd_pos` | strict reduction for positive cwnd | High |
+| `wCubicNat_at_k_eq_wmax` | W_cubic(K) = w_max | High — correctness |
+| `wCubicNat_monotone` | non-decreasing for t ≥ K | Medium |
+| `fastConv_wmax_lt_cwnd` | fast convergence strictly reduces w_max | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 26 theorems, 0 sorry (run ~50).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/StreamId.lean` (T18) ↔ `quiche/src/stream/mod.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/StreamId.lean`
+**Rust source**: `quiche/src/stream/mod.rs` (`is_bidi`, `is_local`,
+`peer_streams_left_bidi/uni`) and `quiche/src/lib.rs` (`stream_do_send`)
+
+### Purpose
+
+Models the RFC 9000 §2.1 stream-ID classification and peer stream-credit
+accounting.  Key properties proved: the four stream types (client/server ×
+bidi/uni) partition all IDs; `is_bidi ↔ (id % 4 < 2)`; credit invariant
+`localOpened ≤ peerMax` is maintained by all credit updates.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `isBidi` | `Nat → Bool` | `is_bidi` | `fn(u64) → bool` | **exact** — (id & 0x2 == 0) ↔ id % 4 < 2 |
+| `isServerInit` | `Nat → Bool` | `is_local(id, true)` | `fn(u64, bool) → bool` | **abstraction** — server perspective |
+| `StreamCredits` | `structure { localOpened, peerMax, inv }` | `peer_streams_left_*` state | fields in `Connection` | **abstraction** — extracted to pure model |
+
+### Known divergences
+
+1. **Bitwise vs modular**: `(id & 1) ≡ id % 2` for `Nat`; proof uses `omega`.
+2. **Stream ID space**: `Nat` (unbounded); u64 wrap is not modelled.
+3. **Stream lifecycle** (open/close/reset): out of scope.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `streamType_partition` | exactly four types; each type has infinite members | High — RFC 9000 §2.1 |
+| `isBidi_iff` | `isBidi id ↔ id % 4 < 2` | High |
+| `credits_left_pos_iff` | credit available ↔ `localOpened < peerMax` | High |
+| `credits_open_preserves_inv` | opening a stream maintains `localOpened ≤ peerMax` | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 35 theorems, 0 sorry (run ~64).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/PacketHeader.lean` (T29) ↔ `quiche/src/packet.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/PacketHeader.lean`
+**Rust source**: `quiche/src/packet.rs` — `Header::to_bytes` / `Header::from_bytes`,
+RFC 9000 §17 (QUIC packet formats)
+
+### Purpose
+
+Models the QUIC packet-header first-byte encoding and type-code round-trip.
+The `PacketType` enum (Initial/ZeroRTT/Handshake/Retry/VersionNegotiation/Short)
+and its 2-bit wire type code are fully modelled.  Properties proved include:
+every long-header type sets FORM_BIT (0x80) and FIXED_BIT (0x40); Short headers
+clear FORM_BIT; encode/decode is a round-trip for all types.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `PacketType` | `inductive` | `Type` | `enum` | **exact** — same 6 variants |
+| `longHeaderFirstByte` | `PacketType → Nat → Nat` | first-byte encoding | bitwise OR | **exact** — same formula |
+| `decodeTypeBits` | `Nat → Option PacketType` | type-bits decode | match on 2 bits | **exact** |
+
+### Known divergences
+
+1. **Full packet encoding**: only the first byte and type-code bits are modelled.
+   Connection IDs, version, token, and packet-number fields are out of scope.
+2. **`FIXED_BIT` grease**: the grease bit and `QUIC_BIT_GREASE` feature are not
+   modelled.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `longHeader_formBit` | long-header always has FORM_BIT set | High |
+| `shortHeader_formBit_clear` | Short header has FORM_BIT clear | High |
+| `typeBits_roundtrip` | `decodeTypeBits (encodeTypeBits t) = some t` | High — decode correctness |
+| `fixedBit_set_long` | FIXED_BIT set in all long-header first bytes | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 14 theorems, 0 sorry (run 105).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/PacketNumDecode.lean` ↔ `quiche/src/packet.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/PacketNumDecode.lean`
+**Rust source**: `quiche/src/packet.rs` — `decode_pkt_num` (lines 634–652),
+RFC 9000 Appendix A.3
+
+### Purpose
+
+Models the RFC 9000 Appendix A.3 packet-number decoding algorithm.  The
+`candidatePn` function selects the closest candidate packet number from the
+truncated wire value and the expected (largest acknowledged) value.  Key
+property: with the QUIC proximity invariant (`truncated` is within `pnWin/2`
+of the expected value), `candidatePn` recovers the original packet number.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `candidatePn` | `Nat → Nat → Nat → Nat` | `decode_pkt_num` candidate selection | integer mask + OR | **approximation** — arithmetic equivalent to bitwise for power-of-two windows |
+
+### Known divergences
+
+1. **Arithmetic vs bitwise**: `(expected & ~mask) | truncated` is modelled as
+   division-based arithmetic; the two are equal when `truncated < pnWin`.
+2. **u64 overflow**: not modelled (Nat is unbounded).
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `decode_pktnum_correct` | with proximity invariant, candidate = original | High — wire safety |
+| `candidatePn_in_window` | result is within `pnWin/2` of expected | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 23 theorems, 0 sorry (run ~39).
+- Route-B tests not yet written for this target.
+
+---
+
+## `FVSquad/RangeBuf.lean` ↔ `quiche/src/range_buf.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/RangeBuf.lean`
+**Rust source**: `quiche/src/range_buf.rs` — `RangeBuf` struct
+
+### Purpose
+
+Models the `RangeBuf` — a byte buffer carrying a stream-offset annotation.
+Only the offset/length/consumed view is modelled (no byte contents).
+Key invariants: `consumed ≤ len`; `pos = off + consumed`; `consume(n)` advances
+`consumed` by exactly `n` while keeping `off` fixed.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `RangeBuf` | `{ off, len, consumed : Nat }` | `RangeBuf` | `struct { data, start, pos }` | **abstraction** — byte data elided |
+| `consume` | `RangeBuf → Nat → RangeBuf` | `RangeBuf::consume` | `fn(&mut self, consumed)` | **exact** — increments pos/consumed |
+
+### Known divergences
+
+1. **Byte contents** (`data : Vec<u8>`) are elided; the model tracks only
+   offset and length semantics.
+2. **`start` / `pos` internals**: collapsed to `off` and `consumed` in the
+   public-API model.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `consume_advances` | `consumed` increases by `n` after `consume(n)` | High |
+| `consumed_le_len` | invariant maintained after `consume` | High |
+| `consume_idempotent` | `consume 0` is a no-op | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 19 theorems, 0 sorry (run ~55).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/RecvBuf.lean` ↔ `quiche/src/stream/recv_buf.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/RecvBuf.lean`
+**Rust source**: `quiche/src/stream/recv_buf.rs` — `RecvBuf` struct
+
+### Purpose
+
+Models the stream receive buffer.  A `RecvBuf` is represented as a sorted,
+non-overlapping list of byte intervals plus a read cursor and a high-watermark.
+Properties proved include: interval sorting and non-overlap invariants are
+maintained under `write`; `read` advances the cursor monotonically; interval
+merge is correct when newly written data is adjacent.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `RecvBuf` | `{ chunks : List Interval, off : Nat, len : Nat }` | `RecvBuf` | `BTreeMap`-backed | **abstraction** — BTreeMap → sorted List |
+| `write` | `RecvBuf → Nat → Nat → RecvBuf` | `RecvBuf::write` | `fn(&mut self, buf, off)` | **abstraction** — byte data elided |
+
+### Known divergences
+
+1. **Byte contents**: not modelled; only offsets and lengths.
+2. **Flow-control state** (`max_data`, drain mode, error codes): elided.
+3. **`BTreeMap` vs `List`**: the model uses a sorted `List`; merge and lookup
+   semantics differ in constant factors but not in observable bounds.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `write_preserves_sort` | sorted invariant maintained after write | High |
+| `write_preserves_nooverlap` | non-overlap maintained | High |
+| `read_advances_off` | cursor advances monotonically | High |
+| `merge_correct` | adjacent intervals are merged exactly | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 38 theorems, 0 sorry (run ~60).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/SendBuf.lean` ↔ `quiche/src/stream/send_buf.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/SendBuf.lean`
+**Rust source**: `quiche/src/stream/send_buf.rs` — `SendBuf` struct
+
+### Purpose
+
+Models the stream send buffer.  Properties proved: monotone offset growth
+(`write_off` only increases); capacity invariant (`len ≤ capacity`); `emit`
+advances the read pointer by exactly the emitted byte count; `ack` marks bytes
+as delivered and shrinks the un-acked range.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|----------------|
+| `SendBuf` | `{ off, len, cap : Nat }` | `SendBuf` | `VecDeque`-backed | **abstraction** — byte data elided |
+| `emit` | `SendBuf → Nat → Option (Nat × SendBuf)` | `SendBuf::emit` | `fn(&mut self, out)` | **abstraction** — out bytes not modelled |
+
+### Known divergences
+
+1. **Byte contents**: elided.
+2. **VecDeque internals**: head/tail pointers collapsed to a single offset.
+3. **Flow-control interaction** (`max_data`): not modelled here.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `write_off_monotone` | write offset never decreases | High |
+| `len_le_cap` | length ≤ capacity invariant | High |
+| `emit_advances` | read pointer advances by emitted count | High |
+| `ack_shrinks_unacked` | un-acked range shrinks after ack | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 26 theorems, 0 sorry (run ~60).
+- Route-B correspondence tests not yet written for this target.
+
+---
+
+## `FVSquad/SendBufRetransmit.lean` ↔ `quiche/src/stream/send_buf.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/SendBufRetransmit.lean`
+**Rust source**: `quiche/src/stream/send_buf.rs` — `SendBuf::retransmit`
+and related retransmit-queue operations
+
+### Purpose
+
+Models the retransmit logic layered on top of `SendBuf`.  Properties proved:
+re-enqueued data does not extend the write offset; retransmit ranges are
+subsets of the original sent range; the retransmit queue drains correctly.
+
+### Known divergences
+
+Same as `SendBuf.lean` plus: the retransmit priority queue is modelled as a
+plain `List` (not a `BTreeMap`-keyed priority structure).
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `retransmit_subset` | retransmitted range ⊆ sent range | High |
+| `retransmit_no_extend_off` | write offset unchanged by retransmit | High |
+| `retransmit_queue_drains` | finite queue eventually empties | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 17 theorems, 0 sorry (run ~68).
+- Route-B correspondence tests not yet written for this target.
+  Open question OQ-RT-1 (run 68): zero-length retransmit with `off > ackOff`
+  may not be a no-op — flagged for maintainer review.
+
+---
+
+## `FVSquad/StreamPriorityKey.lean` ↔ `quiche/src/stream/mod.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/StreamPriorityKey.lean`
+**Rust source**: `quiche/src/stream/mod.rs` — `StreamPriorityKey` struct and ordering
+
+### Purpose
+
+Models the `StreamPriorityKey` used to order streams in the scheduler.  Key
+properties: the ordering is a total preorder; urgency is the primary sort key;
+incremental is the secondary sort key; the `Default` priority is a specific
+known value.
+
+### Known divergences
+
+1. **Antisymmetry violation (OQ-1)**: the `PartialOrd` implementation in Rust
+   is intentionally non-antisymmetric (two keys with the same urgency and
+   incremental flag but different stream IDs compare as equal).  The Lean model
+   faithfully captures this non-antisymmetric preorder.  See finding OQ-1.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `priorityKey_total` | total preorder | Medium |
+| `urgency_primary_key` | lower urgency always wins | High |
+| `incremental_secondary_key` | for equal urgency, incremental wins | Medium |
+| `default_priority_known` | default has urgency = 3, incremental = false | Low |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 21 theorems, 0 sorry (run ~49).
+- Finding OQ-1 documented in memory: antisymmetry violation is intentional.
+
+---
+
+## `FVSquad/VarIntRoundtrip.lean` (T23) ↔ `octets/src/lib.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/VarIntRoundtrip.lean`
+**Rust source**: `octets/src/lib.rs` — `put_varint` / `get_varint`
+
+### Purpose
+
+Proves `get_varint ∘ put_varint = id` — the QUIC varint codec round-trip.
+Covers 1-byte, 2-byte, and 4-byte ranges (values < 2^30).  The 8-byte case
+(values in [2^30, 2^62)) is deferred.
+
+### Known divergences
+
+1. **8-byte encoding** (`2^30 ≤ v < 2^62`): previously carried a `sorry`;
+   resolved as of run ~68 (see `VarIntTag.lean`).
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `varint_roundtrip_1byte` | 1-byte values round-trip | High |
+| `varint_roundtrip_2byte` | 2-byte values round-trip | High |
+| `varint_roundtrip_4byte` | 4-byte values round-trip | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 8 theorems, 0 sorry (run ~85).
+- Cross-module round-trips also confirmed in `OctetsRoundtrip.lean`.
+
+---
+
+## `FVSquad/VarIntTag.lean` (T30) ↔ `octets/src/lib.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/VarIntTag.lean`
+**Rust source**: `octets/src/lib.rs` — varint tag encoding (RFC 9000 §16)
+
+### Purpose
+
+Proves the consistency of the 2-bit varint tag scheme: the four tag values
+(0, 1, 2, 3) correspond exactly to the four length ranges (1, 2, 4, 8 bytes);
+they are non-overlapping; and the tag is always recoverable from the first byte.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `varint_tag_consistency` | tag ↔ length range, four cases | High |
+| `tag_ranges_nooverlap` | ranges are disjoint | High |
+| `tag_recoverable` | `tagOf (firstByte v) = tag v` | High |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 15 theorems, 0 sorry (run 85).
+
+---
+
+## `FVSquad/CidMgmt.lean` ↔ `quiche/src/cid.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/CidMgmt.lean`
+**Rust source**: `quiche/src/cid.rs` — Connection ID management
+
+### Purpose
+
+Models the connection-ID (CID) management subsystem.  Key invariants proved:
+the active CID list length is bounded by `active_conn_id_limit`; the `path_id`
+↔ `cid` mapping is injective; retiring a CID decrements the active count by one.
+
+### Known divergences
+
+1. **CID byte content**: connection IDs are modelled as abstract `Nat` identifiers;
+   actual byte sequences are not modelled.
+2. **Stateless reset tokens**: not modelled.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `active_count_le_limit` | `|active| ≤ active_conn_id_limit` | High |
+| `cid_mapping_injective` | no two paths share the same CID | High |
+| `retire_decrements_count` | retiring reduces count by 1 | Medium |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.30.0-rc2 — 21 theorems, 0 sorry (run ~70).
+- Route-B correspondence tests not yet written for this target.
+
