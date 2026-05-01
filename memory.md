@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-04-30 (run 118)
+Last updated: 2026-05-01 (run 119)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 35 modules
+FVSquad.lean: import manifest for all 36 modules
 
 ## FV Targets
 
@@ -17,7 +17,7 @@ FVSquad.lean: import manifest for all 35 modules
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 Limits struct invariants | quiche/src/recovery/gcongestion/bbr2.rs | 5 | Done run113 (14 thms, 0 sorry) |
 | 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run114 (20 thms, 0 sorry) |
-| 34 | QPACK static table lookup | quiche/src/h3/qpack/static_table.rs | 1 | Researched run87 — NOT YET WRITTEN |
+| 34 | QPACK static table lookup | quiche/src/h3/qpack/static_table.rs | 5 | Done run119 (12 thms, 0 sorry) |
 | 35 | parse_settings_frame RFC compliance | quiche/src/h3/frame.rs | 5 | Done run116 (21 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry); Route-B 25/25 PASS run112 |
@@ -25,10 +25,11 @@ FVSquad.lean: import manifest for all 35 modules
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (16 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
+| 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 2 | Informal spec written run119 |
 
-## MILESTONE: 35 Lean files, ~728 theorems, 0 sorry (run 118)
+## MILESTONE: 36 Lean files, ~740 theorems, 0 sorry (run 119)
 
-## Lean File Registry (confirmed in repo as of run 118)
+## Lean File Registry (confirmed in repo as of run 119)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -67,7 +68,8 @@ FVSquad.lean: import manifest for all 35 modules
 | FVSquad/H3Settings.lean | 20 | Done run114 |
 | FVSquad/H3ParseSettings.lean | 21 | Done run116 |
 | FVSquad/FrameAckEliciting.lean | 15 | Done run118 |
-| **TOTAL** | **~728** | **0 sorry** 🎉 |
+| FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
+| **TOTAL** | **~740** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -87,13 +89,13 @@ FVSquad.lean: import manifest for all 35 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run118 (branch lean-squad-run118-25180830453-frame-ack-pathstate):
-  Task 5 — T42 FrameAckEliciting.lean (15 thms, 0 sorry)
-  Task 8 — T38 Route-B tests (75/75 PASS)
+- PR run119 (branch lean-squad-run119-25202476610-qpack-static-table):
+  Task 5 — T34 QPACKStaticTable.lean (12 thms, 0 sorry)
+  Task 2 — T34 informal spec + T44 stream state machine informal spec
 
 ## Status Issue
 
-Issue #4 (open) — updated run118
+Issue #4 (open) — updated run118 (update to run119 in progress)
 
 ## Key Findings
 
@@ -104,11 +106,13 @@ Issue #4 (open) — updated run118
 - OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
 - OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
 - OQ-T40-1 (run111): shift in decode_int not explicitly capped; relies on checked_shl
+- OQ-T34-1 (run119): are all 99 decode entries also in encode table? (open question)
 
 ## Next Priority Targets
 
-1. T34: write FVSquad/QPACKStaticTable.lean (~20 lines, fully decidable — T34 researched, file not yet written)
-2. New target: QUIC stream state machine (quiche/src/stream/mod.rs) — ~5 states, RFC 9000 §3
+1. T44: write FVSquad/StreamStateMachine.lean — QUIC stream is_complete invariants
+   (informal spec done; 3-way case split; is_bidi/is_local purely from stream ID)
+2. Route-B tests for T34 (QPACKStaticTable) — encode/decode consistency at Rust level
 3. Route-B tests for T42 (FrameAckEliciting) — 23 frame kinds × ack_eliciting × probing
 4. Route-B tests for T29 (PacketHeader)
 5. RecvBuf flow-control bound: highMark ≤ max_data
