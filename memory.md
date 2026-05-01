@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-01 (run 120)
+Last updated: 2026-05-01 (run 121)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 37 modules
+FVSquad.lean: import manifest for all 41 modules
 
 ## FV Targets
 
@@ -26,9 +26,9 @@ FVSquad.lean: import manifest for all 37 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry) |
-| 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 2 | Informal spec written run120 |
+| 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); round-trip proved for all v,p |
 
-## MILESTONE: 37 Lean files, ~755 theorems, 0 sorry (run 120)
+## MILESTONE: 41 Lean files, ~770 theorems, 0 sorry (run 121)
 
 ## Lean File Registry (confirmed in repo as of run 120)
 
@@ -71,7 +71,8 @@ FVSquad.lean: import manifest for all 37 modules
 | FVSquad/FrameAckEliciting.lean | 15 | Done run118 |
 | FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
 | FVSquad/StreamStateMachine.lean | 15 | Done run120 |
-| **TOTAL** | **~755** | **0 sorry** 🎉 |
+| FVSquad/QPACKInteger.lean | 10 + 9 examples | Done run121 |
+| **TOTAL** | **~770** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -108,7 +109,7 @@ Issue #4 (open) — updated run120
 
 ## Next Targets
 
-- T45: QPACK integer encode/decode (phase 2) → Lean spec (Task 3), then proofs (Task 5)
+- T45: Done run121 (QPACKInteger.lean, 10 thms + examples, 0 sorry)
   - encode_int / decode_int from encoder.rs + decoder.rs
   - Key property: roundtrip decode(encode(v, 0, p)) = v for all v, valid p
   - Model as pure functions on List UInt8
