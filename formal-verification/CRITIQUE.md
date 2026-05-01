@@ -4,25 +4,27 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-29 05:30 UTC
-- **Commit**: `608ea4474bb5a16e0471345290a3b210cc159360`
-- **Run**: run 113 — added T38 PathState (24 thms, 0 sorry), T32 BBR2Limits
-  (14 thms, 0 sorry); merged run107/run109 PRs; full suite 35 files, 0 sorry
+- **Date**: 2026-05-01 17:58 UTC
+- **Commit**: `c5670718a98d51749eff679be42f041515bdf143`
+- **Run**: run 121 — added T45 QPACKInteger (10 thms + examples, 0 sorry),
+  added T44 H3Settings (run 119), T44b H3ParseSettings (run 120),
+  T46 QPACKStaticTable (run 119), T47 FrameAckEliciting (run 120),
+  T48 StreamStateMachine (run 120); full suite 41 files, ~770 theorems, 0 sorry
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **35 Lean files with
-~655 theorems (+ examples), 0 sorry** 🎉 (Lean 4.30.0-rc2, no Mathlib). Run 113
-merged run107/109 PRs and added `FVSquad/BBR2Limits.lean` (T32, 14 thms),
-bringing the total to **35 files**. Runs 107–113 added `BytesInFlight.lean`
-(T37, 17 thms), `PathState.lean` (T38, 24 thms), and `BBR2Limits.lean` (T32,
-14 thms). Route-B correspondence tests now cover 6 targets (pkt_num_len/18,
-bandwidth/25, rangeset/21, ack_ranges/25, h3_frame/25, bytes_in_flight/25 —
-all PASS).
+The formal verification suite for `quiche` now covers **41 Lean files with
+~770 theorems (+ examples), 0 sorry** 🎉 (Lean 4.29.0, no Mathlib). Run 121
+added `FVSquad/QPACKInteger.lean` (T45, 10 theorems + 9 native_decide examples),
+completing the QPACK integer codec round-trip proof. Prior runs 119–120 added
+`H3Settings.lean`, `H3ParseSettings.lean`, `QPACKStaticTable.lean`,
+`FrameAckEliciting.lean`, and `StreamStateMachine.lean` (6 files combined,
+~115 theorems). The full suite now spans QUIC transport, congestion control
+(including BBR2), HTTP/3 codec, QPACK, and stream/frame state machines.
 
-This is a significant milestone: **the entire FV suite of ~655 theorems across 35
+This is a significant milestone: **the entire FV suite of ~770 theorems across 41
 Lean files is fully proved with zero outstanding sorry obligations.** Every
 theorem has been mechanically verified by `lake build`.
 
@@ -1160,4 +1162,94 @@ be described as independent (executable) correspondence validation.
 | HTTP/3 layer | **Medium** | Add section describing H3Frame.lean scope and limitations |
 | Sorry count "3" → "0" | **Medium** | Correct abstract and conclusion; highlight 0-sorry milestone |
 | Lean version | **Low** | Align with 4.30.0-rc2 |
+
+
+---
+
+## Run 119–121 Additions — Critique
+
+### T44 H3Settings / T44b H3ParseSettings (runs 119–120)
+**Files**: `H3Settings.lean`, `H3ParseSettings.lean`
+
+- **Strength**: Covers `h3::Config` field validation (max header list size,
+  QPACK table capacity, blocked streams). Round-trip decode ∘ encode properties
+  ensure that settings survives serialization/deserialization.
+- **Limitation**: Both models use unbounded `Nat`; the real implementation
+  caps values at `u64::MAX` and validates `varint` encoding bounds. Overflow
+  corner cases are not modelled.
+- **Utility**: Medium-high. Settings parsing is a common source of
+  interoperability bugs; round-trip proof is a useful sanity check.
+- **Recommendation**: Add a bounded model (`UInt64`) and verify that large
+  values are correctly clamped or rejected.
+
+### T46 QPACKStaticTable (run 119)
+**File**: `QPACKStaticTable.lean`
+- **Strength**: Static table lookup is a pure finite function over 99 entries;
+  `native_decide` proofs are ironclad.
+- **Limitation**: The dynamic table (QPACK's main complexity) is not modelled.
+  The static table alone cannot catch dynamic indexing bugs.
+- **Utility**: Low for bug-finding; high as a sanity/regression check. If the
+  table contents are ever accidentally modified, proofs will catch it.
+- **Recommendation**: The dynamic table is the higher-value target; consider
+  modelling insert/evict invariants.
+
+### T47 FrameAckEliciting (run 120)
+**File**: `FrameAckEliciting.lean`
+- **Strength**: The `is_ack_eliciting` predicate is a pure Boolean function on
+  a finite enum; `decide` proofs are completely reliable. Mutual exclusion
+  between ACK and non-ACK-eliciting frames is mechanically verified.
+- **Limitation**: Frame semantics beyond the ACK-eliciting bit are not
+  modelled. Actual on-wire encoding is in H3Frame, not here.
+- **Utility**: Medium. ACK-eliciting classification directly affects congestion
+  control decisions; a misclassification could cause liveness failures. The
+  proof guards against future enum extensions breaking the invariant.
+- **Recommendation**: Add a property that `PADDING` is non-eliciting (RFC 9000
+  §13.2.1), and that `ACK_ECN` behaves like `ACK`.
+
+### T48 StreamStateMachine (run 120)
+**File**: `StreamStateMachine.lean`
+- **Strength**: State reachability and transition safety for
+  `StreamState` (send/recv directions). `decide`-based proofs are exhaustive
+  over the finite state space.
+- **Limitation**: The model is a pure transition function; the real
+  implementation has concurrent state updates across send/recv paths. Race
+  conditions and interleaving are not captured.
+- **Utility**: High. Stream state machine correctness directly impacts whether
+  `STREAM` frames are processed in valid states. The proof prevents invalid
+  transitions (e.g., writing to a `ResetSent` stream).
+- **Recommendation**: Consider a product model of (send_state, recv_state) to
+  verify bidir stream invariants jointly.
+
+### T45 QPACKInteger (run 121)
+**File**: `QPACKInteger.lean`
+- **Strength**: Full round-trip proof `decodeInt (encodeInt v p) p = some v`
+  holds for ALL `v : Nat` and ALL `p : Nat` without any precondition — stronger
+  than anticipated. The proof requires only stdlib Lean 4 (no Mathlib), using
+  strong recursion, `omega`, and structural unfolding. The RFC 7541 §5.1
+  concrete example ([31, 154, 10] for 1337 with prefix 5) is verified by
+  `native_decide`.
+- **Limitation**: The `first` parameter (high flag bits OR-ed into the first
+  byte) is abstracted away (modelled as `first=0`). Callers ensure
+  `first & mask = 0`, so this is a sound abstraction but is not formally
+  verified here. Buffer overflow checks (`checked_shl`, `checked_add` in Rust)
+  are not modelled; unbounded `Nat` is used throughout.
+- **Utility**: High. QPACK/HPACK integer encoding is used on every header
+  field in every HTTP/3 request. A decode/encode inversion bug would cause
+  systematic header corruption. The round-trip proof directly rules this out
+  for the pure integer layer.
+- **Recommendation**: Model the `first` parameter and prove the full
+  `decodeInt (encodeInt_with_first v p first) p = some v` variant. Also
+  consider proving `encodeInt` produces only values in `[0, 255]` (byte-range
+  invariant), which is relevant for buffer size reasoning.
+
+### Paper Update Needed (runs 119–121)
+The paper (`formal-verification/paper/paper.tex`) still reports 35 files /
+~655 theorems. It should be updated to:
+- **41 files, ~770 theorems, 0 sorry** (run 121 state)
+- Add Table 1 rows for: H3Settings, H3ParseSettings, QPACKStaticTable,
+  FrameAckEliciting, StreamStateMachine, QPACKInteger
+- Update abstract theorem count and sorry-free claim
+- Note the HTTP/3 layer expansion (H3Settings, H3ParseSettings)
+- Note the QPACK integer round-trip proof as a new application of
+  strong recursion + structural induction in the suite
 
