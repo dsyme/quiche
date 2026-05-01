@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-01 (run 119)
+Last updated: 2026-05-01 (run 120)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 36 modules
+FVSquad.lean: import manifest for all 37 modules
 
 ## FV Targets
 
@@ -25,11 +25,12 @@ FVSquad.lean: import manifest for all 36 modules
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (16 thms, 0 sorry) |
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
-| 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 2 | Informal spec written run119 |
+| 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry) |
+| 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 2 | Informal spec written run120 |
 
-## MILESTONE: 36 Lean files, ~740 theorems, 0 sorry (run 119)
+## MILESTONE: 37 Lean files, ~755 theorems, 0 sorry (run 120)
 
-## Lean File Registry (confirmed in repo as of run 119)
+## Lean File Registry (confirmed in repo as of run 120)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -69,7 +70,8 @@ FVSquad.lean: import manifest for all 36 modules
 | FVSquad/H3ParseSettings.lean | 21 | Done run116 |
 | FVSquad/FrameAckEliciting.lean | 15 | Done run118 |
 | FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
-| **TOTAL** | **~740** | **0 sorry** 🎉 |
+| FVSquad/StreamStateMachine.lean | 15 | Done run120 |
+| **TOTAL** | **~755** | **0 sorry** 🎉 |
 
 ## Route-B Correspondence Tests
 
@@ -89,30 +91,24 @@ FVSquad.lean: import manifest for all 36 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run119 (branch lean-squad-run119-25202476610-qpack-static-table):
-  Task 5 — T34 QPACKStaticTable.lean (12 thms, 0 sorry)
-  Task 2 — T34 informal spec + T44 stream state machine informal spec
+- PR run120 (branch lean-squad-run120-25210690678-stream-state-machine):
+  Task 5 — T44 StreamStateMachine.lean (15 thms, 0 sorry)
+  Task 2 — T45 QPACK integer codec informal spec
 
 ## Status Issue
 
-Issue #4 (open) — updated run118 (update to run119 in progress)
+Issue #4 (open) — updated run120
 
 ## Key Findings
 
-- OQ-1 (run49): StreamPriorityKey antisymmetry violation (intentional by design)
-- OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
-- OQ-FC-1 (run70): RESET_STREAM guard in RecvBuf not modelled
-- decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
-- OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
-- OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
-- OQ-T40-1 (run111): shift in decode_int not explicitly capped; relies on checked_shl
-- OQ-T34-1 (run119): are all 99 decode entries also in encode table? (open question)
+- OQ-T43-2: parse_ack_frame block_count unbounded varint (potential DoS)
+- OQ-STREAM-1: recv.is_fin and recv.is_shutdown may coexist (verify)
+- OQ-QPACKINT-3: decode_int uses BufferTooShort for overflow (wrong error code?)
+- OQ-1 (run49): StreamPriorityKey antisymmetry — intentional
 
-## Next Priority Targets
+## Next Targets
 
-1. T44: write FVSquad/StreamStateMachine.lean — QUIC stream is_complete invariants
-   (informal spec done; 3-way case split; is_bidi/is_local purely from stream ID)
-2. Route-B tests for T34 (QPACKStaticTable) — encode/decode consistency at Rust level
-3. Route-B tests for T42 (FrameAckEliciting) — 23 frame kinds × ack_eliciting × probing
-4. Route-B tests for T29 (PacketHeader)
-5. RecvBuf flow-control bound: highMark ≤ max_data
+- T45: QPACK integer encode/decode (phase 2) → Lean spec (Task 3), then proofs (Task 5)
+  - encode_int / decode_int from encoder.rs + decoder.rs
+  - Key property: roundtrip decode(encode(v, 0, p)) = v for all v, valid p
+  - Model as pure functions on List UInt8
