@@ -33,3 +33,4 @@ import FVSquad.BBR2Limits
 import FVSquad.H3Settings
 import FVSquad.H3ParseSettings
 import FVSquad.FrameAckEliciting
+import FVSquad.QPACKStaticTable
