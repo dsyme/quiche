@@ -1,7 +1,7 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-02 (run 123)
-Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
+Last updated: 2026-05-02 (run 124)
+Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 38 modules
 
@@ -23,15 +23,14 @@ FVSquad.lean: import manifest for all 38 modules
 | 37 | BytesInFlight counter invariant | quiche/src/recovery/bytes_in_flight.rs | 5 | Done run107 (17 thms, 0 sorry); Route-B 25/25 PASS run112 |
 | 38 | PathState monotone progression | quiche/src/path.rs | 5 | Done run109 (24 thms, 0 sorry); Route-B 75/75 PASS run118 |
 | 41 | Pacer pacing_rate cap | quiche/src/recovery/gcongestion/pacer.rs | 5 | Done run98 (16 thms, 0 sorry) |
-| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry) |
+| 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry); Route-B 33/33 PASS run124 |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
-| 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry) |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
 
-## MILESTONE: 38 Lean files, ~770 theorems, 0 sorry (run 121), correspondence complete (run 123), Route-B 285/285 PASS (9 targets)
+## MILESTONE: 38 Lean files, ~770 theorems, 0 sorry; Route-B 10 targets, 318/318 PASS
 
-## Lean File Registry (confirmed in repo as of run 122)
+## Lean File Registry
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -88,12 +87,12 @@ FVSquad.lean: import manifest for all 38 modules
 | T38 (PathState) | tests/path_state/ | 118 | 75 | 75/75 PASS |
 | T45 (QPACKInteger) | tests/qpack_integer/ | 122 | 25 | 25/25 PASS |
 | T44 (StreamStateMachine) | tests/stream_state_machine/ | 123 | 46 | 46/46 PASS |
+| T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
 
 ## CORRESPONDENCE.md Status
 
 - All 38 Lean files have correspondence entries as of run 122.
-- No mismatches identified.
-- No sorry in any Lean file.
+- No mismatches identified. No sorry in any Lean file.
 
 ## CI Status
 
@@ -101,13 +100,13 @@ FVSquad.lean: import manifest for all 38 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run123 (branch lean-squad-run123-25249171110-report-correspondence):
-  Task 8 — Route-B tests for T44 StreamStateMachine (46/46 PASS)
-  Task 10 — REPORT.md updated (769 thms, 38 files, 4 layers, Route-B table)
+- PR run124 (branch lean-squad-run124-25257633659-critique-route-b-frame-ack):
+  Task 7 — CRITIQUE.md updated (runs 122-124, Route-B coverage, next priorities)
+  Task 8 — Route-B tests for T42 FrameAckEliciting (33/33 PASS)
 
 ## Status Issue
 
-Issue #4 (open) — updated run122
+Issue #4 (open) — updated run123; update to run124 pending
 
 ## Key Findings
 
@@ -119,7 +118,8 @@ Issue #4 (open) — updated run122
 ## Next Targets
 
 New Lean file candidates:
-- T46: CUBIC `cubic_k` / `cubic_wmax` invariants (gcongestion/cubic.rs) - ~40 lines
-- T47: Connection idle timeout model (quiche/src/lib.rs) - state machine, medium
-- T48: Frame size accounting (`encode_pkt`/`encode_frame`) - arithmetic, easy
-- Extend Route-B tests for targets without them: T33 (H3Settings), T35 (H3ParseSettings) [T44 done run123]
+- T46: CUBIC cubic_k / cubic_wmax invariants (gcongestion/cubic.rs) ~40 lines, omega
+- T47: Connection idle timeout model (quiche/src/lib.rs) - state machine
+- T48: Frame size accounting arithmetic
+- Route-B for H3Settings (T33) and H3ParseSettings (T35) — high value, no tests yet
+- Paper update (Task 11): still reflects 35 files / ~655 theorems
