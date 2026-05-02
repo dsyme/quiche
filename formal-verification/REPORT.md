@@ -2,58 +2,54 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 604 named theorems + 238+ examples, **0 `sorry`**
-(all proofs complete), 29 Lean files (Lean 4.30.0-rc2, no Mathlib).
+**Status**: ✅ ACTIVE — 769 named theorems + examples, **0 `sorry`**
+(all proofs complete), 38 Lean files (Lean 4.29.0+, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-04-24 12:30 UTC
-- **Commit**: `85ebb69e`
+- **Date**: 2026-05-02 10:00 UTC
+- **Commit**: `51434be1`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **591 named theorems**
-across 28 Lean 4 files covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **769 named theorems**
+across **38 Lean 4 files** covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`,
-`Bandwidth`) to stream management (`RecvBuf`, `SendBuf`, `CidMgmt`) and wire
-encoding (`StreamId`, `PacketNumLen`, `SendBufRetransmit`). Highlights include:
-formal proof of a *real RFC 9000 §A.3 conformance property*
+`Bandwidth`, `Pacer`, `BBR2Limits`) to stream management (`RecvBuf`, `SendBuf`,
+`CidMgmt`, `StreamStateMachine`) and wire encoding (`StreamId`, `PacketNumLen`,
+`AckRanges`, `FrameAckEliciting`), plus HTTP/3 layer coverage (`H3Frame`,
+`H3Settings`, `H3ParseSettings`, `QPACKStaticTable`, `QPACKInteger`).
+Highlights include: formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
-violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); cross-module
-write-then-read round-trips for all integer widths (`OctetsRoundtrip`); RFC
-9000 §2.1 stream-ID classification laws (`StreamId`); **15 theorems covering
-QUIC packet-header first-byte encoding and full buffer round-trip**
-(`PacketHeader`, now with 0 sorry); **15 theorems for
-varint 2-bit tag consistency** (`VarIntTag`); **22 theorems for bandwidth
-arithmetic invariants** (`Bandwidth.lean`); **17 theorems for the Pacer
-pacing-rate cap** (`Pacer.lean`); and — new in run 99 — **19 theorems for the
-HTTP/3 frame type codec** (`H3Frame.lean`, T31), covering type-ID distinctness,
-varint-payload round-trips for GoAway, CancelPush, and MaxPushId, encoding-
-length consistency, and the RFC 9114 type-ID-to-varint-range property. **Run 105
-closed the last remaining `sorry`**: the full long-header buffer round-trip
-`longHeader_roundtrip` in `PacketHeader.lean`, achieving 0 sorry across all
-604 named theorems.
+violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); full QPACK/HPACK
+integer codec round-trip by strong induction (`QPACKInteger`); RFC 9000 §2.1
+stream-ID classification laws (`StreamId`); and the full long-header buffer
+round-trip (`PacketHeader`). **Run 105 closed the last `sorry`**, achieving 0
+sorry — maintained across all subsequent runs including run 123. Nine targets
+have Route-B executable correspondence tests (46 new cases for StreamStateMachine
+added in run 123), all passing.
 
 ---
 
 ## Proof Architecture
 
-The 26 files form three logical layers, with a cross-module bridge layer:
+The 38 files form four logical layers:
 
 ```mermaid
 graph TD
-    subgraph L1["Layer 1 — Byte framing primitives"]
+    subgraph L1["Layer 1 — Byte framing primitives (7 files, ~153 theorems)"]
         Varint["Varint.lean<br/>10 theorems"]
         VarIntTag["VarIntTag.lean<br/>15 theorems"]
         Octets["Octets.lean<br/>48 theorems"]
         OctetsMut["OctetsMut.lean<br/>27 theorems"]
-        OctetsRT["OctetsRoundtrip.lean<br/>20 theorems"]
-        PacketHeader["PacketHeader.lean<br/>15 theorems"]
+        OctetsRT["OctetsRoundtrip.lean<br/>21 theorems"]
+        PacketHeader["PacketHeader.lean<br/>14 theorems"]
+        VarIntRT["VarIntRoundtrip.lean<br/>8 theorems"]
     end
-    subgraph L2["Layer 2 — Protocol algorithms"]
+    subgraph L2["Layer 2 — Protocol algorithms (12 files, ~255 theorems)"]
         RangeSet["RangeSet.lean<br/>16 theorems"]
         Minmax["Minmax.lean<br/>15 theorems"]
         RttStats["RttStats.lean<br/>23 theorems"]
@@ -65,8 +61,9 @@ graph TD
         StreamPriorityKey["StreamPriorityKey.lean<br/>21 theorems"]
         StreamId["StreamId.lean<br/>35 theorems"]
         PacketNumLen["PacketNumLen.lean<br/>20 theorems"]
+        PktNumEnc["PacketNumEncodeDecode.lean<br/>10 theorems"]
     end
-    subgraph L3["Layer 3 — Congestion control & stream I/O"]
+    subgraph L3["Layer 3 — Congestion control & stream I/O (7 files, ~148 theorems)"]
         NewReno["NewReno.lean<br/>13 theorems"]
         Cubic["Cubic.lean<br/>26 theorems"]
         RangeBuf["RangeBuf.lean<br/>19 theorems"]
@@ -75,15 +72,30 @@ graph TD
         SendBufRT["SendBufRetransmit.lean<br/>17 theorems"]
         Bandwidth["Bandwidth.lean<br/>22 theorems"]
     end
+    subgraph L4["Layer 4 — Extended protocol & HTTP/3 (12 files, ~213 theorems)"]
+        Pacer["Pacer.lean<br/>16 theorems"]
+        BBR2["BBR2Limits.lean<br/>14 theorems"]
+        BytesIF["BytesInFlight.lean<br/>17 theorems"]
+        PathSt["PathState.lean<br/>24 theorems"]
+        AckR["AckRanges.lean<br/>13 theorems"]
+        FrameAE["FrameAckEliciting.lean<br/>32 theorems"]
+        StreamSM["StreamStateMachine.lean<br/>15 theorems"]
+        H3Fr["H3Frame.lean<br/>19 theorems"]
+        H3Set["H3Settings.lean<br/>20 theorems"]
+        H3PS["H3ParseSettings.lean<br/>21 theorems"]
+        QPStatic["QPACKStaticTable.lean<br/>12 theorems"]
+        QPInt["QPACKInteger.lean<br/>10 theorems"]
+    end
     L1 --> L2
     L2 --> L3
+    L3 --> L4
 ```
 
 ---
 
 ## What Was Verified
 
-### Layer 1 — Byte Framing Primitives (6 files, ~134 theorems)
+### Layer 1 — Byte Framing Primitives (7 files, ~153 theorems)
 
 The foundational byte-I/O layer used throughout QUIC packet parsing.
 
@@ -129,7 +141,7 @@ graph LR
 - `longFirstByte_type_bits` (PacketHeader): the 2-bit type field extracted
   from the first byte equals the original type code
 
-### Layer 2 — Protocol Algorithms (11 files, ~230 theorems)
+### Layer 2 — Protocol Algorithms (12 files, ~255 theorems)
 
 The pure algorithmic components of the QUIC protocol.
 
@@ -195,51 +207,99 @@ graph LR
   confirms unit-conversion round-trip; `fromBytesAndTimeDelta_pos` confirms the
   lower-bound invariant that any positive byte count yields non-zero bandwidth
 
+### Layer 4 — Extended Protocol & HTTP/3 (12 files, ~213 theorems)
+
+New targets added in runs 98–123.
+
+```mermaid
+graph LR
+    PC["Pacer.lean<br/>16 theorems<br/>pacer_rate_cap ✅"]
+    BB["BBR2Limits.lean<br/>14 theorems<br/>limits_clamp_ge_lo ✅"]
+    BI["BytesInFlight.lean<br/>17 theorems<br/>add_increases_bytes ✅"]
+    PS["PathState.lean<br/>24 theorems<br/>promote_monotone ✅"]
+    AR["AckRanges.lean<br/>13 theorems<br/>ack_range_bounds ✅"]
+    FA["FrameAckEliciting.lean<br/>32 theorems<br/>ack_eliciting_not_probing ✅"]
+    SS["StreamStateMachine.lean<br/>15 theorems<br/>bidi_complete_not_writable ✅"]
+    H3["H3Frame.lean<br/>19 theorems<br/>goAway_round_trip ✅"]
+    HS["H3Settings.lean<br/>20 theorems<br/>settings_valid_bounded ✅"]
+    HP["H3ParseSettings.lean<br/>21 theorems<br/>parse_valid_bounded ✅"]
+    QS["QPACKStaticTable.lean<br/>12 theorems<br/>static_table_bounds ✅"]
+    QI["QPACKInteger.lean<br/>10 theorems<br/>encode_decode_roundtrip ✅"]
+```
+
+**Key results**:
+- `pacer_rate_cap` (Pacer): pacing rate is capped at `initial_max_burst_size`
+- `limits_clamp_ge_lo` (BBR2Limits): clamped value is always ≥ lower bound — BBR2 rate invariant
+- `promote_monotone` (PathState): state only moves forward in `promote_to` — RFC 9000 §8.2
+- `ack_eliciting_not_probing` (FrameAckEliciting): ack-eliciting frames are
+  never probing frames — RFC 9000 §9.1 category disjointness
+- `bidi_complete_not_writable` (StreamStateMachine): a complete bidirectional
+  stream is never writable — RFC 9000 §3 stream lifecycle
+- `goAway_round_trip` (H3Frame): GoAway push_id round-trips through encode/decode
+- `encode_decode_roundtrip` (QPACKInteger): full QPACK/HPACK integer codec round-trip
+  proved by strong induction on the residual value (RFC 7541 §5.1)
+
 ---
 
 ## File Inventory
 
-| File | Public Theorems | Examples | Phase | Key result |
-|------|-----------------|----------|-------|-----------|
-| `Varint.lean` | 10 | 25 | ✅ | `varint_round_trip` |
-| `VarIntTag.lean` | 15 | 22 | ✅ | `varint_tag_partition` |
-| `RangeSet.lean` | 16 | 15 | ✅ | `insert_preserves_invariant` |
-| `Minmax.lean` | 15 | 6 | ✅ | `update_monotone` |
-| `RttStats.lean` | 23 | 2 | ✅ | `adjusted_rtt_ge_min_rtt` |
-| `FlowControl.lean` | 22 | 1 | ✅ | `consume_safe` |
-| `NewReno.lean` | 13 | 0 | ✅ | `single_halving` |
-| `DatagramQueue.lean` | 26 | 0 | ✅ | `byte_size_invariant` |
-| `PRR.lean` | 20 | 0 | ✅ | `prr_rate_le_bd` |
-| `PacketNumDecode.lean` | 23 | 0 | ✅ | `decode_pktnum_correct` |
-| `Cubic.lean` | 26 | 0 | ✅ | `cubic_reduction` |
-| `RangeBuf.lean` | 19 | 5 | ✅ | `split_adjacency` |
-| `RecvBuf.lean` | 38 | 17 | ✅ | `insertAny_inv` |
-| `SendBuf.lean` | 26 | 11 | ✅ | `emitN_le_maxData` |
-| `CidMgmt.lean` | 21 | 13 | ✅ | `newScid_seq_fresh` |
-| `StreamPriorityKey.lean` | 21 | 8 | ✅ | `cmpKey_incr_incr_not_antisymmetric` |
-| `OctetsMut.lean` | 27 | 7 | ✅ | `putU32_getU32_roundtrip` |
-| `Octets.lean` | 48 | 9 | ✅ | `getU16_split` |
-| `OctetsRoundtrip.lean` | 20 | 9 | ✅ | `putU16_freeze_getU16` |
-| `StreamId.lean` | 35 | 8 | ✅ | `streamId_is_bidi_client` |
-| `PacketNumLen.lean` | 20 | 10 | ✅ | `encodeLen_le_4` |
-| `SendBufRetransmit.lean` | 17 | 10 | ✅ | `retransmit_offset_ge` |
-| `VarIntRoundtrip.lean` | 8 | 16 | ✅ | `putVarint_freeze_4byte` |
-| `PacketNumEncodeDecode.lean` | 10 | 23 | ✅ | `encode_decode_pktnum` |
-| `PacketHeader.lean` | 14 | 12 | 🔄 1 sorry | `typeCode_roundtrip` |
-| `Bandwidth.lean` | 22 | 9 | ✅ | `toBytesPerPeriod_mono_bw` |
-| `Pacer.lean` | 17 | 0 | ✅ | `pacer_rate_cap` |
-| `H3Frame.lean` | 19 | 12 | ✅ | `goAway_round_trip` |
-| **Total** | **591** | **238+** | — | **1 sorry** |
+| File | Theorems | Phase | Key result |
+|------|----------|-------|-----------|
+| `Varint.lean` | 10 | ✅ | `varint_round_trip` |
+| `VarIntTag.lean` | 15 | ✅ | `varint_tag_partition` |
+| `RangeSet.lean` | 16 | ✅ | `insert_preserves_invariant` |
+| `Minmax.lean` | 15 | ✅ | `update_monotone` |
+| `RttStats.lean` | 23 | ✅ | `adjusted_rtt_ge_min_rtt` |
+| `FlowControl.lean` | 22 | ✅ | `consume_safe` |
+| `NewReno.lean` | 13 | ✅ | `single_halving` |
+| `DatagramQueue.lean` | 26 | ✅ | `byte_size_invariant` |
+| `PRR.lean` | 20 | ✅ | `prr_rate_le_bd` |
+| `PacketNumDecode.lean` | 23 | ✅ | `decode_pktnum_correct` |
+| `Cubic.lean` | 26 | ✅ | `cubic_reduction` |
+| `RangeBuf.lean` | 19 | ✅ | `split_adjacency` |
+| `RecvBuf.lean` | 38 | ✅ | `insertAny_inv` |
+| `SendBuf.lean` | 26 | ✅ | `emitN_le_maxData` |
+| `CidMgmt.lean` | 21 | ✅ | `newScid_seq_fresh` |
+| `StreamPriorityKey.lean` | 21 | ✅ | `cmpKey_incr_incr_not_antisymmetric` |
+| `OctetsMut.lean` | 27 | ✅ | `putU32_getU32_roundtrip` |
+| `Octets.lean` | 48 | ✅ | `getU16_split` |
+| `OctetsRoundtrip.lean` | 21 | ✅ | `putU16_freeze_getU16` |
+| `StreamId.lean` | 35 | ✅ | `streamId_is_bidi_client` |
+| `PacketNumLen.lean` | 20 | ✅ | `encodeLen_le_4` |
+| `SendBufRetransmit.lean` | 17 | ✅ | `retransmit_offset_ge` |
+| `VarIntRoundtrip.lean` | 8 | ✅ | `putVarint_freeze_4byte` |
+| `PacketNumEncodeDecode.lean` | 10 | ✅ | `encode_decode_pktnum` |
+| `PacketHeader.lean` | 14 | ✅ | `longHeader_roundtrip` |
+| `Bandwidth.lean` | 22 | ✅ | `toBytesPerPeriod_mono_bw` |
+| `Pacer.lean` | 16 | ✅ | `pacer_rate_cap` |
+| `H3Frame.lean` | 19 | ✅ | `goAway_round_trip` |
+| `AckRanges.lean` | 13 | ✅ | `ack_range_bounds` |
+| `BytesInFlight.lean` | 17 | ✅ | `add_increases_bytes` |
+| `PathState.lean` | 24 | ✅ | `promote_monotone` |
+| `BBR2Limits.lean` | 14 | ✅ | `limits_clamp_ge_lo` |
+| `H3Settings.lean` | 20 | ✅ | `settings_valid_bounded` |
+| `H3ParseSettings.lean` | 21 | ✅ | `parse_valid_bounded` |
+| `FrameAckEliciting.lean` | 32 | ✅ | `ack_eliciting_not_probing` |
+| `QPACKStaticTable.lean` | 12 | ✅ | `static_table_bounds` |
+| `StreamStateMachine.lean` | 15 | ✅ | `bidi_complete_not_writable` |
+| `QPACKInteger.lean` | 10 | ✅ | `encode_decode_roundtrip` |
+| **Total** | **769** | **0 sorry** | **38 files** |
 
-### Informal Specs Awaiting Formal Lean Files
+### Route-B Correspondence Tests
 
-| Target | Spec file | Phase | Priority |
-|--------|-----------|-------|----------|
-| T33 — H3 Settings frame invariants | `h3_settings_informal.md` | Phase 2 ✅ (run 86) | MEDIUM — boolean constraints, size guard, GREASE RT loss |
-| T38 — PathState monotone progression | (planned) | Phase 1 (run 91) | MEDIUM — RFC 9000 §8.2; ~45 lines |
-| T39 — QPACK static table lookup bounds | (planned) | Phase 1 (run 91) | HIGH — all decide; ~20 lines |
-| T40 — QPACK decode_int prefix-mask | (planned) | Phase 1 (run 91) | MEDIUM — fuel model; ~50 lines |
-| T41 — Pacer pacing_rate cap | (planned) | Phase 1 (run 91) | HIGH — Nat.min; ~25 lines |
+| Target | Directory | Cases | Result |
+|--------|-----------|-------|--------|
+| T20 (PacketNumLen) | `tests/pkt_num_len/` | 18 | ✅ 18/18 PASS |
+| T36 (Bandwidth) | `tests/bandwidth_arithmetic/` | 25 | ✅ 25/25 PASS |
+| T2 (RangeSet) | `tests/rangeset_insert/` | 21 | ✅ 21/21 PASS |
+| T43 (AckRanges) | `tests/ack_ranges/` | 25 | ✅ 25/25 PASS |
+| T31 (H3Frame) | `tests/h3_frame/` | 25 | ✅ 25/25 PASS |
+| T37 (BytesInFlight) | `tests/bytes_in_flight/` | 25 | ✅ 25/25 PASS |
+| T38 (PathState) | `tests/path_state/` | 75 | ✅ 75/75 PASS |
+| T45 (QPACKInteger) | `tests/qpack_integer/` | 25 | ✅ 25/25 PASS |
+| T44 (StreamStateMachine) | `tests/stream_state_machine/` | 46 | ✅ 46/46 PASS |
+
+**Total Route-B cases**: 285/285 PASS across 9 targets.
 
 ---
 
@@ -375,34 +435,29 @@ timeline
         Research T38–T41 + CI improvements (run 91), REPORT + Paper update (run 92) : research pipeline
     section Runs 93–99
         QPACKStatic.lean T39 (12 theorems, 0 sorry — QPACK static table bounds, run 97), FrameClassification.lean T42 (25 theorems — ack_eliciting/probing, run 97), Pacer.lean T41 (17 theorems — pacing-rate cap, run 98), H3Frame.lean T31 (19 theorems — GoAway/CancelPush/MaxPushId round-trips, run 99) : 73 new theorems (runs 97-99)
+    section Runs 100–105
+        AckRanges T43 (29→13 thms, 0 sorry — run 102), Route-B tests (H3Frame, AckRanges — run 103), PacketHeader 0 sorry (run 105) : 0 sorry milestone, 604 theorems
+    section Runs 106–112
+        BytesInFlight T37 (17 thms, 0 sorry — run 107), PathState T38 (24 thms — run 109), Route-B BytesInFlight (25/25 — run 112) : 41 new theorems
+    section Runs 113–118
+        BBR2Limits T32 (14 thms — run 113), H3Settings T33 (20 thms — run 114), H3ParseSettings T35 (21 thms — run 116), FrameAckEliciting T42 (32 thms — run 118), Route-B PathState 75/75 (run 118) : 87 new theorems
+    section Runs 119–123
+        QPACKStaticTable T34 (12 thms — run 119), StreamStateMachine T44 (15 thms — run 120), QPACKInteger T45 (10 thms — run 121), Route-B QPACKInteger 25/25 (run 122), CORRESPONDENCE 4 entries, Route-B StreamStateMachine 46/46 PASS + REPORT update (run 123) : 37 new theorems; total 769 theorems, 38 files, 0 sorry
 ```
 
 ---
 
 ## Toolchain
 
-- **Prover**: Lean 4 (version 4.30.0-rc2)
+- **Prover**: Lean 4 (version 4.29.0+)
 - **Libraries**: stdlib only — no Mathlib dependency
 - **CI**: `.github/workflows/lean-ci.yml` — runs `lake build` on every PR
   that touches `formal-verification/lean/**`
 - **Build system**: Lake (lakefile.toml with zero external packages)
-
-### Tactic Inventory
-
-| Tactic | Usage |
-|--------|-------|
-| `omega` | Integer/natural-number arithmetic (most proofs) |
-| `simp only [...]` | Targeted definitional unfolding + rewriting |
-| `by_cases h : P` | If-then-else case splits (replaces Mathlib's `split_ifs`) |
-| `native_decide` | Decidable closed propositions (test vectors) |
-| `decide` | Small finite decidable goals |
-| `cases`, `rcases`, `obtain` | Pattern matching / destructuring |
-| `rfl` | Reflexivity |
-| `exact`, `apply`, `refine` | Goal-directed proof steps |
-| `rw [...]` | Equational rewriting |
+- **Route-B tests**: 9 targets, 285 cases, all passing
 
 ---
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 24759205671](https://github.com/dsyme/quiche/actions/runs/24759205671).
+> [workflow run 25249171110](https://github.com/dsyme/quiche/actions/runs/25249171110).
