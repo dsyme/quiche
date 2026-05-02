@@ -35,3 +35,4 @@ import FVSquad.H3ParseSettings
 import FVSquad.FrameAckEliciting
 import FVSquad.QPACKStaticTable
 import FVSquad.StreamStateMachine
+import FVSquad.QPACKInteger

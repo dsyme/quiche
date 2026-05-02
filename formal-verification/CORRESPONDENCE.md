@@ -4,13 +4,15 @@
 
 ## Last Updated
 
-- **Date**: 2026-04-30 18:00 UTC
-- **Commit**: `5bc48a9747b75988c95fd010335242b230a96abb`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 36 files, **0 sorry** 🎉
-  (run 115: added 17 missing correspondence entries for Bandwidth, AckRanges, Pacer, Octets, OctetsRoundtrip, Cubic, StreamId, PacketHeader, PacketNumDecode, RangeBuf, RecvBuf, SendBuf, SendBufRetransmit, StreamPriorityKey, VarIntRoundtrip, VarIntTag, CidMgmt)
+- **Date**: 2026-05-02 04:00 UTC
+- **Commit**: `15c44215`
+- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 38 files, **0 sorry** 🎉
+  (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
+  StreamStateMachine, QPACKInteger)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
   `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS;
-  `tests/h3_frame/` 25/25 PASS (run 103); `tests/bytes_in_flight/` 25/25 PASS (run 112)
+  `tests/h3_frame/` 25/25 PASS (run 103); `tests/bytes_in_flight/` 25/25 PASS (run 112);
+  `tests/path_state/` 75/75 PASS (run 118); `tests/qpack_integer/` 25/25 PASS (run 122)
 
 ---
 
@@ -2689,3 +2691,202 @@ role in acknowledgement and path-probing protocols.
   decidable enumeration.
 - Route-B correspondence tests not yet written (the exhaustive `decide`
   proofs cover all 23 frame kinds; executable tests would add no new coverage).
+
+---
+
+## `FVSquad/H3ParseSettings.lean` (T35) ↔ `quiche/src/h3/frame.rs`
+
+**Rust source**: `quiche/src/h3/frame.rs` — `fn parse_settings_frame` (~lines 400–500)
+
+### Purpose
+
+Models the RFC 9114 §7.2.4 `SETTINGS` frame parser.  The Lean model
+verifies: (a) size guard (≤ 128 pairs); (b) last-value-wins semantics for
+duplicate settings IDs; (c) correct extraction of each known settings field;
+(d) rejection of all five reserved IDs mandated by RFC §7.2.4/§A.2.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|---------------|
+| `H3Settings.SettingsFrame` | `structure` | `Frame::Settings` | `enum Frame` variant | **abstraction** — only settings fields, no enum wrapper |
+| `H3ParseSettings.parseSized` | `List (UInt64 × UInt64) → ParseResult` | `parse_settings_frame` | `Octets → Result<Frame>` | **abstraction** — cursor/IO omitted, pure pair-list input |
+| `H3Settings.isReserved` | `UInt64 → Bool` | local reserved-ID check | inline integer comparisons | **exact** — same five reserved values |
+| `H3Settings.requiresBool` | `UInt64 → Bool` | local bool-constraint check | inline integer comparisons | **exact** |
+
+### Approximations
+
+1. **Cursor/buffer omitted**: `parse_settings_frame` reads from an `Octets`
+   cursor.  The Lean model takes a pre-decoded `List (UInt64 × UInt64)`.
+   Varint decoding correctness is out of scope here (covered by T23/T45).
+
+2. **MAX_PAIRS proxy**: The Rust guard is on byte length (≤ 256 bytes); the
+   Lean model uses ≤ 128 pairs as a proxy (each pair is ≥ 2 bytes), which is
+   a valid inner bound.
+
+3. **Unknown IDs**: The Rust silently skips unknown IDs; the Lean model does
+   the same via `applyEntry` fall-through.  No proof covers unknown-ID
+   behaviour explicitly, but it is structurally identical.
+
+### Impact on proofs
+
+21 theorems, 0 sorry.  Key results cover all five reserved-ID rejection cases,
+both last-value-wins cases, all four boolean-constrained fields, and the size
+guard.  The approximations do not invalidate any theorem — every theorem
+operates on the abstract pair-list domain.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.30.0-rc2 (run 116).
+- Route-B correspondence tests not yet written; the `decide`/`simp`-proved
+  theorems cover all reserved IDs and structural properties exhaustively.
+
+---
+
+## `FVSquad/QPACKStaticTable.lean` (T34) ↔ `quiche/src/h3/qpack/static_table.rs`
+
+**Rust source**: `quiche/src/h3/qpack/static_table.rs`
+
+### Purpose
+
+Models the QPACK static table (RFC 9204 Appendix A).  The Lean file inlines
+both the 99-entry decode table and the encode-table index mappings as `List`
+literals, then proves four invariants fully by `decide`/`native_decide`.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|---------------|
+| `QPACKStatic.decodeTable` | `List Entry` | `STATIC_DECODE_TABLE` | `[(&[u8], &[u8]); 99]` | **exact** — 99 entries, same names and values |
+| `QPACKStatic.Entry` | `structure (name value : List Nat)` | `(&[u8], &[u8])` | byte-slice pair | **exact** — byte values identical |
+| `QPACKStatic.encodeTableTriples` | `List (List Nat × List Nat × Nat)` | `STATIC_ENCODE_TABLE` | nested array | **exact** — same triples |
+
+### Approximations
+
+1. **Byte representation**: Rust uses `&[u8]`; the Lean model uses
+   `List Nat`.  Values are identical because `toList.map Char.toNat` for
+   ASCII strings gives the same byte sequence.
+
+2. **Lookup functions not modelled**: `encode_static_header` and
+   `decode_static_header` are omitted; only the table contents are verified.
+
+### Impact on proofs
+
+12 theorems, 0 sorry.  All proved by `decide`/`native_decide`.  The table
+contents are the single source of truth for QPACK header compression; verifying
+them eliminates an entire class of silent mis-encoding bugs.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.30.0-rc2 (run 119).
+- The proofs are fully decidable and cover every entry in the 99-element table;
+  no further Route-B tests required.
+
+---
+
+## `FVSquad/StreamStateMachine.lean` (T44) ↔ `quiche/src/stream/mod.rs`
+
+**Rust source**: `quiche/src/stream/mod.rs`, `quiche/src/stream/recv_buf.rs`,
+`quiche/src/stream/send_buf.rs`
+
+### Purpose
+
+Models the completion and writability predicates of the QUIC stream state
+machine (RFC 9000 §3).  The key predicates are:
+- `recvIsComplete`: the receive side has consumed all bytes up to the final offset.
+- `sendIsComplete`: the send side has been fully acknowledged.
+- `streamIsComplete`: both sides are done.
+- `sendIsWritable`: the stream can still accept application data.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|---------------|
+| `StreamStateMachine.StreamRecvState` | `structure` | `RecvBuf` (partial) | `struct RecvBuf` | **abstraction** — only `finOff` and `off` |
+| `StreamStateMachine.StreamSendState` | `structure` | `SendBuf` (partial) | `struct SendBuf` | **abstraction** — `finOff`, `off`, `ackedEnd`, `shutdown` |
+| `recvIsComplete` | `StreamRecvState → Bool` | `RecvBuf::is_fin` + `is_complete` | methods | **exact** for the modelled fields |
+| `sendIsComplete` | `StreamSendState → Bool` | `SendBuf::is_fin` + `is_complete` | methods | **exact** for the modelled fields |
+| `sendIsWritable` | `StreamSendState → Bool → Bool` | `Stream::is_writable` | method | **abstraction** — flow-control capacity is an opaque boolean |
+
+### Approximations
+
+1. **RangeSet acked range**: The Rust `acked` field is a `RangeSet`;
+   the Lean model simplifies to `ackedEnd : Nat` (contiguous acked prefix).
+   Theorems about `sendIsComplete` only fire when `ackedEnd = finOff.get`,
+   which matches the semantically interesting case.
+
+2. **Flow-control capacity**: `is_writable` in Rust checks several flow-control
+   fields (`max_off`, `off_back`, `send_lowat`).  These are abstracted to an
+   opaque `sendIsWritableFc : Bool`.
+
+3. **`recv.ready()`** (readable): Not modelled — separate concern from
+   completion.
+
+### Impact on proofs
+
+15 theorems, 0 sorry.  All proved by `simp`/`omega`/`decide`.  Key results:
+completeness requires FIN ack, writability requires neither shutdown nor FIN.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.30.0-rc2 (run 120).
+- Route-B correspondence tests not yet written; predicates are simple
+  boolean expressions with no non-trivial control flow.
+
+---
+
+## `FVSquad/QPACKInteger.lean` (T45) ↔ `quiche/src/h3/qpack/encoder.rs` + `decoder.rs`
+
+**Rust source**: `encode_int` at `quiche/src/h3/qpack/encoder.rs:120` and
+`decode_int` at `quiche/src/h3/qpack/decoder.rs:212`.
+
+### Purpose
+
+Models the QPACK/HPACK integer codec (RFC 7541 §5.1).  The key result is the
+**full round-trip theorem**: `decodeInt (encodeInt v p) p = some v` holds for
+**all** `v p : Nat` with no preconditions (proved by strong induction on the
+residual value in `encodeAux`).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|---------------|
+| `QPACKInteger.encodeAux` | `Nat → List Nat` | `encode_int` (continuation loop) | `while v >= 128 { … }` | **exact** — same loop logic, same byte values |
+| `QPACKInteger.encodeInt` | `Nat → Nat → List Nat` | `encode_int(v, first=0, prefix=p, …)` | `pub fn encode_int` | **abstraction** — `first` byte flags omitted (always 0) |
+| `QPACKInteger.decodeAux` | `List Nat → Option Nat` | `decode_int` (continuation loop) | `while b.cap() > 0 { … }` | **exact** — same continuation-bit logic |
+| `QPACKInteger.decodeInt` | `List Nat → Nat → Option Nat` | `decode_int(b, prefix=p)` | `fn decode_int` | **abstraction** — buffer/cursor, overflow errors omitted |
+
+### Approximations
+
+1. **`first` parameter (flag byte)**: `encode_int` takes a `first: u8` that
+   OR-s high-bit flags into the first byte.  The Lean model sets `first = 0`.
+   Round-trip holds because callers ensure `first & mask == 0`; the Lean model
+   proves the round-trip for the pure value bits.
+
+2. **Integer overflow checking**: The Rust uses `checked_shl`/`checked_add`
+   and returns `Error::BufferTooShort` on overflow.  The Lean model uses
+   unbounded `Nat` — the round-trip holds for all inputs without any overflow
+   precondition.
+
+3. **Buffer cursor state**: `decode_int` reads from an `Octets` cursor; the
+   Lean model takes a `List Nat`.  Cursor advancement and remaining-byte
+   semantics are not modelled.
+
+4. **Error paths**: `decodeInt` returns `none` only for an empty list; the
+   Rust returns `Error::BufferTooShort` for underflow and overflow.  The
+   distinction is immaterial for the round-trip theorem.
+
+### Impact on proofs
+
+10 theorems + 9 `native_decide` examples, 0 sorry.  The round-trip
+`decodeInt_encodeInt` holds universally.  The `first=0` abstraction means
+the theorem covers all callers that do not set flag bits in the first byte —
+i.e., all plain integer-only encode/decode calls.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.30.0-rc2 (run 121).
+- **Route-B tests**: `formal-verification/tests/qpack_integer/` — 25 cases,
+  25/25 PASS (run 122).  Test vectors include all three RFC 7541 §5.1
+  canonical examples and 22 additional cases spanning single-byte, multi-byte,
+  various prefix widths, and large values.
