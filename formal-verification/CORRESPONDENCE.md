@@ -4,8 +4,8 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-02 04:00 UTC
-- **Commit**: `15c44215`
+- **Date**: 2026-05-02 10:00 UTC
+- **Commit**: `51434be1`
 - **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 38 files, **0 sorry** 🎉
   (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
   StreamStateMachine, QPACKInteger)
@@ -2830,8 +2830,12 @@ completeness requires FIN ack, writability requires neither shutdown nor FIN.
 ### Validation evidence
 
 - `lake build` passed with Lean 4.30.0-rc2 (run 120).
-- Route-B correspondence tests not yet written; predicates are simple
-  boolean expressions with no non-trivial control flow.
+- **Route-B tests**: `formal-verification/tests/stream_state_machine/` —
+  **46/46 PASS** (run 123). Tests cover all 6 predicates (`recvIsFin`,
+  `sendIsFin`, `sendIsComplete`, `sendIsShutdown`, `streamIsComplete`,
+  `streamIsWritable`) across 46 input cases including bidi/uni/local/remote
+  stream types, edge cases (large offsets, zero-length streams,
+  shutdown+fin coexistence), and stream-ID classification (IDs 0–5).
 
 ---
 
