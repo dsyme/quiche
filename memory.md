@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-01 (run 121)
-Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
+Last updated: 2026-05-02 (run 122)
+Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 41 modules
+FVSquad.lean: import manifest for all 38 modules
 
 ## FV Targets
 
@@ -26,11 +26,11 @@ FVSquad.lean: import manifest for all 41 modules
 | 42 | Frame ack_eliciting/probing | quiche/src/frame.rs | 5 | Done run118 (15 thms, 0 sorry) |
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry) |
-| 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); round-trip proved for all v,p |
+| 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
 
-## MILESTONE: 41 Lean files, ~770 theorems, 0 sorry (run 121)
+## MILESTONE: 38 Lean files, ~770 theorems, 0 sorry (run 121), correspondence complete (run 122)
 
-## Lean File Registry (confirmed in repo as of run 120)
+## Lean File Registry (confirmed in repo as of run 122)
 
 | File | Theorems | Status |
 |------|----------|--------|
@@ -72,7 +72,7 @@ FVSquad.lean: import manifest for all 41 modules
 | FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
 | FVSquad/StreamStateMachine.lean | 15 | Done run120 |
 | FVSquad/QPACKInteger.lean | 10 + 9 examples | Done run121 |
-| **TOTAL** | **~770** | **0 sorry** 🎉 |
+| **TOTAL** | **~770** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -85,6 +85,13 @@ FVSquad.lean: import manifest for all 41 modules
 | T31 (H3Frame) | tests/h3_frame/ | 103 | 25 | 25/25 PASS |
 | T37 (BytesInFlight) | tests/bytes_in_flight/ | 112 | 25 | 25/25 PASS |
 | T38 (PathState) | tests/path_state/ | 118 | 75 | 75/75 PASS |
+| T45 (QPACKInteger) | tests/qpack_integer/ | 122 | 25 | 25/25 PASS |
+
+## CORRESPONDENCE.md Status
+
+- All 38 Lean files have correspondence entries as of run 122.
+- No mismatches identified.
+- No sorry in any Lean file.
 
 ## CI Status
 
@@ -92,13 +99,13 @@ FVSquad.lean: import manifest for all 41 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run120 (branch lean-squad-run120-25210690678-stream-state-machine):
-  Task 5 — T44 StreamStateMachine.lean (15 thms, 0 sorry)
-  Task 2 — T45 QPACK integer codec informal spec
+- PR run122 (branch lean-squad-run122-25243288144-correspondence-qpack-integer):
+  Task 6 — CORRESPONDENCE.md 4 new entries (H3ParseSettings, QPACKStaticTable, StreamStateMachine, QPACKInteger)
+  Task 8 — Route-B tests for T45 QPACKInteger (25/25 PASS)
 
 ## Status Issue
 
-Issue #4 (open) — updated run120
+Issue #4 (open) — updated run122
 
 ## Key Findings
 
@@ -109,7 +116,8 @@ Issue #4 (open) — updated run120
 
 ## Next Targets
 
-- T45: Done run121 (QPACKInteger.lean, 10 thms + examples, 0 sorry)
-  - encode_int / decode_int from encoder.rs + decoder.rs
-  - Key property: roundtrip decode(encode(v, 0, p)) = v for all v, valid p
-  - Model as pure functions on List UInt8
+New Lean file candidates:
+- T46: CUBIC `cubic_k` / `cubic_wmax` invariants (gcongestion/cubic.rs) - ~40 lines
+- T47: Connection idle timeout model (quiche/src/lib.rs) - state machine, medium
+- T48: Frame size accounting (`encode_pkt`/`encode_frame`) - arithmetic, easy
+- Extend Route-B tests for targets without them: T33 (H3Settings), T35 (H3ParseSettings), T44 (StreamStateMachine)
