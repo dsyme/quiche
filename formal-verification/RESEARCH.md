@@ -952,3 +952,109 @@ lemmas need `cases` analysis on `Option`.
    documented in `pktNumLen_four_coverage`).
 2. **T36/T37 added** — New gcongestion targets identified and documented;
    T36 is the highest-priority easy target for the next Lean spec run.
+
+---
+
+### Target 46: `idle_timeout` Negotiation (RFC 9000 §10.1.1)
+
+**Location**: `quiche/src/lib.rs` — `fn idle_timeout()`
+
+**Description**: The QUIC connection idle timeout is negotiated between two
+endpoints. Each advertises a `max_idle_timeout` transport parameter in
+milliseconds, where 0 means "disabled". The effective timeout is:
+- `None` if both peers set 0 (both disabled)
+- The non-zero peer's value if exactly one sets 0
+- `min(local, peer)` if both are non-zero
+- Then clamped to `max(effective_ms, 3 * pto)` in milliseconds
+
+**Benefit**: The RFC requires that neither endpoint experiences a timeout
+sooner than it expects. A bug here (e.g., using max instead of min) would
+cause premature connection closure. The logic is pure integer arithmetic,
+making all key properties directly provable with `omega`.
+
+**Key theorems** (~12):
+- `idle_timeout_both_zero_none`: both disabled → result is `None`
+- `idle_timeout_local_zero`: local disabled → use peer value
+- `idle_timeout_peer_zero`: peer disabled → use local value
+- `idle_timeout_min_when_both_nonzero`: both nonzero → result ≤ local and ≤ peer
+- `idle_timeout_le_local`: effective timeout ≤ local (when local nonzero)
+- `idle_timeout_le_peer`: effective timeout ≤ peer (when peer nonzero)
+- `idle_timeout_ge_3pto`: effective timeout ≥ 3 * pto (final clamp)
+- `idle_timeout_symmetric`: `negotiate(a, b) = negotiate(b, a)` (commutativity)
+- `idle_timeout_idem`: `negotiate(a, a) = a` (when a ≠ 0)
+- `idle_timeout_monotone`: if a ≤ a' and b ≤ b', negotiate(a, b) ≤ negotiate(a', b')
+- `idle_timeout_none_iff_both_zero`: result is None ↔ both are 0
+- `idle_timeout_some_positive`: result is Some(t) → t > 0
+
+**Specification size**: ~45 Lean lines.
+
+**Proof tractability**: HIGH — all `omega` after unfolding the Lean model.
+Min/max of two naturals with special-case for 0 is exactly what `omega`
+handles efficiently.
+
+**Approximations needed**: `pto()` (Path Timeout Overhead) is modelled as
+an abstract `Nat` parameter with the precondition `pto ≥ 0`. The PTO
+computation itself is not verified — only the final clamp property.
+
+**Priority**: ⭐⭐ HIGH — RFC correctness property, purely integer arithmetic,
+directly verifiable with `omega`.
+
+---
+
+### Target 47: PMTUD Binary Search Invariant
+
+**Location**: `quiche/src/pmtud.rs` — `fn update_probe_size()`,
+`fn successful_probe()`, `fn failed_probe()`
+
+**Description**: Path MTU Discovery (PMTUD) uses a binary search over MTU
+sizes between `MIN_PLPMTU` (1200) and `maximum_supported_mtu`. The invariant
+is: at all times, if a `largest_successful_probe_size` and
+`smallest_failed_probe_size` are both known, then:
+- `largest_successful < smallest_failed`
+- `probe_size = (largest_successful + smallest_failed) / 2`
+
+More broadly: `probe_size ∈ [MIN_PLPMTU, maximum_supported_mtu]` always.
+
+**Benefit**: A bug in the binary search pivot computation could cause infinite
+loops (probe_size stuck), incorrect PMTU selection (probe_size outside bounds),
+or false convergence (probe_size = smallest_failed instead of midpoint). These
+properties are pure integer arithmetic.
+
+**Key theorems** (~10):
+- `probe_size_le_max`: `probe_size ≤ maximum_supported_mtu` always
+- `probe_size_ge_min`: `probe_size ≥ MIN_PLPMTU` after failure
+- `update_sets_midpoint`: `probe_size = (successful + failed) / 2` (binary search case)
+- `pmtu_found_iff_adjacent`: PMTU set ↔ `failed - successful ≤ 1`
+- `update_none_none_uses_max`: no data → uses maximum_supported_mtu
+- `successful_updates_largest`: `successful_probe` updates `largest_successful_probe_size`
+- `failed_sets_smallest`: `failed_probe` records the smallest failure
+- `binary_search_converges`: after finite rounds, `failed - successful ≤ 1`
+- `get_current_mtu_ge_min`: `get_current_mtu() ≥ MIN_PLPMTU`
+- `probe_size_in_bounds_invariant`: invariant maintained through `successful_probe` + `failed_probe`
+
+**Specification size**: ~60 Lean lines.
+
+**Proof tractability**: MEDIUM — `omega` handles all arithmetic; case analysis
+on `Option` pairs for the 4-way match; binary search convergence needs an
+inductive measure argument.
+
+**Approximations needed**: `max_probes` (retry counter) is modelled as requiring
+exactly 1 failure per size (simplifying `probe_failure_count < max_probes`). The
+`restart_pmtud` path on inconsistent state is modelled as a reset.
+
+**Priority**: ⭐ MEDIUM — binary search correctness is a classic FV target;
+adds coverage of the network stack's MTU estimation path.
+
+---
+
+## Run 126 Additions
+
+- **T46** (idle_timeout negotiation): new HIGH-priority target. RFC 9000 §10.1.1
+  compliance properties, purely integer, `omega`-decidable.
+- **T47** (PMTUD binary search): new MEDIUM-priority target. Adds MTU discovery
+  path coverage. Binary search invariant + bounds.
+
+These targets were identified by reviewing uncovered modules after reaching
+38 Lean files in run 125. The critique (run 124) flagged the connection lifecycle
+and network path modules as under-represented. Both T46 and T47 address this gap
+with tractable pure-integer models.
