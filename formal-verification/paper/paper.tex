@@ -771,9 +771,16 @@ a substantial class of protocol-level proofs: linear arithmetic
 (\texttt{omega}) discharges the majority of obligations, and careful
 functional modelling of Rust's ownership patterns is feasible with
 explicit freeze/state-return transformations.
-Future work includes: verifying CUBIC cubic\_k/wmax invariants; modelling
-the QUIC idle-timeout state machine; and exploring Aeneas extraction to
-mechanically bridge the Lean model to the Rust source.
+Identified next targets include:
+(T46) the RFC~9000~\S10.1.1 idle-timeout negotiation function
+(\texttt{idle\_timeout()}), where the effective timeout is
+$\min(\text{local}, \text{peer})$ clamped to $3\times\text{PTO}$---a
+purely integer invariant directly provable with \texttt{omega}; and
+(T47) the PMTUD binary-search probe-size invariant in
+\texttt{pmtud.rs}, where \texttt{probe\_size = (successful + failed) / 2}
+and convergence follows from a straightforward inductive measure argument.
+Longer-term, Aeneas extraction would mechanically bridge the Lean models to
+the Rust source without hand-written correspondence arguments.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{paper}
