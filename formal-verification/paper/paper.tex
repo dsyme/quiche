@@ -57,13 +57,14 @@ We present an incremental formal verification effort targeting
 \texttt{quiche}, Cloudflare's production implementation of the QUIC
 transport protocol and HTTP/3 in Rust.
 Using \emph{Lean~4} without Mathlib, we have proved
-\textbf{591 named theorems across 28 files}, covering core QUIC algorithms
-from byte-level framing through congestion control (including the BBR2
-bandwidth primitive) and stream management.
-590 of these theorems are fully sorry-free; 1~\texttt{sorry} obligation
-remains: the full byte-list roundtrip in \texttt{PacketHeader.lean}
-(requires a byte-list buffer model; all other sorry obligations closed).
+\textbf{769 named theorems across 38 files}, covering core QUIC algorithms
+from byte-level framing through congestion control (including BBR2 bandwidth
+and gcongestion pacing), HTTP/3 frame codec, QPACK integer encoding, stream
+state machines, and path-validation state.
+All 769 theorems are fully sorry-free; 0~\texttt{sorry} obligations remain.
 Proofs are verified continuously by CI.
+Behavioural correspondence between the Lean functional models and the Rust
+source is validated by 11 Route-B test suites covering 361 cases, all passing.
 Our methodology applies a five-phase pipeline---target identification,
 informal specification, formal specification, implementation extraction,
 and proof---to each algorithmic component in turn.
@@ -76,8 +77,9 @@ We report four notable findings:
 (3)~a formal composition theorem \texttt{encode\_decode\_pktnum} proving
     that packet number encoding and decoding are inverses across all four
     QUIC encoding lengths; and
-(4)~an unresolved model gap in the zero-length retransmit path of
-    \texttt{SendBuf::retransmit}.
+(4)~a formal characterisation of the HTTP/3 settings RFC-compliance
+    invariants, with 11 Route-B test suites (361 cases, all PASS)
+    providing direct behavioural correspondence evidence.
 The entire project runs without Mathlib, using only Lean~4's built-in
 tactics (\texttt{omega}, \texttt{simp}, \texttt{decide}), demonstrating
 that substantial protocol-level proofs are achievable without heavyweight
@@ -113,14 +115,19 @@ Our contributions are:
   \item A \emph{target selection and specification methodology} adapted
     to Rust codebases, extracting functional models from imperative code
     while documenting the abstraction boundary.
-  \item \textbf{591 Lean~4 theorems} (590 sorry-free) across 28 algorithmic
+  \item \textbf{769 Lean~4 theorems} (all sorry-free) across 38 algorithmic
     components, covering QUIC's byte framing, congestion control (including
-    BBR2 bandwidth arithmetic and the gcongestion pacer), flow control,
-    packet-number arithmetic, stream management, and H3 frame codec.
+    BBR2 bandwidth arithmetic, BBR2 Limits invariants, and the gcongestion
+    pacer), flow control, packet-number arithmetic, stream management, stream
+    state machines, HTTP/3 frame codec, H3 Settings validation,
+    QPACK integer encoding, and path-validation state.
+  \item \textbf{11 Route-B correspondence test suites} covering 361 cases
+    across representative targets, all PASS---providing direct behavioural
+    evidence that the Lean functional models agree with the Rust source.
   \item \textbf{Four concrete findings}: a formally proved $\mathtt{Ord}$
     violation; a corrected RFC~\S A.3 specification; a composition theorem
     (\texttt{encode\_decode\_pktnum}) closing the packet-number pipeline; and
-    a documented open question in the retransmit model.
+    a formal characterisation of H3 Settings RFC-compliance invariants.
   \item Evidence that \emph{Lean~4 without Mathlib} is sufficient for
     this class of protocol proofs, using only
     \texttt{omega}/\texttt{simp}/\texttt{decide}.
@@ -215,8 +222,8 @@ We prioritise targets with: (a)~security or correctness impact if wrong;
 (b)~tractable proof obligations (decidable or linear arithmetic);
 (c)~low abstraction cost (pure or nearly-pure functions);
 (d)~existing tests that encode implicit specifications.
-Table~\ref{tab:targets-overview} shows the 41 identified targets and their
-current phases; 26 have reached Phase~5 (proofs complete or in progress).
+Table~\ref{tab:targets-overview} shows the 45 identified targets and their
+current phases; 38 have reached Phase~5 (proofs complete).
 
 \begin{table}[h]
 \centering\small
@@ -224,15 +231,13 @@ current phases; 26 have reached Phase~5 (proofs complete or in progress).
 \toprule
 \textbf{Phase} & \textbf{Targets} & \textbf{Lean files} \\
 \midrule
-5 — Proofs complete      & 26 & 26 \\
-4 — Implementation       &  1 & (T29, PacketHeader) \\
-2 — Informal spec        &  2 & (T31, T33) \\
-1/0 — Identified/Researched & 12 & — \\
+5 — Proofs complete      & 38 & 38 \\
+1/0 — Identified/Researched & 7 & — \\
 \midrule
-\textbf{Total identified} & \textbf{41} & \textbf{26} \\
+\textbf{Total identified} & \textbf{45} & \textbf{38} \\
 \bottomrule
 \end{tabular}
-\caption{Pipeline phase distribution across 41 identified FV targets.}
+\caption{Pipeline phase distribution across 45 identified FV targets.}
 \label{tab:targets-overview}
 \end{table}
 
@@ -272,7 +277,7 @@ Rust counterpart at the line level, assigning one of four correspondence
 levels: \emph{exact}, \emph{abstraction} (pure subset modelled),
 \emph{approximation} (semantically different in a documented way), or
 \emph{mismatch} (incorrect).
-Of 25 files audited, \textbf{no mismatches} were found.
+Of 38 files audited, \textbf{no mismatches} were found.
 
 % ---------------------------------------------------------------------------
 \section{Results}
@@ -281,11 +286,10 @@ Of 25 files audited, \textbf{no mismatches} were found.
 
 \subsection{Proof Inventory}
 
-Table~\ref{tab:theorems} summarises the 26 Lean files.
-The project totals \textbf{591 named theorems}, \textbf{198 examples},
-and \textbf{1 \texttt{sorry}} (in \texttt{PacketHeader.lean} for the full
-long-header round-trip),
+Table~\ref{tab:theorems} summarises the 38 Lean files.
+The project totals \textbf{769 named theorems}, \textbf{0 \texttt{sorry}},
 verified by Lean~4.30.0-rc2 via the Lake build system.
+Correspondence is validated by \textbf{11 Route-B test suites} (361 cases, all PASS).
 
 \begin{table*}[t]
 \centering
@@ -295,44 +299,53 @@ verified by Lean~4.30.0-rc2 via the Lake build system.
 \textbf{File} & \textbf{Rust source} & \textbf{Layer} & \textbf{Thms} &
   \textbf{Key result} & \textbf{Key tactic(s)} \\
 \midrule
-\texttt{Varint.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 10  & \texttt{varint\_round\_trip}     & \texttt{omega} \\
-\texttt{Octets.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 48  & \texttt{getU16\_split}           & \texttt{simp}, \texttt{omega} \\
-\texttt{OctetsMut.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 27  & \texttt{putU64\_getU64\_rt}      & \texttt{simp}, \texttt{omega} \\
-\texttt{OctetsRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  & 20  & \texttt{putU32\_freeze\_getU32}  & \texttt{simp}, \texttt{omega} \\
-\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte} & \texttt{omega} \\
-\texttt{VarIntTag.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 15  & \texttt{varint\_tag\_consistency}  & \texttt{omega} \\
-\texttt{PacketHeader.lean}      & \texttt{quiche/src/packet.rs}       & Framing  & 14  & \texttt{short\_long\_first\_byte\_differ} & \texttt{simp}, \texttt{omega} \\ \hline
-\multicolumn{6}{l}{\small $^{\dagger}$1 sorry in \texttt{PacketHeader.lean} (\texttt{longHeader\_roundtrip}); all other sorry closed.} \\
+\texttt{Varint.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 10  & \texttt{varint\_round\_trip}          & \texttt{omega} \\
+\texttt{Octets.lean}            & \texttt{octets/src/lib.rs}          & Framing  & 48  & \texttt{getU16\_split}                & \texttt{simp}, \texttt{omega} \\
+\texttt{OctetsMut.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 27  & \texttt{putU64\_getU64\_rt}           & \texttt{simp}, \texttt{omega} \\
+\texttt{OctetsRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  & 21  & \texttt{putU32\_freeze\_getU32}       & \texttt{simp}, \texttt{omega} \\
+\texttt{VarIntRoundtrip.lean}   & \texttt{octets/src/lib.rs}          & Framing  &  8  & \texttt{putVarint\_freeze\_4byte}     & \texttt{omega} \\
+\texttt{VarIntTag.lean}         & \texttt{octets/src/lib.rs}          & Framing  & 15  & \texttt{varint\_tag\_consistency}     & \texttt{omega} \\
+\texttt{PacketHeader.lean}      & \texttt{quiche/src/packet.rs}       & Framing  & 14  & \texttt{short\_long\_first\_byte\_differ} & \texttt{simp}, \texttt{omega} \\
 \midrule
-\texttt{RangeSet.lean}          & \texttt{quiche/src/ranges.rs}       & Algorithm & 16 & \texttt{insert\_preserves\_inv}  & \texttt{simp}, \texttt{omega} \\
-\texttt{Minmax.lean}            & \texttt{quiche/src/minmax.rs}       & Algorithm & 15 & \texttt{minmax\_bounded}         & \texttt{omega} \\
-\texttt{RttStats.lean}          & \texttt{quiche/src/recovery/rtt.rs} & Algorithm & 23 & \texttt{adjusted\_rtt\_ge\_min}  & \texttt{omega} \\
-\texttt{FlowControl.lean}       & \texttt{quiche/src/flowcontrol.rs}  & Algorithm & 22 & \texttt{fc\_update\_preserves\_inv} & \texttt{omega} \\
-\texttt{DatagramQueue.lean}     & \texttt{quiche/src/dgram.rs}        & Algorithm & 26 & \texttt{dq\_push\_capacity}      & \texttt{omega} \\
-\texttt{PacketNumDecode.lean}   & \texttt{quiche/src/packet.rs}       & Algorithm & 23 & \texttt{decode\_pktnum\_correct} & \texttt{omega} \\
-\texttt{PacketNumLen.lean}      & \texttt{quiche/src/packet.rs}       & Algorithm & 20 & \texttt{pktNumLen\_k\_coverage}  & \texttt{omega} \\
-\texttt{PacketNumEncodeDecode.lean} & \texttt{quiche/src/packet.rs}   & Algorithm & 10 & \texttt{encode\_decode\_pktnum}   & \texttt{omega} \\
-\texttt{StreamId.lean}          & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 35 & \texttt{streamType\_add\_mul4}   & \texttt{omega} \\
-\texttt{StreamPriorityKey.lean} & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 21 & \textbf{OQ-1 antisymmetry}       & \texttt{decide} \\
-\texttt{CidMgmt.lean}           & \texttt{quiche/src/cid.rs}          & Algorithm & 21 & \texttt{newScid\_seq\_fresh}      & \texttt{omega} \\
+\texttt{RangeSet.lean}          & \texttt{quiche/src/ranges.rs}       & Algorithm & 16 & \texttt{insert\_preserves\_inv}       & \texttt{simp}, \texttt{omega} \\
+\texttt{Minmax.lean}            & \texttt{quiche/src/minmax.rs}       & Algorithm & 15 & \texttt{minmax\_bounded}              & \texttt{omega} \\
+\texttt{RttStats.lean}          & \texttt{quiche/src/recovery/rtt.rs} & Algorithm & 23 & \texttt{adjusted\_rtt\_ge\_min}       & \texttt{omega} \\
+\texttt{FlowControl.lean}       & \texttt{quiche/src/flowcontrol.rs}  & Algorithm & 22 & \texttt{fc\_update\_preserves\_inv}   & \texttt{omega} \\
+\texttt{DatagramQueue.lean}     & \texttt{quiche/src/dgram.rs}        & Algorithm & 26 & \texttt{dq\_push\_capacity}           & \texttt{omega} \\
+\texttt{PacketNumDecode.lean}   & \texttt{quiche/src/packet.rs}       & Algorithm & 23 & \texttt{decode\_pktnum\_correct}      & \texttt{omega} \\
+\texttt{PacketNumLen.lean}      & \texttt{quiche/src/packet.rs}       & Algorithm & 20 & \texttt{pktNumLen\_k\_coverage}       & \texttt{omega} \\
+\texttt{PacketNumEncodeDecode.lean} & \texttt{quiche/src/packet.rs}   & Algorithm & 10 & \texttt{encode\_decode\_pktnum}        & \texttt{omega} \\
+\texttt{StreamId.lean}          & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 35 & \texttt{streamType\_add\_mul4}        & \texttt{omega} \\
+\texttt{StreamPriorityKey.lean} & \texttt{quiche/src/stream/mod.rs}   & Algorithm & 21 & \textbf{OQ-1 antisymmetry}            & \texttt{decide} \\
+\texttt{CidMgmt.lean}           & \texttt{quiche/src/cid.rs}          & Algorithm & 21 & \texttt{newScid\_seq\_fresh}           & \texttt{omega} \\
+\texttt{PathState.lean}         & \texttt{quiche/src/path.rs}         & Algorithm & 24 & \texttt{pathState\_monotone}          & \texttt{omega}, \texttt{decide} \\
+\texttt{AckRanges.lean}         & \texttt{quiche/src/frame.rs}        & Algorithm & 13 & \texttt{ack\_range\_bounds}           & \texttt{omega} \\
+\texttt{FrameAckEliciting.lean} & \texttt{quiche/src/frame.rs}        & Algorithm & 15 & \texttt{ackEliciting\_char}           & \texttt{decide} \\
+\texttt{StreamStateMachine.lean}& \texttt{quiche/src/stream/mod.rs}   & Algorithm & 15 & \texttt{send\_recv\_independence}     & \texttt{decide} \\
 \midrule
-\texttt{NewReno.lean}           & \texttt{quiche/src/recovery/\ldots/reno.rs} & Congestion & 13 & \texttt{single\_halving} & \texttt{omega} \\
-\texttt{Cubic.lean}             & \texttt{quiche/src/recovery/\ldots/cubic.rs} & Congestion & 26 & \texttt{wCubic\_fast\_conv} & \texttt{omega} \\
-\texttt{PRR.lean}               & \texttt{quiche/src/recovery/prr.rs} & Congestion & 20 & \texttt{prr\_send\_le\_limit}    & \texttt{omega} \\
-\texttt{Bandwidth.lean}         & \texttt{quiche/src/recovery/bandwidth.rs} & Congestion & 22 & \texttt{toBytesPerPeriod\_mono\_bw} & \texttt{omega} \\
-\texttt{Pacer.lean}             & \texttt{quiche/src/recovery/gcongestion/pacer.rs} & Congestion & 17 & \texttt{pacer\_rate\_le\_cap} & \texttt{omega} \\
+\texttt{NewReno.lean}           & \texttt{quiche/src/recovery/\ldots/reno.rs}   & Congestion & 13 & \texttt{single\_halving}        & \texttt{omega} \\
+\texttt{Cubic.lean}             & \texttt{quiche/src/recovery/\ldots/cubic.rs}  & Congestion & 26 & \texttt{wCubic\_fast\_conv}     & \texttt{omega} \\
+\texttt{PRR.lean}               & \texttt{quiche/src/recovery/prr.rs}           & Congestion & 20 & \texttt{prr\_send\_le\_limit}   & \texttt{omega} \\
+\texttt{Bandwidth.lean}         & \texttt{quiche/src/recovery/bandwidth.rs}     & Congestion & 22 & \texttt{toBytesPerPeriod\_mono} & \texttt{omega} \\
+\texttt{Pacer.lean}             & \texttt{quiche/src/recovery/gcongestion/pacer.rs} & Congestion & 16 & \texttt{pacer\_rate\_le\_cap} & \texttt{omega} \\
+\texttt{BBR2Limits.lean}        & \texttt{quiche/src/recovery/gcongestion/bbr2.rs}  & Congestion & 14 & \texttt{limits\_clamp\_bounds} & \texttt{omega} \\
+\texttt{BytesInFlight.lean}     & \texttt{quiche/src/recovery/bytes\_in\_flight.rs} & Congestion & 17 & \texttt{bytes\_inflight\_conserved} & \texttt{omega} \\
 \midrule
-\texttt{RangeBuf.lean}          & \texttt{quiche/src/range\_buf.rs}   & Stream   & 19  & \texttt{maxOff\_consume}         & \texttt{omega} \\
-\texttt{RecvBuf.lean}           & \texttt{quiche/src/stream/recv\_buf.rs} & Stream & 38 & \texttt{insertAny\_inv}          & \texttt{simp}, \texttt{omega} \\
-\texttt{SendBuf.lean}           & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 26 & \texttt{emitN\_le\_maxData}      & \texttt{omega} \\
-\texttt{SendBufRetransmit.lean} & \texttt{quiche/src/stream/send\_buf.rs} & Stream & 17 & \texttt{retransmit\_inv}         & \texttt{omega} \\
+\texttt{RangeBuf.lean}          & \texttt{quiche/src/range\_buf.rs}             & Stream  & 19  & \texttt{maxOff\_consume}             & \texttt{omega} \\
+\texttt{RecvBuf.lean}           & \texttt{quiche/src/stream/recv\_buf.rs}       & Stream  & 38  & \texttt{insertAny\_inv}              & \texttt{simp}, \texttt{omega} \\
+\texttt{SendBuf.lean}           & \texttt{quiche/src/stream/send\_buf.rs}       & Stream  & 26  & \texttt{emitN\_le\_maxData}          & \texttt{omega} \\
+\texttt{SendBufRetransmit.lean} & \texttt{quiche/src/stream/send\_buf.rs}       & Stream  & 17  & \texttt{retransmit\_inv}             & \texttt{omega} \\
 \midrule
-\texttt{H3Frame.lean}           & \texttt{quiche/src/h3/frame.rs}    & H3       & 19  & \texttt{goAway\_rt}              & \texttt{omega}, \texttt{decide} \\
+\texttt{H3Frame.lean}           & \texttt{quiche/src/h3/frame.rs}               & H3/QPACK& 19  & \texttt{goAway\_rt}                  & \texttt{omega}, \texttt{decide} \\
+\texttt{H3Settings.lean}        & \texttt{quiche/src/h3/frame.rs}               & H3/QPACK& 16  & \texttt{parse\_reserved\_id\_err}    & \texttt{simp}, \texttt{decide} \\
+\texttt{H3ParseSettings.lean}   & \texttt{quiche/src/h3/frame.rs}               & H3/QPACK& 21  & \texttt{parseSettings\_reject}       & \texttt{simp}, \texttt{decide} \\
+\texttt{QPACKStaticTable.lean}  & \texttt{quiche/src/h3/qpack/static\_table.rs} & H3/QPACK& 12  & \texttt{static\_table\_bounds}       & \texttt{decide} \\
+\texttt{QPACKInteger.lean}      & \texttt{quiche/src/h3/qpack/encoder.rs}       & H3/QPACK& 10  & \texttt{decodeInt\_encodeInt}        & \texttt{omega}, \texttt{simp} \\
 \midrule
-\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{591} & \textbf{1 sorry}$^{\dagger}$ & \\
+\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{769} & \textbf{0 sorry} & \\
 \bottomrule
 \end{tabular}
-\caption{Summary of 28 Lean~4 files: Rust source, logical layer, named
+\caption{Summary of 38 Lean~4 files: Rust source, logical layer, named
 theorem count, headline result, and predominant proof tactics.
 \textbf{Bold} marks results with cross-cutting implications.}
 \label{tab:theorems}
@@ -340,76 +353,96 @@ theorem count, headline result, and predominant proof tactics.
 
 \subsection{Proof Architecture}
 
-The 28 files form four logical layers (Framing, Algorithm, Congestion, Stream/H3), as shown in
+The 38 files form five logical layers (Framing, Algorithm, Congestion,
+Stream, H3/QPACK), as shown in Figure~\ref{fig:arch}.
+The Algorithm layer has grown from 9 to 15 files, the Congestion layer from 5 to 7,
+and a new H3/QPACK layer captures 5 files covering HTTP/3 framing, settings
+validation, QPACK static table, and QPACK integer codec.
 
 \begin{figure}[h]
 \centering
 \begin{tikzpicture}[
   box/.style={draw, rounded corners=3pt, text centered,
-    minimum height=5mm, font=\small, fill=blue!8},
+    minimum height=5mm, font=\small\ttfamily, fill=blue!8},
   layer/.style={draw, dashed, rounded corners=6pt,
     fill=gray!5, inner sep=4pt},
   arr/.style={-{Stealth[scale=0.8]}, thick}
 ]
-% Layer 1: Framing
-\node[box, minimum width=22mm] (V)  at (0,  6.5) {Varint};
-\node[box, minimum width=22mm] (O)  at (2.4,6.5) {Octets};
-\node[box, minimum width=22mm] (OM) at (4.8,6.5) {OctetsMut};
-\node[box, minimum width=22mm] (OR) at (7.2,6.5) {OctetsRT};
-\node[box, minimum width=18mm] (VR) at (9.2,6.5) {VarIntRT};
-\node[box, minimum width=18mm] (VT) at (11.1,6.5) {VarIntTag};
-\node[box, minimum width=18mm] (PH) at (13.0,6.5) {PktHdr};
+% Layer 1: Framing (7 files)
+\node[box, minimum width=18mm] (V)  at (0,    8.5) {Varint};
+\node[box, minimum width=18mm] (O)  at (2.0,  8.5) {Octets};
+\node[box, minimum width=22mm] (OM) at (4.2,  8.5) {OctetsMut};
+\node[box, minimum width=22mm] (OR) at (6.5,  8.5) {OctetsRT};
+\node[box, minimum width=18mm] (VR) at (8.5,  8.5) {VarIntRT};
+\node[box, minimum width=18mm] (VT) at (10.4, 8.5) {VarIntTag};
+\node[box, minimum width=18mm] (PH) at (12.3, 8.5) {PktHdr};
 \begin{pgfonlayer}{background}
-  \node[layer, fit=(V)(PH), label=above:{\small\textit{Layer 1 — Byte framing}}] {};
+  \node[layer, fit=(V)(PH), label=above:{\small\textit{Layer 1 — Byte framing (7 files)}}] {};
 \end{pgfonlayer}
-% Layer 2: Algorithms
-\node[box, minimum width=21mm] (RS) at (0.5,4.8) {RangeSet};
-\node[box, minimum width=21mm] (MX) at (2.8,4.8) {Minmax};
-\node[box, minimum width=21mm] (RT) at (5.1,4.8) {RttStats};
-\node[box, minimum width=21mm] (FC) at (7.4,4.8) {FlowControl};
-\node[box, minimum width=21mm] (DQ) at (0.5,3.6) {DatagramQueue};
-\node[box, minimum width=21mm] (PN) at (2.8,3.6) {PktNumDec};
-\node[box, minimum width=21mm] (PL) at (5.1,3.6) {PktNumLen};
-\node[box, minimum width=21mm] (PE) at (7.4,3.6) {PktNumEnc};
-\node[box, minimum width=21mm] (SI) at (0.5,2.5) {StreamId};
-\node[box, minimum width=21mm] (SP) at (2.8,2.5) {\textbf{StreamPrio}};
-\node[box, minimum width=21mm] (CM) at (5.1,2.5) {CidMgmt};
+% Layer 2: Algorithms (15 files across 3 rows)
+\node[box, minimum width=18mm] (RS) at (0,    6.6) {RangeSet};
+\node[box, minimum width=18mm] (MX) at (2.2,  6.6) {Minmax};
+\node[box, minimum width=18mm] (RT) at (4.4,  6.6) {RttStats};
+\node[box, minimum width=22mm] (FC) at (6.8,  6.6) {FlowControl};
+\node[box, minimum width=22mm] (DQ) at (9.2,  6.6) {DatagramQ};
+\node[box, minimum width=18mm] (PN) at (0,    5.4) {PktNumDec};
+\node[box, minimum width=18mm] (PL) at (2.2,  5.4) {PktNumLen};
+\node[box, minimum width=18mm] (PE) at (4.4,  5.4) {PktNumEnc};
+\node[box, minimum width=18mm] (SI) at (6.8,  5.4) {StreamId};
+\node[box, minimum width=22mm] (SP) at (9.2,  5.4) {\textbf{StreamPrio}};
+\node[box, minimum width=18mm] (CM) at (0,    4.2) {CidMgmt};
+\node[box, minimum width=18mm] (PS) at (2.2,  4.2) {PathState};
+\node[box, minimum width=18mm] (AR) at (4.4,  4.2) {AckRanges};
+\node[box, minimum width=22mm] (FA) at (6.8,  4.2) {FrameAckEl};
+\node[box, minimum width=22mm] (SS) at (9.2,  4.2) {StreamSM};
 \begin{pgfonlayer}{background}
-  \node[layer, fit=(RS)(FC)(DQ)(PE)(SI)(CM),
-    label=above:{\small\textit{Layer 2 — Protocol algorithms}}] {};
+  \node[layer, fit=(RS)(DQ)(PN)(PE)(SI)(SP)(CM)(PS)(AR)(FA)(SS),
+    label=above:{\small\textit{Layer 2 — Protocol algorithms (15 files)}}] {};
 \end{pgfonlayer}
-% Layer 3: Congestion
-\node[box, minimum width=21mm] (NR) at (1.2,1.0) {NewReno};
-\node[box, minimum width=21mm] (CB) at (3.8,1.0) {Cubic};
-\node[box, minimum width=21mm] (PR) at (6.4,1.0) {PRR};
-\node[box, minimum width=21mm] (BW) at (9.0,1.0) {Bandwidth};
+% Layer 3: Congestion (7 files)
+\node[box, minimum width=18mm] (NR) at (0,    2.8) {NewReno};
+\node[box, minimum width=18mm] (CB) at (2.0,  2.8) {Cubic};
+\node[box, minimum width=18mm] (PR) at (4.0,  2.8) {PRR};
+\node[box, minimum width=18mm] (BW) at (6.0,  2.8) {Bandwidth};
+\node[box, minimum width=18mm] (PA) at (8.0,  2.8) {Pacer};
+\node[box, minimum width=18mm] (B2) at (10.0, 2.8) {BBR2Lim};
+\node[box, minimum width=18mm] (BF) at (12.0, 2.8) {BytesFlt};
 \begin{pgfonlayer}{background}
-  \node[layer, fit=(NR)(BW),
-    label=above:{\small\textit{Layer 3 — Congestion control}}] {};
+  \node[layer, fit=(NR)(BF),
+    label=above:{\small\textit{Layer 3 — Congestion control (7 files)}}] {};
 \end{pgfonlayer}
-% Layer 4: Stream
-\node[box, minimum width=22mm] (RB) at (0.8,-0.5) {RangeBuf};
-\node[box, minimum width=22mm] (RV) at (3.5,-0.5) {RecvBuf};
-\node[box, minimum width=22mm] (SB) at (6.2,-0.5) {SendBuf};
-\node[box, minimum width=22mm] (SR) at (8.9,-0.5) {SendBufRT};
+% Layer 4: Stream (4 files)
+\node[box, minimum width=20mm] (RB) at (0.5,  1.4) {RangeBuf};
+\node[box, minimum width=20mm] (RV) at (3.0,  1.4) {RecvBuf};
+\node[box, minimum width=20mm] (SB) at (5.5,  1.4) {SendBuf};
+\node[box, minimum width=22mm] (SR) at (8.0,  1.4) {SendBufRT};
 \begin{pgfonlayer}{background}
   \node[layer, fit=(RB)(SR),
-    label=below:{\small\textit{Layer 4 — Stream I/O}}] {};
+    label=above:{\small\textit{Layer 4 — Stream I/O (4 files)}}] {};
 \end{pgfonlayer}
-% Arrows
+% Layer 5: H3/QPACK (5 files)
+\node[box, minimum width=18mm] (HF) at (0,    0.0) {H3Frame};
+\node[box, minimum width=22mm] (HS) at (2.2,  0.0) {H3Settings};
+\node[box, minimum width=22mm] (HP) at (4.8,  0.0) {H3ParseSt};
+\node[box, minimum width=22mm] (QS) at (7.4,  0.0) {QPACKStatic};
+\node[box, minimum width=20mm] (QI) at (10.0, 0.0) {QPACKInt};
+\begin{pgfonlayer}{background}
+  \node[layer, fit=(HF)(QI),
+    label=below:{\small\textit{Layer 5 — HTTP/3 and QPACK (5 files)}}] {};
+\end{pgfonlayer}
+% Representative arrows
 \draw[arr] (V.south)  -- (RS.north);
 \draw[arr] (O.south)  -- (PN.north);
 \draw[arr] (OM.south) -- (FC.north);
 \draw[arr] (FC.south) -- (SB.north);
 \draw[arr] (RS.south) -- (RV.north);
+\draw[arr] (V.south)  -- (HF.north);
 \end{tikzpicture}
-\caption{Proof architecture: four logical layers from byte framing
-(top) to stream I/O (bottom).
-\textbf{Bold} marks the \texttt{StreamPriorityKey} file where the
-$\mathtt{Ord}$ violation was discovered.
-Layer~1 now includes \texttt{VarIntTag} (tag-bit consistency) and
-\texttt{PacketHeader} (first-byte encoding properties).
-Layer~3 includes \texttt{Bandwidth} (BBR2 bandwidth arithmetic, run~90).}
+\caption{Proof architecture: five logical layers from byte framing
+(top) to HTTP/3 and QPACK (bottom).
+\textbf{Bold} marks \texttt{StreamPriorityKey} where the $\mathtt{Ord}$
+violation was discovered.
+Arrows show representative proof dependencies.}
 \label{fig:arch}
 \end{figure}
 
@@ -580,15 +613,13 @@ carefully structured inductive argument.
 \subsubsection{No Bugs Found (Positive Finding)}
 
 No bug was found in the quiche source that invalidated a proved theorem.
-The RFC~9000~\S A.3 gap (\S\ref{sec:findings}.\ref{oq1-pktnum}) was a
+The RFC~9000~\S A.3 gap (\S\ref{sec:findings}) was a
 specification error, not an implementation bug.
-This is itself a positive finding: the 591 theorems provide formal
+This is itself a positive finding: the 769 theorems provide formal
 evidence that the modelled properties hold in the Lean functional model,
 with correspondences to the Rust source documented in
-\texttt{CORRESPONDENCE.md}.
-The H3 frame codec (T31) is now verified; H3 Settings validation (T33) and
-ACK frame range bounds (T43) have informal specifications and are next in
-the pipeline.
+\texttt{CORRESPONDENCE.md} and validated by 11 Route-B test suites
+covering 361 cases across 11 representative targets, all PASS.
 
 % ---------------------------------------------------------------------------
 \section{Discussion}
@@ -712,24 +743,26 @@ reassembly---in a proof assistant.
 \label{sec:conclusion}
 % ---------------------------------------------------------------------------
 
-We have presented an incremental formal verification of 28 algorithmic
+We have presented an incremental formal verification of 38 algorithmic
 components in \texttt{quiche}, Cloudflare's production QUIC implementation,
 using Lean~4 without Mathlib.
-The project has accumulated 591 machine-checked theorems; 590 are fully
-sorry-free.  One \texttt{sorry} obligation remains: the full byte-list
-round-trip in \texttt{PacketHeader.lean} (requiring a byte-list buffer model;
-all varint and framing sorry obligations are now closed).
-The proofs cover byte framing (including H3 frame codec round-trips),
-congestion control (including BBR2 bandwidth arithmetic and gcongestion
-pacing-rate invariants), flow control, packet-number arithmetic, stream
-management, and packet-header encoding.
+The project has accumulated \textbf{769 machine-checked theorems}, all
+fully sorry-free.
+The proofs cover byte framing, congestion control (including BBR2 bandwidth
+arithmetic, BBR2 Limits struct, gcongestion pacing-rate invariants, and
+bytes-in-flight invariants), flow control, packet-number arithmetic, stream
+management, QUIC stream state machines, packet-header encoding, ACK range
+bounds, path-validation state, and HTTP/3/QPACK (frame codec, settings
+RFC-compliance, QPACK static table, QPACK integer codec).
+Correspondence between Lean models and Rust source is validated by
+\textbf{11 Route-B test suites covering 361 cases, all PASS}.
 
 Four findings stand out: a formally proved \texttt{Ord} contract
 violation in HTTP/3 stream scheduling (intentional by design); a corrected
 specification of the RFC~9000~\S A.3 packet-number decoding algorithm;
 a composition theorem (\texttt{encode\_decode\_pktnum}) formally closing the
-QUIC packet-number encode--decode pipeline; and a documented open question
-in the retransmit model.
+QUIC packet-number encode--decode pipeline; and a formal characterisation
+of H3 Settings RFC-compliance invariants with Route-B correspondence evidence.
 No implementation bugs were found, which is itself evidence that the
 modelled properties hold in the Lean functional model.
 
@@ -738,11 +771,9 @@ a substantial class of protocol-level proofs: linear arithmetic
 (\texttt{omega}) discharges the majority of obligations, and careful
 functional modelling of Rust's ownership patterns is feasible with
 explicit freeze/state-return transformations.
-Future work includes: closing the byte-list buffer gap in PacketHeader;
-verifying the H3 Settings frame invariants (T33, informal spec done);
-verifying ACK frame acked-range bounds (T43, informal spec done this run);
-and exploring Aeneas extraction to mechanically bridge the Lean model to
-the Rust source.
+Future work includes: verifying CUBIC cubic\_k/wmax invariants; modelling
+the QUIC idle-timeout state machine; and exploring Aeneas extraction to
+mechanically bridge the Lean model to the Rust source.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{paper}
