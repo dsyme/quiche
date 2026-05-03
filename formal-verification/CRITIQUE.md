@@ -4,12 +4,12 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-02 17:30 UTC
-- **Commit**: `131cdbb479af6847d01d167d1f2ae3dffd4e6281`
-- **Run**: run 124 — Route-B tests for T42 FrameAckEliciting (33/33 PASS);
-  prior runs 122–123 added Route-B tests for QPACKInteger (25/25 PASS) and
-  StreamStateMachine (46/46 PASS), and updated CORRESPONDENCE.md and REPORT.md.
-  Full suite: 38 Lean files, ~770 theorems, 0 sorry; 10 Route-B test targets.
+- **Date**: 2026-05-03 17:45 UTC
+- **Commit**: `645ff715` (merged runs 124–126)
+- **Run**: run 127 — Task 2: informal spec for T46 (idle_timeout RFC 9000
+  §10.1.1); Task 7: critique update. Route-B test target count raised to 11
+  (T33 H3Settings 43/43 PASS run 125). Paper updated run 126 to include T46/T47.
+  Full suite: 38 Lean files, ~769 theorems, 0 sorry; 11 Route-B test targets.
 
 ---
 
@@ -1291,15 +1291,70 @@ if the Rust source ever adds a new frame kind or changes the non-eliciting list,
 the Lean proofs and Route-B tests will both immediately fail and catch the
 inconsistency.
 
-### Next Priorities (run 124 → onwards)
+---
 
-1. **Paper update** (Task 11): paper still reflects 35 files / ~655 theorems;
-   needs updating to 38 files / ~770 theorems with new layers (H3, QPACK).
-2. **Route-B for H3Settings / H3ParseSettings**: these targets have Lean specs
-   but no Route-B tests yet. H3ParseSettings is particularly valuable (settings
-   parsing is interoperability-critical).
-3. **T46 CUBIC cubic_k / cubic_wmax invariants**: arithmetic-heavy, ~40 lines,
-   `omega`-provable — a natural next Lean file.
-4. **Dynamic QPACK table**: the static-table proof is a sanity check; the
-   dynamic table (insert/evict invariants) is the higher-value target.
+## Run 125–127 Additions — Critique
+
+### Route-B Tests: H3Settings (T33, run 125) — 43/43 PASS
+
+Route-B tests for `H3Settings.lean` confirm the Lean model's
+`isValidSettingsFrame`, `normalise`, and constituent predicate functions agree
+with the Rust `parse_settings_frame` / `Settings` struct logic on 43 cases
+(boundary values, zero/max, invalid QUIC-reserved identifiers, duplicate
+detection). 
+
+**Assessment**: H3 Settings parsing is a high-value target — incorrect handling
+of Reserved-for-QUIC IDs (0x0, 0x2, 0x3, 0x4, 0x5) would cause an endpoint
+to silently accept malformed HTTP/3 sessions. The Route-B tests directly check
+this boundary. Correspondence confidence: high.
+
+### Research: T46 — `idle_timeout()` RFC 9000 §10.1.1 (run 126/127)
+
+`idle_timeout()` negotiates the effective QUIC idle timeout from two `u64`
+transport parameters and the path PTO estimate. The informal spec
+(`specs/idle_timeout_informal.md`) now documents all eight cases, the RFC basis,
+and the PTO safety clamping intent.
+
+**Utility assessment**: HIGH. The negotiation logic is a critical safety
+property: an incorrect idle-timeout negotiation can cause premature connection
+termination (interoperability failure) or prevent connections from expiring
+(resource leak). The 12 expected theorems cover the zero/nonzero/PTO boundary
+matrix and are all `omega`-provable. Open question OQ-T46-1 flags a latent
+correctness issue: if `get_active()` fails on an established connection, the PTO
+bound silently becomes zero — deserving deeper investigation.
+
+### Research: T47 — PMTUD `probe_size` binary search (run 126)
+
+`pmtud.rs` implements binary-search PMTUD probe scheduling. The binary search
+invariant (`lo <= probe_size <= hi` throughout) is a natural Phase 3 target,
+estimated at ~10 theorems, `omega`+`cases`. 
+
+**Utility assessment**: MEDIUM. PMTUD errors manifest as path MTU overshoot or
+infinite probe loops. The binary-search invariant proof would rule out invalid
+probe sizes reaching the wire.
+
+### Paper Assessment (run 125–126)
+
+The paper (`formal-verification/paper/paper.tex`) was updated in run 126 to
+mention T46 and T47 in the Future Work section. Current paper state:
+- Reports ~770 theorems across 38 files (accurate as of run 124).
+- Notes 11 Route-B targets with 361/361 cases (accurate after run 125).
+- Future work section describes T46 and T47.
+- **Gap**: paper does not yet include the H3Settings Route-B confirmation (run
+  125) or the FrameAckEliciting Route-B (run 124) in the results table.
+  These should be added in the next Task 11 run.
+- **Gap**: paper still says "10 Route-B targets"; should be "11 Route-B targets,
+  361+43=404 cases".
+
+### Next Priorities (run 127 → onwards)
+
+1. **T46: write `FVSquad/IdleTimeout.lean`** — informal spec now done
+   (run 127); ~12 `omega` theorems; highest priority new Lean file.
+2. **T47: write `FVSquad/Pmtud.lean`** — binary-search invariants; ~10 theorems.
+3. **Route-B for H3ParseSettings (T35)**: the last H3 target without
+   correspondence tests; settings parsing is interoperability-critical.
+4. **Paper update**: add run 124–125 Route-B results to results section;
+   update Route-B count to 11 targets, 404 cases.
+5. **OQ-T46-1 investigation**: can `get_active()` fail on an established
+   connection? If yes, this may be a latent bug worth an issue.
 
