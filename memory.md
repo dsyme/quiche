@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-03 (run 126)
+Last updated: 2026-05-03 (run 127)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 38 modules
@@ -27,10 +27,10 @@ FVSquad.lean: import manifest for all 38 modules
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
-| 46 | idle_timeout() negotiation RFC 9000 §10.1.1 | quiche/src/lib.rs:8757 | 1 | Research done run126; HIGH priority; ~12 thms, all omega |
+| 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 2 | Informal spec done run127; HIGH priority; ~12 thms, all omega |
 | 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 1 | Research done run126; MEDIUM priority; ~10 thms, omega+cases |
 
-## MILESTONE: 38 Lean files, ~769 theorems, 0 sorry; Route-B 11 targets, 361/361 PASS
+## MILESTONE: 38 Lean files, ~769 theorems, 0 sorry; Route-B 11 targets, 361+43=404 PASS
 
 ## Lean File Registry
 
@@ -92,42 +92,37 @@ FVSquad.lean: import manifest for all 38 modules
 | T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
 | T33 (H3Settings) | tests/h3_settings/ | 125 | 43 | 43/43 PASS |
 
-## CORRESPONDENCE.md Status
-
-- All 38 Lean files have correspondence entries as of run 122.
-- No mismatches identified. No sorry in any Lean file.
-- T33 Route-B added run125.
-
-## Paper Status
-
-- formal-verification/paper/paper.tex: updated run126 (future work: T46+T47 described)
-- paper.pdf: NOT compiled (LaTeX unavailable in sandbox)
-- Paper last reflected: run 126 state
-
-## CI Status
-
-- lean-ci.yml: exists, healthy, path-triggered on formal-verification/lean/**
-
 ## Open PRs (lean-squad label)
 
-- PR run125 (branch lean-squad-run125-...): paper + T33 Route-B — PENDING MERGE
-- PR run124 (branch lean-squad-run124-...): CRITIQUE + T42 Route-B — PENDING MERGE
-- PR run126 (branch lean-squad-run126-25275954529-research-paper): Task 1+11 — new this run
+- PR run127 (branch lean-squad-run127-25285919024-idle-timeout-critique):
+  Task 2 — T46 idle_timeout informal spec
+  Task 7 — CRITIQUE.md update (runs 125-127 assessment)
 
 ## Status Issue
 
-Issue #4 (open) — update to run126 pending
+Issue #4 (open) — updated run127
 
 ## Key Findings
 
 - OQ-T43-2: parse_ack_frame block_count unbounded varint (potential DoS)
 - OQ-STREAM-1: recv.is_fin and recv.is_shutdown may coexist (verify)
 - OQ-QPACKINT-3: decode_int uses BufferTooShort for overflow (wrong error code?)
-- OQ-1 (run49): StreamPriorityKey antisymmetry — intentional
+- OQ-T46-1: get_active() failure on established connection silently disables PTO bound
+- OQ-1 (run49): StreamPriorityKey antisymmetry -- intentional
+
+## CI Status
+
+- lean-ci.yml: exists, healthy, path-triggered on formal-verification/lean/**
+
+## Paper Status
+
+- formal-verification/paper/paper.tex: updated run126 (future work: T46+T47 described)
+- paper.pdf: NOT compiled (LaTeX unavailable in sandbox)
+- Gap: Route-B count in paper should be 11 targets, 404 cases (paper says 10/361)
 
 ## Next Targets
 
-- T46: idle_timeout() RFC 9000 §10.1.1 — write IdleTimeout.lean (Task 3+5)
-- T47: PMTUD binary search — write Pmtud.lean (Task 3+5)
-- Route-B for T35 H3ParseSettings — remaining H3 target without tests
-- Paper: compile PDF when LaTeX available (CI or local)
+1. T46: write FVSquad/IdleTimeout.lean (informal spec done run127; ~12 omega thms)
+2. T47: write FVSquad/Pmtud.lean (binary-search invariants; ~10 thms)
+3. Route-B for T35 H3ParseSettings
+4. Paper update: Route-B count 10->11, 361->404 cases
