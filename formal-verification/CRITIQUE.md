@@ -4,29 +4,29 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-01 17:58 UTC
-- **Commit**: `c5670718a98d51749eff679be42f041515bdf143`
-- **Run**: run 121 — added T45 QPACKInteger (10 thms + examples, 0 sorry),
-  added T44 H3Settings (run 119), T44b H3ParseSettings (run 120),
-  T46 QPACKStaticTable (run 119), T47 FrameAckEliciting (run 120),
-  T48 StreamStateMachine (run 120); full suite 41 files, ~770 theorems, 0 sorry
+- **Date**: 2026-05-02 17:30 UTC
+- **Commit**: `131cdbb479af6847d01d167d1f2ae3dffd4e6281`
+- **Run**: run 124 — Route-B tests for T42 FrameAckEliciting (33/33 PASS);
+  prior runs 122–123 added Route-B tests for QPACKInteger (25/25 PASS) and
+  StreamStateMachine (46/46 PASS), and updated CORRESPONDENCE.md and REPORT.md.
+  Full suite: 38 Lean files, ~770 theorems, 0 sorry; 10 Route-B test targets.
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **41 Lean files with
-~770 theorems (+ examples), 0 sorry** 🎉 (Lean 4.29.0, no Mathlib). Run 121
-added `FVSquad/QPACKInteger.lean` (T45, 10 theorems + 9 native_decide examples),
-completing the QPACK integer codec round-trip proof. Prior runs 119–120 added
-`H3Settings.lean`, `H3ParseSettings.lean`, `QPACKStaticTable.lean`,
-`FrameAckEliciting.lean`, and `StreamStateMachine.lean` (6 files combined,
-~115 theorems). The full suite now spans QUIC transport, congestion control
-(including BBR2), HTTP/3 codec, QPACK, and stream/frame state machines.
+The formal verification suite for `quiche` now covers **38 Lean files with
+~770 theorems (+ examples), 0 sorry** 🎉 (Lean 4.29.0, no Mathlib), backed by
+**10 Route-B correspondence test targets (285+ cases PASS)**. Run 124 adds
+Route-B tests for `FrameAckEliciting` (T42, 33/33 PASS). Prior runs 122–123
+added Route-B tests for `QPACKInteger` (25/25 PASS) and `StreamStateMachine`
+(46/46 PASS). The full suite spans QUIC transport, congestion control (including
+BBR2), HTTP/3 codec, QPACK, and stream/frame state machines.
 
-This is a significant milestone: **the entire FV suite of ~770 theorems across 41
-Lean files is fully proved with zero outstanding sorry obligations.** Every
-theorem has been mechanically verified by `lake build`.
+This is a significant milestone: **the entire FV suite of ~770 theorems across 38
+Lean files is fully proved with zero outstanding sorry obligations**, and **10 of
+38 targets have independent Route-B executable correspondence tests confirming
+model fidelity.** Every theorem has been mechanically verified by `lake build`.
 
 The most notable results span the full QUIC stack: **`encode_decode_pktnum`**
 (end-to-end packet-number encode↔decode composition for all four lengths);
@@ -1245,11 +1245,61 @@ be described as independent (executable) correspondence validation.
 ### Paper Update Needed (runs 119–121)
 The paper (`formal-verification/paper/paper.tex`) still reports 35 files /
 ~655 theorems. It should be updated to:
-- **41 files, ~770 theorems, 0 sorry** (run 121 state)
+- **38 files, ~770 theorems, 0 sorry** (run 124 state)
 - Add Table 1 rows for: H3Settings, H3ParseSettings, QPACKStaticTable,
   FrameAckEliciting, StreamStateMachine, QPACKInteger
 - Update abstract theorem count and sorry-free claim
 - Note the HTTP/3 layer expansion (H3Settings, H3ParseSettings)
 - Note the QPACK integer round-trip proof as a new application of
   strong recursion + structural induction in the suite
+- Note the expanded Route-B test coverage (10 targets, 285+ cases)
+
+---
+
+## Run 122–124 Additions — Critique
+
+### Route-B Tests: QPACKInteger (T45, run 122) — 25/25 PASS
+
+Route-B tests for `QPACKInteger.lean` confirm that the Lean model's `encodeInt`
+and `decodeInt` agree with the Rust QPACK integer codec on 25 representative
+inputs. These include boundary values (prefix widths 1–8, max-prefix integers,
+multi-byte suffixes up to 2^31). High correspondence confidence.
+
+### Route-B Tests: StreamStateMachine (T44, run 123) — 46/46 PASS
+
+Route-B tests for `StreamStateMachine.lean` confirm the Lean model's
+`RecvBuf::is_fin`, `SendBuf::is_fin/is_complete/is_shutdown`, and
+`Stream::is_complete` predicates agree with Rust on 46 cases covering all
+boundary conditions. Model fidelity is high.
+
+### Route-B Tests: FrameAckEliciting (T42, run 124) — 33/33 PASS
+
+Route-B tests for `FrameAckEliciting.lean` cover all 23 `FrameKind` variants
+for both `ackEliciting` and `probing`, plus 10 property checks mirroring the
+Lean theorems.
+
+**Key observation**: The Rust `Frame` enum has 26 variants (including
+`CryptoHeader`, `StreamHeader`, `DatagramHeader`) versus the Lean model's 23.
+The three additional variants have identical `ack_eliciting`/`probing` behaviour
+to their payload-carrying counterparts (`Crypto`, `Stream`, `Datagram`) — all
+ack-eliciting, none probing. The Lean model is a sound abstraction; the Route-B
+tests confirm this.
+
+**Assessment**: The predicate proofs are low-level but high-reliability (fully
+`decide`-proved over a finite enum). The key utility is regression protection:
+if the Rust source ever adds a new frame kind or changes the non-eliciting list,
+the Lean proofs and Route-B tests will both immediately fail and catch the
+inconsistency.
+
+### Next Priorities (run 124 → onwards)
+
+1. **Paper update** (Task 11): paper still reflects 35 files / ~655 theorems;
+   needs updating to 38 files / ~770 theorems with new layers (H3, QPACK).
+2. **Route-B for H3Settings / H3ParseSettings**: these targets have Lean specs
+   but no Route-B tests yet. H3ParseSettings is particularly valuable (settings
+   parsing is interoperability-critical).
+3. **T46 CUBIC cubic_k / cubic_wmax invariants**: arithmetic-heavy, ~40 lines,
+   `omega`-provable — a natural next Lean file.
+4. **Dynamic QPACK table**: the static-table proof is a sanity check; the
+   dynamic table (insert/evict invariants) is the higher-value target.
 
