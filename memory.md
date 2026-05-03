@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-03 (run 125)
+Last updated: 2026-05-03 (run 126)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 38 modules
@@ -27,6 +27,8 @@ FVSquad.lean: import manifest for all 38 modules
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
+| 46 | idle_timeout() negotiation RFC 9000 §10.1.1 | quiche/src/lib.rs:8757 | 1 | Research done run126; HIGH priority; ~12 thms, all omega |
+| 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 1 | Research done run126; MEDIUM priority; ~10 thms, omega+cases |
 
 ## MILESTONE: 38 Lean files, ~769 theorems, 0 sorry; Route-B 11 targets, 361/361 PASS
 
@@ -98,9 +100,9 @@ FVSquad.lean: import manifest for all 38 modules
 
 ## Paper Status
 
-- formal-verification/paper/paper.tex: updated run125 (769 thms, 38 files, 0 sorry, 11 Route-B suites)
-- paper.pdf: NOT compiled (LaTeX unavailable in sandbox — no root for apt-get)
-- Paper last reflected: run 125 state
+- formal-verification/paper/paper.tex: updated run126 (future work: T46+T47 described)
+- paper.pdf: NOT compiled (LaTeX unavailable in sandbox)
+- Paper last reflected: run 126 state
 
 ## CI Status
 
@@ -108,13 +110,13 @@ FVSquad.lean: import manifest for all 38 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run125 (branch lean-squad-run125-25269897487-paper-h3settings-route-b):
-  Task 11 — paper.tex updated (769 thms, 38 files, 0 sorry, 5 layers)
-  Task 8 — Route-B tests for T33 H3Settings (43/43 PASS)
+- PR run125 (branch lean-squad-run125-...): paper + T33 Route-B — PENDING MERGE
+- PR run124 (branch lean-squad-run124-...): CRITIQUE + T42 Route-B — PENDING MERGE
+- PR run126 (branch lean-squad-run126-25275954529-research-paper): Task 1+11 — new this run
 
 ## Status Issue
 
-Issue #4 (open) — update to run125 pending
+Issue #4 (open) — update to run126 pending
 
 ## Key Findings
 
@@ -125,8 +127,7 @@ Issue #4 (open) — update to run125 pending
 
 ## Next Targets
 
-New Lean file candidates:
-- T46: CUBIC cubic_k / cubic_wmax invariants (gcongestion/cubic.rs) ~40 lines, omega
-- T47: Connection idle timeout model (quiche/src/lib.rs) - state machine
-- Route-B for H3ParseSettings (T35) — remaining H3 target without tests
+- T46: idle_timeout() RFC 9000 §10.1.1 — write IdleTimeout.lean (Task 3+5)
+- T47: PMTUD binary search — write Pmtud.lean (Task 3+5)
+- Route-B for T35 H3ParseSettings — remaining H3 target without tests
 - Paper: compile PDF when LaTeX available (CI or local)
