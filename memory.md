@@ -1,7 +1,7 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-02 (run 124)
-Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file)
+Last updated: 2026-05-03 (run 125)
+Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 38 modules
 
@@ -16,7 +16,7 @@ FVSquad.lean: import manifest for all 38 modules
 | 30 | Varint 2-bit tag consistency | octets/src/lib.rs | 5 | Done run85 (15 thms, 0 sorry) |
 | 31 | H3 frame type codec round-trip | quiche/src/h3/frame.rs | 5 | Done run99/100 (19 thms, 0 sorry); Route-B 25/25 PASS run103 |
 | 32 | BBR2 Limits struct invariants | quiche/src/recovery/gcongestion/bbr2.rs | 5 | Done run113 (14 thms, 0 sorry) |
-| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run114 (20 thms, 0 sorry) |
+| 33 | H3 Settings frame invariants | quiche/src/h3/frame.rs | 5 | Done run114 (16 thms, 0 sorry); Route-B 43/43 PASS run125 |
 | 34 | QPACK static table lookup | quiche/src/h3/qpack/static_table.rs | 5 | Done run119 (12 thms, 0 sorry) |
 | 35 | parse_settings_frame RFC compliance | quiche/src/h3/frame.rs | 5 | Done run116 (21 thms, 0 sorry) |
 | 36 | Bandwidth arithmetic invariants | quiche/src/recovery/bandwidth.rs | 5 | Done run90 (22 thms, 0 sorry); Route-B 25/25 PASS |
@@ -28,7 +28,7 @@ FVSquad.lean: import manifest for all 38 modules
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
 
-## MILESTONE: 38 Lean files, ~770 theorems, 0 sorry; Route-B 10 targets, 318/318 PASS
+## MILESTONE: 38 Lean files, ~769 theorems, 0 sorry; Route-B 11 targets, 361/361 PASS
 
 ## Lean File Registry
 
@@ -66,13 +66,13 @@ FVSquad.lean: import manifest for all 38 modules
 | FVSquad/BytesInFlight.lean | 17 | Done run107 |
 | FVSquad/PathState.lean | 24 | Done run109 |
 | FVSquad/BBR2Limits.lean | 14 | Done run113 |
-| FVSquad/H3Settings.lean | 20 | Done run114 |
+| FVSquad/H3Settings.lean | 16 | Done run114 |
 | FVSquad/H3ParseSettings.lean | 21 | Done run116 |
 | FVSquad/FrameAckEliciting.lean | 15 | Done run118 |
 | FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
 | FVSquad/StreamStateMachine.lean | 15 | Done run120 |
 | FVSquad/QPACKInteger.lean | 10 + 9 examples | Done run121 |
-| **TOTAL** | **~770** | **0 sorry** |
+| **TOTAL** | **~769** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -88,11 +88,19 @@ FVSquad.lean: import manifest for all 38 modules
 | T45 (QPACKInteger) | tests/qpack_integer/ | 122 | 25 | 25/25 PASS |
 | T44 (StreamStateMachine) | tests/stream_state_machine/ | 123 | 46 | 46/46 PASS |
 | T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
+| T33 (H3Settings) | tests/h3_settings/ | 125 | 43 | 43/43 PASS |
 
 ## CORRESPONDENCE.md Status
 
 - All 38 Lean files have correspondence entries as of run 122.
 - No mismatches identified. No sorry in any Lean file.
+- T33 Route-B added run125.
+
+## Paper Status
+
+- formal-verification/paper/paper.tex: updated run125 (769 thms, 38 files, 0 sorry, 11 Route-B suites)
+- paper.pdf: NOT compiled (LaTeX unavailable in sandbox — no root for apt-get)
+- Paper last reflected: run 125 state
 
 ## CI Status
 
@@ -100,13 +108,13 @@ FVSquad.lean: import manifest for all 38 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run124 (branch lean-squad-run124-25257633659-critique-route-b-frame-ack):
-  Task 7 — CRITIQUE.md updated (runs 122-124, Route-B coverage, next priorities)
-  Task 8 — Route-B tests for T42 FrameAckEliciting (33/33 PASS)
+- PR run125 (branch lean-squad-run125-25269897487-paper-h3settings-route-b):
+  Task 11 — paper.tex updated (769 thms, 38 files, 0 sorry, 5 layers)
+  Task 8 — Route-B tests for T33 H3Settings (43/43 PASS)
 
 ## Status Issue
 
-Issue #4 (open) — updated run123; update to run124 pending
+Issue #4 (open) — update to run125 pending
 
 ## Key Findings
 
@@ -120,6 +128,5 @@ Issue #4 (open) — updated run123; update to run124 pending
 New Lean file candidates:
 - T46: CUBIC cubic_k / cubic_wmax invariants (gcongestion/cubic.rs) ~40 lines, omega
 - T47: Connection idle timeout model (quiche/src/lib.rs) - state machine
-- T48: Frame size accounting arithmetic
-- Route-B for H3Settings (T33) and H3ParseSettings (T35) — high value, no tests yet
-- Paper update (Task 11): still reflects 35 files / ~655 theorems
+- Route-B for H3ParseSettings (T35) — remaining H3 target without tests
+- Paper: compile PDF when LaTeX available (CI or local)
