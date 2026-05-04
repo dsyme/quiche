@@ -2894,3 +2894,58 @@ i.e., all plain integer-only encode/decode calls.
   25/25 PASS (run 122).  Test vectors include all three RFC 7541 §5.1
   canonical examples and 22 additional cases spanning single-byte, multi-byte,
   various prefix widths, and large values.
+
+---
+
+## `FVSquad/IdleTimeout.lean` (T46) ↔ `quiche/src/lib.rs:8757`
+
+**Rust source**: `fn idle_timeout(&self) -> Option<Duration>` at `quiche/src/lib.rs:8757`.
+
+### Purpose
+
+Models the QUIC idle-timeout negotiation function (RFC 9000 §10.1.1).  The
+key results are: (1) the result is `None` iff both transport parameters are
+zero, (2) the result is always ≥ 3 × PTO, (3) negotiation is commutative
+(swapping local/peer gives the same result), and (4) the result is monotone
+in PTO.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust type | Correspondence |
+|-----------|-----------|-----------|-----------|---------------|
+| `IdleTimeout.idleTimeout` | `Nat → Nat → Nat → Option Nat` | `Connection::idle_timeout` | `fn idle_timeout(&self) -> Option<Duration>` | **abstraction** — parameters extracted; Duration modelled as Nat (ms) |
+
+### Approximations
+
+1. **`Duration` → `Nat`**: the Rust uses `Duration` (wrapping milliseconds)
+   and `Duration::from_millis`; the Lean model uses `Nat` for millisecond
+   values.  Arithmetic is identical; the abstraction removes the `Duration`
+   wrapper only.
+
+2. **`path_pto` error path**: when `self.paths.get_active()` returns `Err`,
+   `path_pto` is set to `Duration::ZERO` (OQ-T46-1 in the informal spec).
+   The Lean model accepts `pto` as a parameter and thus covers both the
+   `pto = 0` case (error path) and any concrete PTO value.
+
+3. **Connection state**: `local_transport_params.max_idle_timeout` and
+   `peer_transport_params.max_idle_timeout` are extracted as plain `Nat`
+   parameters.  No connection fields other than these two and `pto` are
+   relevant to this function.
+
+### Impact on proofs
+
+12 theorems (none with `sorry`):
+- `idleTimeout_none_iff`: `None` ↔ `loc = 0 ∧ peer = 0`
+- `idleTimeout_some_of_nonzero`, `idleTimeout_local_zero`, `idleTimeout_peer_zero`, `idleTimeout_both_nonzero`: case analysis on the negotiated value
+- `idleTimeout_ge_3pto`: RFC 9000 §10.1.1 PTO safety floor (∀ pto)
+- `idleTimeout_le_max_params`: result ≤ max(loc, peer) when pto = 0
+- `idleTimeout_ge_min_nonzero`: result ≥ min(loc, peer) when both nonzero
+- `idleTimeout_at_most_local`, `idleTimeout_at_most_peer`: exact values when pto = 0
+- `idleTimeout_comm`: commutativity (loc/peer are symmetric)
+- `idleTimeout_mono_pto`: monotone in PTO
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 128), 0 sorry.
+- Informal spec: `formal-verification/specs/idle_timeout_informal.md`.
+- Route-B tests: not yet created (planned for a future run).
