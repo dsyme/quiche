@@ -97,3 +97,42 @@
 | 7 | PRR (Proportional Rate Reduction) | 5 — All Proofs | pending | 20 theorems; 0 sorry |
 | 18 | StreamId RFC 9000 §2.1 arithmetic | 5 — All Proofs | run 64 | 35 theorems; 0 sorry |
 | 19 | Octets↔OctetsMut cross-module round-trip | 5 — All Proofs | run 65 | 20 theorems + 9 examples; 0 sorry |
+
+---
+
+## New Targets (Run 126)
+
+### Target 46: `idle_timeout` Negotiation
+
+**Phase**: 1 — Identified (research done)  
+**Location**: `quiche/src/lib.rs:8757` — `fn idle_timeout()`  
+**Priority**: ⭐⭐ HIGH  
+
+RFC 9000 §10.1.1: effective idle timeout = `min(local, peer)` when both
+nonzero; fallback to the single nonzero value; then clamp to `max(t, 3*pto)`.
+
+**Key properties**:
+- Negotiated timeout ≤ both local and peer values (neither surprised)
+- Commutativity: `negotiate(a, b) = negotiate(b, a)`
+- None ↔ both are 0
+- Final value ≥ 3 × PTO
+
+**Next action**: Write `FVSquad/IdleTimeout.lean` (Task 3+5).
+
+---
+
+### Target 47: PMTUD Binary Search Invariant
+
+**Phase**: 1 — Identified (research done)  
+**Location**: `quiche/src/pmtud.rs` — `fn update_probe_size()` and friends  
+**Priority**: ⭐ MEDIUM  
+
+Binary search between `largest_successful_probe_size` and
+`smallest_failed_probe_size`; probe_size = midpoint when both known.
+
+**Key properties**:
+- `probe_size ≤ maximum_supported_mtu` always
+- Binary search pivot: `probe_size = (successful + failed) / 2`
+- PMTU found ↔ `failed - successful ≤ 1`
+
+**Next action**: Write `FVSquad/Pmtud.lean` (Task 3+5).
