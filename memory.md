@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-03 (run 127)
-Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.30.0-rc2 (stable)
+Last updated: 2026-05-04 (run 128)
+Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 38 modules
+FVSquad.lean: import manifest for all 39 modules
 
 ## FV Targets
 
@@ -27,10 +27,10 @@ FVSquad.lean: import manifest for all 38 modules
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
-| 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 2 | Informal spec done run127; HIGH priority; ~12 thms, all omega |
+| 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry); informal spec done |
 | 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 1 | Research done run126; MEDIUM priority; ~10 thms, omega+cases |
 
-## MILESTONE: 38 Lean files, ~769 theorems, 0 sorry; Route-B 11 targets, 361+43=404 PASS
+## MILESTONE: 39 Lean files, ~781 theorems, 0 sorry; Route-B 11 targets, 361+43=404 PASS
 
 ## Lean File Registry
 
@@ -74,7 +74,8 @@ FVSquad.lean: import manifest for all 38 modules
 | FVSquad/QPACKStaticTable.lean | 12 | Done run119 |
 | FVSquad/StreamStateMachine.lean | 15 | Done run120 |
 | FVSquad/QPACKInteger.lean | 10 + 9 examples | Done run121 |
-| **TOTAL** | **~769** | **0 sorry** |
+| FVSquad/IdleTimeout.lean | 12 | Done run128 |
+| **TOTAL** | **~781** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -94,35 +95,17 @@ FVSquad.lean: import manifest for all 38 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run127 (branch lean-squad-run127-25285919024-idle-timeout-critique):
-  Task 2 — T46 idle_timeout informal spec
-  Task 7 — CRITIQUE.md update (runs 125-127 assessment)
+- PR #100 (run124): Task 7+8 — CRITIQUE.md + Route-B FrameAckEliciting (33/33)
+- PR #101 (run125): Task 11+8 — paper update (769 thms) + Route-B H3Settings (43/43)
+- PR #102 (run126): Task 1+11 — research T46/T47 + paper future work
+- PR #103 (run127): Task 2+7 — T46 idle_timeout informal spec + CRITIQUE update
+- PR run128: Task 3+5+6 — IdleTimeout.lean (12 thms, 0 sorry) + CORRESPONDENCE + informal spec
 
-## Status Issue
+Note: PRs 100-103 have not yet been merged. PR run128 includes content from run127 that conflicted.
 
-Issue #4 (open) — updated run127
+## Next Actions
 
-## Key Findings
-
-- OQ-T43-2: parse_ack_frame block_count unbounded varint (potential DoS)
-- OQ-STREAM-1: recv.is_fin and recv.is_shutdown may coexist (verify)
-- OQ-QPACKINT-3: decode_int uses BufferTooShort for overflow (wrong error code?)
-- OQ-T46-1: get_active() failure on established connection silently disables PTO bound
-- OQ-1 (run49): StreamPriorityKey antisymmetry -- intentional
-
-## CI Status
-
-- lean-ci.yml: exists, healthy, path-triggered on formal-verification/lean/**
-
-## Paper Status
-
-- formal-verification/paper/paper.tex: updated run126 (future work: T46+T47 described)
-- paper.pdf: NOT compiled (LaTeX unavailable in sandbox)
-- Gap: Route-B count in paper should be 11 targets, 404 cases (paper says 10/361)
-
-## Next Targets
-
-1. T46: write FVSquad/IdleTimeout.lean (informal spec done run127; ~12 omega thms)
-2. T47: write FVSquad/Pmtud.lean (binary-search invariants; ~10 thms)
-3. Route-B for T35 H3ParseSettings
-4. Paper update: Route-B count 10->11, 361->404 cases
+1. T47: write FVSquad/Pmtud.lean (binary-search probe_size invariant, ~10 thms, omega+cases)
+2. T46: Route-B correspondence tests for idle_timeout (~10-15 test cases)
+3. T35 H3ParseSettings: Route-B tests
+4. Update conference paper (paper.tex) for 39 files, 781 theorems, T46 addition
