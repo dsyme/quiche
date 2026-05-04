@@ -43,6 +43,8 @@
 | 35 | H3 `parse_settings_frame` RFC compliance | `quiche/src/h3/frame.rs` | 2 | 📝 Informal Spec | `specs/parse_settings_frame_informal.md` (run 115); reserved-ID rejection, boolean validation, size guard; OQ-T35-1 to OQ-T35-4 |
 | 36 | `Bandwidth` arithmetic invariants | `quiche/src/recovery/bandwidth.rs` | 1 | 🔬 Researched | gcongestion module; all `omega`; ~40 Lean lines; run 88/89 research |
 | 37 | `BytesInFlight` counter state-machine invariant | `quiche/src/recovery/bytes_in_flight.rs` | 1 | 🔬 Researched | `bytes > 0 ↔ interval_start.is_some()`; MEDIUM; run 88/89 research |
+| 47 | PMTUD binary-search probe_size invariant | `quiche/src/pmtud.rs` | 5 | ✅ Done (run 129) | `FVSquad/Pmtud.lean` (run 129): 12 theorems, 0 sorry; probe_size ∈ [MIN_PLPMTU, max_mtu], binary-search convergence, narrowing, midpoint bounds |
+| 48 | HyStart++ RTT threshold clamp + CSS growth divisor | `quiche/src/recovery/congestion/hystart.rs` | 2 | 📝 Informal Spec (run 129) | `specs/hystart_informal.md`; clamp to [4ms, 16ms], css_cwnd_inc monotonicity, css_round_count bounds; ~10 thms, omega |
 
 ## Phase Definitions
 
