@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-04 (run 130)
+Last updated: 2026-05-05 (run 131)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 41 modules
+FVSquad.lean: import manifest for all 42 modules
 
 ## FV Targets
 
@@ -79,7 +79,8 @@ FVSquad.lean: import manifest for all 41 modules
 | FVSquad/IdleTimeout.lean | 12 | Done run128 |
 | FVSquad/Pmtud.lean | 12 | Done run129 |
 | FVSquad/Hystart.lean | 13 | Done run130 |
-| **TOTAL** | **~806** | **0 sorry** |
+| FVSquad/WindowedFilter.lean | 15 | Done run131 |
+| **TOTAL** | **~821** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -97,13 +98,18 @@ FVSquad.lean: import manifest for all 41 modules
 | T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
 | T33 (H3Settings) | tests/h3_settings/ | 125 | 43 | 43/43 PASS |
 
+## CI Status
+
+- lean-ci.yml: exists, working, path-triggered on formal-verification/lean/**
+- Audited run131: CI workflow healthy, correct triggers, cache keyed on lake-manifest.json
+
 ## Open PRs (lean-squad label)
 
-- PR run130: Task 5+1 — Hystart.lean (13 thms, 0 sorry) + T49 WindowedFilter research
+- PR run131: Task 5 — WindowedFilter.lean (15 thms, 0 sorry) + Task 9 CI audit
 
 ## Next Actions
 
-1. T49: write informal spec + FVSquad/WindowedFilter.lean (reset invariant, value ordering, ~15 thms)
-2. T48: Route-B correspondence tests for HyStart++ (~10-15 test cases)
-3. T47: Route-B correspondence tests for PMTUD (~10-15 test cases)
-4. Update conference paper for 41 files, 806 theorems
+1. T48: Route-B correspondence tests for HyStart++
+2. T47: Route-B correspondence tests for PMTUD
+3. Update conference paper for 42 files, 821 theorems
+4. Route-B tests for WindowedFilter
