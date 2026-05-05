@@ -4,12 +4,12 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-02 17:30 UTC
-- **Commit**: `131cdbb479af6847d01d167d1f2ae3dffd4e6281`
-- **Run**: run 124 — Route-B tests for T42 FrameAckEliciting (33/33 PASS);
-  prior runs 122–123 added Route-B tests for QPACKInteger (25/25 PASS) and
-  StreamStateMachine (46/46 PASS), and updated CORRESPONDENCE.md and REPORT.md.
-  Full suite: 38 Lean files, ~770 theorems, 0 sorry; 10 Route-B test targets.
+- **Date**: 2026-05-05 10:30 UTC
+- **Commit**: `fed253fc75212144e31bb7b0151d72615551745c`
+- **Run**: run 132 — Task 3 (T50 TransportParamReserved, 15 thms, 0 sorry) +
+  Task 7 (Critique update). Also merges run 130 (Hystart, 13 thms) and
+  run 131 (WindowedFilter, 15 thms). Full suite: 43 Lean files, ~836 theorems,
+  0 sorry; 11 Route-B test targets (404+ PASS).
 
 ---
 
@@ -1303,3 +1303,84 @@ inconsistency.
 4. **Dynamic QPACK table**: the static-table proof is a sanity check; the
    dynamic table (insert/evict invariants) is the higher-value target.
 
+
+---
+
+## Run 125–132 Additions — Critique
+
+### HyStart++ RTT Threshold Clamp (T48, run 130) — 13 theorems, 0 sorry
+
+`FVSquad/Hystart.lean` formalises the RTT threshold clamping and CSS cwnd
+increment logic in `quiche/src/recovery/congestion/hystart.rs`.
+
+**Assessment (mid-level, medium bug-catching potential)**:
+- The `rtt_thresh_ge_min` and `rtt_thresh_le_max` theorems are medium-value:
+  they confirm the [MIN_RTT_THRESH=4ms, MAX_RTT_THRESH=16ms] clamp is correctly
+  applied. A bug dropping the lower or upper clamp would immediately fail.
+- `css_cwnd_inc_quarter` verifies the exact divisor (÷4) agreed by RFC draft
+  §4. This would catch a wrong divisor constant.
+- **Limitation**: the full HyStart++ state machine (counting RTT samples,
+  `css_rounds` tracking, ACK-based transitions) is NOT modelled — only pure
+  arithmetic functions. The most important safety property ("HyStart++ never
+  allows cwnd growth faster than slow-start") would require an inductive
+  invariant over the full state machine, which is a natural future target.
+- **Recommendation**: Model `css_duration()` and the round-count check, proving
+  that HyStart++ exits slow-start before a congestion event under the modelled
+  conditions.
+
+### WindowedFilter Ordering Invariant (T49, run 131) — 15 theorems, 0 sorry
+
+`FVSquad/WindowedFilter.lean` formalises the Kathleen Nichols windowed max
+tracking algorithm in `quiche/src/recovery/gcongestion/bbr/windowed_filter.rs`.
+
+**Assessment (mid-level, high structural bug-catching potential)**:
+- `update_pure_preserves_ordered` is the headline theorem: any call to `update`
+  preserves `best ≥ second ≥ third`. This invariant is load-bearing for BBR2:
+  if `best()` could return a value less than `second()`, BBR2 might
+  underestimate available bandwidth.
+- `update_pure_iter_ordered` extends this inductively — the invariant holds
+  after any sequence of updates, which is the realistic usage pattern.
+- **Limitation**: the `window_length` time-based expiry that triggers promotion
+  is abstracted away. The real code can expire the oldest estimate and shift
+  down; the Lean model only covers the non-expiry update path. This means the
+  expiry path's ordering correctness is not verified.
+- **Recommendation**: Model time-based expiry explicitly (using `Nat` for
+  abstract time) and prove that expiry promotion also preserves ordering.
+
+### RFC 9000 §18.1 Reserved Transport Parameter IDs (T50, run 132) — 15 theorems, 0 sorry
+
+`FVSquad/TransportParamReserved.lean` formalises `is_reserved()` in
+`quiche/src/transport_params.rs` — the check that a transport parameter ID
+belongs to the RFC 9000 §18.1 reserved arithmetic progression {27, 58, 89, ...}.
+
+**Assessment (low-to-mid level, medium bug-catching potential)**:
+- `isReserved_iff_mod`: the core result — `is_reserved(id) ↔ id % 31 = 27` for
+  `id ≥ 27`. This proves the RFC 9000 §18.1 definition ("31 * N + 27") is
+  correctly implemented. A bit-error in the constants (e.g., 28 instead of 27,
+  or 30 instead of 31) would immediately falsify this theorem.
+- `isReserved_progression` (∀ k, `isReserved(31*k+27) = true`) and
+  `isReserved_gap` (∀ non-multiples between reserved values, false): together
+  these make the characterisation exhaustive — no reserved IDs are missed,
+  and no non-reserved IDs are incorrectly flagged.
+- `isReserved_spacing`: two distinct reserved IDs differ by ≥ 31. Useful as an
+  anti-aliasing property.
+- **Limitation**: the Rust implementation uses `u64` arithmetic with potential
+  wrapping underflow for `id < 27`. The Lean model uses saturating `Nat`
+  subtraction, which correctly classifies `id < 27` as non-reserved. If a QUIC
+  implementation ever passed an `id < 27` to `is_reserved` expecting wrapping
+  behaviour, the models would diverge. In practice all legitimate transport
+  parameter IDs are ≥ 27 per RFC 9000.
+- **Utility note**: This is a protocol-compliance property — proving that the
+  code correctly identifies the RFC-mandated reserved-ID pattern. It is
+  somewhat lower-level than congestion control invariants, but catches the
+  class of "off-by-one in constant" bugs in protocol demultiplexing logic.
+
+### Overall Status (run 132)
+
+- **43 Lean files, ~836 theorems, 0 sorry** (lake build ✅)
+- Route-B: 11 targets, 404+ cases PASS
+- Coverage spans: QUIC transport, congestion control (NewReno, Cubic, BBR2,
+  HyStart++), HTTP/3 codec, QPACK (static table + integer codec), stream/frame
+  state machines, windowed filtering, RFC compliance (transport param IDs).
+- **Next priority**: Route-B tests for T48 (HyStart++) and T49 (WindowedFilter);
+  update conference paper to 43 files / ~836 theorems.

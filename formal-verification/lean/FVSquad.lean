@@ -39,3 +39,5 @@ import FVSquad.QPACKInteger
 import FVSquad.IdleTimeout
 import FVSquad.Pmtud
 import FVSquad.Hystart
+import FVSquad.WindowedFilter
+import FVSquad.TransportParamReserved
