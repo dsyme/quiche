@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-05 (run 132)
+Last updated: 2026-05-05 (run 133)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 43 modules
+FVSquad.lean: import manifest for all 44 modules
 
 ## FV Targets
 
@@ -28,12 +28,13 @@ FVSquad.lean: import manifest for all 43 modules
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
 | 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry); informal spec done |
-| 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 5 | Done run129 (12 thms, 0 sorry); probe_size in [MIN_PLPMTU, max_mtu], convergence |
-| 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); clamp [4ms,16ms], css_cwnd_inc monotone |
-| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry); best≥second≥third invariant |
-| 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry); isReserved ↔ id%31=27 |
+| 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 5 | Done run129 (12 thms, 0 sorry) |
+| 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); Route-B 27/27 PASS run133 |
+| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry) |
+| 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry) |
+| 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry); max(send,ack) → conservative rate |
 
-## MILESTONE: 43 Lean files, ~836 theorems, 0 sorry; Route-B 11 targets, 404 PASS
+## MILESTONE: 44 Lean files, ~849 theorems, 0 sorry; Route-B 12 targets, 431 PASS
 
 ## Lean File Registry
 
@@ -82,7 +83,8 @@ FVSquad.lean: import manifest for all 43 modules
 | FVSquad/Hystart.lean | 13 | Done run130 |
 | FVSquad/WindowedFilter.lean | 15 | Done run131 |
 | FVSquad/TransportParamReserved.lean | 15 | Done run132 |
-| **TOTAL** | **~836** | **0 sorry** |
+| FVSquad/DeliveryRate.lean | 13 | Done run133 |
+| **TOTAL** | **~849** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -99,6 +101,7 @@ FVSquad.lean: import manifest for all 43 modules
 | T44 (StreamStateMachine) | tests/stream_state_machine/ | 123 | 46 | 46/46 PASS |
 | T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
 | T33 (H3Settings) | tests/h3_settings/ | 125 | 43 | 43/43 PASS |
+| T48 (HyStart++) | tests/hystart/ | 133 | 27 | 27/27 PASS |
 
 ## CI Status
 
@@ -107,13 +110,12 @@ FVSquad.lean: import manifest for all 43 modules
 
 ## Open PRs (lean-squad label)
 
-- PR #106 (run130): Hystart.lean (13 thms, 0 sorry) + T49 research — MERGED INTO run132
-- PR #107 (run131): WindowedFilter.lean (15 thms, 0 sorry) + CI audit — MERGED INTO run132
-- PR run132: Tasks 3+7 — TransportParamReserved.lean (15 thms, 0 sorry) + CRITIQUE update
+- PR #108 (run132): TransportParamReserved.lean (15 thms) + CRITIQUE — open
+- PR run133: DeliveryRate.lean (13 thms) + HyStart++ Route-B 27/27
 
 ## Next Actions
 
-1. Route-B correspondence tests for T48 (HyStart++)
-2. Route-B correspondence tests for T49 (WindowedFilter)
-3. Update conference paper to 43 files / ~836 theorems
-4. Consider: T51 — bandwidth_sampler rate estimation, or T52 — cubic_k formula verification
+1. Route-B correspondence tests for T49 (WindowedFilter)
+2. Route-B correspondence tests for T50 (TransportParamReserved)
+3. Update conference paper to 44 files / ~849 theorems
+4. Consider: T52 — delivery_rate app_limited guard, T53 — reno cwnd growth
