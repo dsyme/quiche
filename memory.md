@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-05 (run 131)
+Last updated: 2026-05-05 (run 132)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 42 modules
+FVSquad.lean: import manifest for all 43 modules
 
 ## FV Targets
 
@@ -30,9 +30,10 @@ FVSquad.lean: import manifest for all 42 modules
 | 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry); informal spec done |
 | 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 5 | Done run129 (12 thms, 0 sorry); probe_size in [MIN_PLPMTU, max_mtu], convergence |
 | 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); clamp [4ms,16ms], css_cwnd_inc monotone |
-| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 1 | Research done run130; best≥second≥third invariant, ~15 thms |
+| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry); best≥second≥third invariant |
+| 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry); isReserved ↔ id%31=27 |
 
-## MILESTONE: 41 Lean files, ~806 theorems, 0 sorry; Route-B 11 targets, 404 PASS
+## MILESTONE: 43 Lean files, ~836 theorems, 0 sorry; Route-B 11 targets, 404 PASS
 
 ## Lean File Registry
 
@@ -80,7 +81,8 @@ FVSquad.lean: import manifest for all 42 modules
 | FVSquad/Pmtud.lean | 12 | Done run129 |
 | FVSquad/Hystart.lean | 13 | Done run130 |
 | FVSquad/WindowedFilter.lean | 15 | Done run131 |
-| **TOTAL** | **~821** | **0 sorry** |
+| FVSquad/TransportParamReserved.lean | 15 | Done run132 |
+| **TOTAL** | **~836** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -105,11 +107,13 @@ FVSquad.lean: import manifest for all 42 modules
 
 ## Open PRs (lean-squad label)
 
-- PR run131: Task 5 — WindowedFilter.lean (15 thms, 0 sorry) + Task 9 CI audit
+- PR #106 (run130): Hystart.lean (13 thms, 0 sorry) + T49 research — MERGED INTO run132
+- PR #107 (run131): WindowedFilter.lean (15 thms, 0 sorry) + CI audit — MERGED INTO run132
+- PR run132: Tasks 3+7 — TransportParamReserved.lean (15 thms, 0 sorry) + CRITIQUE update
 
 ## Next Actions
 
-1. T48: Route-B correspondence tests for HyStart++
-2. T47: Route-B correspondence tests for PMTUD
-3. Update conference paper for 42 files, 821 theorems
-4. Route-B tests for WindowedFilter
+1. Route-B correspondence tests for T48 (HyStart++)
+2. Route-B correspondence tests for T49 (WindowedFilter)
+3. Update conference paper to 43 files / ~836 theorems
+4. Consider: T51 — bandwidth_sampler rate estimation, or T52 — cubic_k formula verification
