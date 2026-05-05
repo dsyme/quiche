@@ -192,3 +192,22 @@ parameter; model as maximizing filter (concrete use in BBR).
 
 **Next action**: Write `formal-verification/specs/windowed_filter_informal.md` (Task 2),
 then `FVSquad/WindowedFilter.lean` (Task 3+5).
+
+---
+
+### Target 50: RFC 9000 §18.1 Reserved Transport Parameter IDs
+
+**Phase**: 5 — Proofs complete (run 132)
+**Location**: `quiche/src/transport_params.rs` (`is_reserved`)
+**Priority**: ⭐⭐ MEDIUM
+
+`is_reserved()` checks whether a transport parameter ID belongs to the
+RFC 9000 §18.1 reserved arithmetic progression {31*N+27 : N ≥ 0}.
+
+**Key properties**:
+- `isReserved(id) ↔ id % 31 = 27` for `id ≥ 27` (RFC 9000 §18.1 compliance)
+- Every element of the progression is detected (`isReserved_progression`)
+- No non-progression element is detected (`isReserved_gap`)
+- Two distinct reserved IDs differ by ≥ 31 (`isReserved_spacing`)
+
+**Lean file**: `FVSquad/TransportParamReserved.lean` — 15 theorems, 0 sorry, `lake build` ✅
