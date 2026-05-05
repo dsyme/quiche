@@ -136,3 +136,59 @@ Binary search between `largest_successful_probe_size` and
 - PMTU found ↔ `failed - successful ≤ 1`
 
 **Next action**: Write `FVSquad/Pmtud.lean` (Task 3+5).
+
+---
+
+## New Targets (Run 130)
+
+### Target 48: HyStart++ RTT-threshold clamp + CSS divisor invariant
+
+**Phase**: 5 — All Proofs Done (this run)  
+**Location**: `quiche/src/recovery/congestion/hystart.rs`  
+**Priority**: ⭐⭐ HIGH  
+
+HyStart++ transitions slow start → CSS → CA. The key purely-computable
+properties are:
+
+1. **RTT threshold clamping**: `rtt_thresh = clamp(last/8, 4ms, 16ms)` — bounded
+   to [MIN_RTT_THRESH, MAX_RTT_THRESH] regardless of input.
+2. **css_cwnd_inc divisor**: exactly `pkt_size / CSS_GROWTH_DIVISOR (=4)`.
+3. **Monotonicity**: both functions are monotone in their inputs.
+4. **Constant sanity**: CSS_ROUNDS = 5, divisor > 0, MIN ≤ MAX.
+
+**Lean file**: `FVSquad/Hystart.lean` — 13 theorems, 0 sorry, `lake build` ✅
+
+**Next action**: Route-B correspondence tests (Task 8).
+
+---
+
+### Target 49: WindowedFilter ordering invariant
+
+**Phase**: 1 — Identified (research done)  
+**Location**: `quiche/src/recovery/gcongestion/bbr/windowed_filter.rs`  
+**Priority**: ⭐⭐ HIGH  
+
+Implements Kathleen Nichols' algorithm for windowed min/max estimation using
+three samples (best, second-best, third-best). Key invariant: after any
+sequence of `reset`/`update` calls, the sample values satisfy
+`estimates[0] ≥ estimates[1] ≥ estimates[2]` (value ordering) and the
+timestamps satisfy `time[0] ≤ time[1] ≤ time[2]` (recency ordering).
+
+**Key properties**:
+- `reset(v, t)` → all three estimates equal `(v, t)` (trivially verifiable)
+- `clear()` → all estimates are `None`
+- `get_best()` = `Some(estimates[0].sample)` after any update
+- Value monotonicity: `best ≥ second_best ≥ third_best` (ordering invariant)
+- After reset, all get_* methods return `Some(same_value)`
+
+**Specification size**: ~15 theorems; `reset` and `clear` trivial by `rfl/decide`,
+ordering invariant requires inductive case analysis over `update`.
+
+**Proof tractability**: reset/clear trivially provable; ordering invariant
+tractable but requires a small model of the update function using `rcases`.
+
+**Approximations needed**: Abstract away `Instant` using abstract `time : Nat`
+parameter; model as maximizing filter (concrete use in BBR).
+
+**Next action**: Write `formal-verification/specs/windowed_filter_informal.md` (Task 2),
+then `FVSquad/WindowedFilter.lean` (Task 3+5).
