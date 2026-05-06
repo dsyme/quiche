@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-06 (run 135)
+Last updated: 2026-05-07 (run 136)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 45 modules
@@ -30,12 +30,13 @@ FVSquad.lean: import manifest for all 45 modules
 | 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry) |
 | 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 5 | Done run129 (12 thms, 0 sorry) |
 | 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); Route-B 27/27 PASS run133 |
-| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry) |
+| 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry); Route-B 24/24 PASS run136 |
 | 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry) |
 | 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry); max(send,ack) → conservative rate |
 | 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run135 (14 thms + 9 examples, 0 sorry) |
+| 53 | NewReno AIMD multi-cycle theorems | formal-verification/lean/FVSquad/NewRenoAIMD.lean | 5 | Done run136 (17 thms, 0 sorry) |
 
-## MILESTONE: 45 Lean files, ~863 theorems, 0 sorry; Route-B 12 targets, 431+ PASS; CORRESPONDENCE.md covers all 45 files
+## MILESTONE: 46 Lean files, ~880 theorems, 0 sorry; Route-B 13 targets, 455+ PASS; CORRESPONDENCE.md covers all 46 files
 
 ## Lean File Registry
 
@@ -47,6 +48,7 @@ FVSquad.lean: import manifest for all 45 modules
 | FVSquad/RttStats.lean | 23 | Done |
 | FVSquad/FlowControl.lean | 22 | Done |
 | FVSquad/NewReno.lean | 13 | Done |
+| FVSquad/NewRenoAIMD.lean | 17 | Done (run136) |
 | FVSquad/DatagramQueue.lean | 26 | Done |
 | FVSquad/PRR.lean | 20 | Done |
 | FVSquad/PacketNumDecode.lean | 23 | Done |
