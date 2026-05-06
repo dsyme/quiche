@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-05 (run 133)
+Last updated: 2026-05-06 (run 134)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 44 modules
@@ -27,14 +27,15 @@ FVSquad.lean: import manifest for all 44 modules
 | 43 | ACK frame acked-range bounds | quiche/src/frame.rs | 5 | Done run102 (13 thms, 0 sorry); Route-B 25/25 PASS |
 | 44 | QUIC stream state machine | quiche/src/stream/mod.rs | 5 | Done run120 (15 thms, 0 sorry); Route-B 46/46 PASS run123 |
 | 45 | QPACK integer encode/decode | quiche/src/h3/qpack/encoder.rs + decoder.rs | 5 | Done run121 (10 thms + examples, 0 sorry); Route-B 25/25 PASS run122 |
-| 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry); informal spec done |
+| 46 | idle_timeout() negotiation RFC 9000 S10.1.1 | quiche/src/lib.rs:8757 | 5 | Done run128 (12 thms, 0 sorry) |
 | 47 | PMTUD binary search probe_size invariant | quiche/src/pmtud.rs | 5 | Done run129 (12 thms, 0 sorry) |
 | 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); Route-B 27/27 PASS run133 |
 | 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry) |
 | 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry) |
 | 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry); max(send,ack) → conservative rate |
+| 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 2 | Informal spec done run134; specs/delivery_rate_app_limited_informal.md |
 
-## MILESTONE: 44 Lean files, ~849 theorems, 0 sorry; Route-B 12 targets, 431 PASS
+## MILESTONE: 44 Lean files, ~849 theorems, 0 sorry; Route-B 12 targets, 431 PASS; CORRESPONDENCE.md covers all 44 files
 
 ## Lean File Registry
 
@@ -108,14 +109,20 @@ FVSquad.lean: import manifest for all 44 modules
 - lean-ci.yml: exists, working, path-triggered on formal-verification/lean/**
 - Audited run131: CI workflow healthy, correct triggers, cache keyed on lake-manifest.json
 
+## CORRESPONDENCE.md Status
+
+- All 44 Lean files now have correspondence entries (updated run134)
+- No mismatches identified
+- Key approximations documented per file
+
 ## Open PRs (lean-squad label)
 
-- PR #108 (run132): TransportParamReserved.lean (15 thms) + CRITIQUE — open
-- PR run133: DeliveryRate.lean (13 thms) + HyStart++ Route-B 27/27
+- None (run133 was merged as PR#109; run134 PR just created)
 
 ## Next Actions
 
-1. Route-B correspondence tests for T49 (WindowedFilter)
-2. Route-B correspondence tests for T50 (TransportParamReserved)
-3. Update conference paper to 44 files / ~849 theorems
-4. Consider: T52 — delivery_rate app_limited guard, T53 — reno cwnd growth
+1. Task 3: Write FVSquad/AppLimitedGuard.lean (T52, phase 2→3)
+2. Route-B correspondence tests for T49 (WindowedFilter)
+3. Route-B correspondence tests for T50 (TransportParamReserved)
+4. Update conference paper to 44 files / ~849 theorems
+5. Consider T53 — reno cwnd multi-cycle AIMD convergence (T28)
