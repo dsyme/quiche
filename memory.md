@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-06 (run 134)
+Last updated: 2026-05-06 (run 135)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 44 modules
+FVSquad.lean: import manifest for all 45 modules
 
 ## FV Targets
 
@@ -33,9 +33,9 @@ FVSquad.lean: import manifest for all 44 modules
 | 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry) |
 | 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry) |
 | 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry); max(send,ack) → conservative rate |
-| 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 2 | Informal spec done run134; specs/delivery_rate_app_limited_informal.md |
+| 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run135 (14 thms + 9 examples, 0 sorry) |
 
-## MILESTONE: 44 Lean files, ~849 theorems, 0 sorry; Route-B 12 targets, 431 PASS; CORRESPONDENCE.md covers all 44 files
+## MILESTONE: 45 Lean files, ~863 theorems, 0 sorry; Route-B 12 targets, 431+ PASS; CORRESPONDENCE.md covers all 45 files
 
 ## Lean File Registry
 
@@ -85,7 +85,8 @@ FVSquad.lean: import manifest for all 44 modules
 | FVSquad/WindowedFilter.lean | 15 | Done run131 |
 | FVSquad/TransportParamReserved.lean | 15 | Done run132 |
 | FVSquad/DeliveryRate.lean | 13 | Done run133 |
-| **TOTAL** | **~849** | **0 sorry** |
+| FVSquad/AppLimitedGuard.lean | 14 + 9 examples | Done run135 |
+| **TOTAL** | **~863** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -111,18 +112,17 @@ FVSquad.lean: import manifest for all 44 modules
 
 ## CORRESPONDENCE.md Status
 
-- All 44 Lean files now have correspondence entries (updated run134)
+- All 45 Lean files now have correspondence entries (updated run135)
 - No mismatches identified
 - Key approximations documented per file
 
 ## Open PRs (lean-squad label)
 
-- None (run133 was merged as PR#109; run134 PR just created)
+- run135: AppLimitedGuard + critique update (just created)
 
 ## Next Actions
 
-1. Task 3: Write FVSquad/AppLimitedGuard.lean (T52, phase 2→3)
-2. Route-B correspondence tests for T49 (WindowedFilter)
-3. Route-B correspondence tests for T50 (TransportParamReserved)
-4. Update conference paper to 44 files / ~849 theorems
-5. Consider T53 — reno cwnd multi-cycle AIMD convergence (T28)
+1. Route-B correspondence tests for T49 (WindowedFilter) and T50 (TransportParamReserved)
+2. T53 — NewReno multi-cycle AIMD convergence (reno cwnd AIMD state machine)
+3. Update conference paper to 45 files / ~863 theorems
+4. Model end-to-end app-limited stamp interaction (T52 recommendation from CRITIQUE.md)
