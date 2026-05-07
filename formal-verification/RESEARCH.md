@@ -1058,3 +1058,161 @@ These targets were identified by reviewing uncovered modules after reaching
 38 Lean files in run 125. The critique (run 124) flagged the connection lifecycle
 and network path modules as under-represented. Both T46 and T47 address this gap
 with tractable pure-integer models.
+
+---
+
+## Run 138 Additions — New Targets T55, T56, T57
+
+*2026-05-07 UTC. Run 138. Previous state: 47 Lean files, 906 theorems, 0 sorry.
+Critique feedback from runs 135–137 flags congestion control coverage gaps:
+BBR2 startup exit conditions and loss detection thresholds are high-value,
+untested areas.*
+
+### Target 55: BBR2 Startup Exit — `full_bandwidth_reached` Monotonicity
+
+**Phase**: 1 — Research
+**Location**: `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+  (lines 620–710, `has_bandwidth_growth`, `check_persistent_queue`,
+  `full_bandwidth_reached`)
+**Priority**: ⭐⭐⭐ HIGH
+
+BBR2 exits startup when one of two conditions triggers:
+1. **No bandwidth growth**: `rounds_without_bandwidth_growth >=
+   startup_full_bw_rounds` AND not app-limited (`has_bandwidth_growth`)
+2. **Persistent queue**: `rounds_with_queueing >= max_startup_queue_rounds`
+   (`check_persistent_queue`)
+
+Both conditions set `full_bandwidth_reached = true`, which is then queried by
+`Startup::on_congestion_event` to determine whether to exit startup mode.
+
+**Benefit**: BBR2 startup exit governs when the algorithm stops probing for
+bandwidth and begins draining. An incorrect exit condition could cause premature
+exit (under-utilisation) or infinite startup (no convergence). The monotonicity
+property — once set, `full_bandwidth_reached` cannot be cleared — is critical
+for the BBR2 state machine's correctness: any code path that could reset this
+flag would be a serious bug.
+
+**Key properties**:
+- **Monotonicity**: `full_bandwidth_reached` is set-only; no path clears it
+  once true (except `reset()` which restarts the whole model)
+- **Growth counter bound**: `rounds_without_bandwidth_growth <=
+  startup_full_bw_rounds` at the point `full_bandwidth_reached` is set
+- **Threshold trigger (no-growth)**: if `rounds_without_bandwidth_growth >=
+  startup_full_bw_rounds` and not app-limited, then `full_bandwidth_reached`
+- **Queue counter bound**: `rounds_with_queueing <= max_startup_queue_rounds`
+  at trigger
+- **Queue threshold trigger**: if `rounds_with_queueing >=
+  max_startup_queue_rounds`, then `full_bandwidth_reached`
+
+**Specification size**: ~12–15 theorems, ~60 Lean lines.
+
+**Proof tractability**: LOW–MEDIUM. The counter bounds are `omega`. The
+monotonicity property is trivial once the model captures that no update path
+decrements the flag. Requires modelling the update functions as pure Lean
+definitions with abstract `params` struct (two Nat fields).
+
+**Approximations needed**: Abstract `Bandwidth` as `Nat`. Model
+`full_bandwidth_baseline` update as an abstract predicate (only the flag
+matters here). `is_app_limited` treated as a Bool parameter. `Instant`/`Duration`
+not needed.
+
+**Approach**: Direct functional model of `has_bandwidth_growth` and
+`check_persistent_queue` as Lean `def`s; prove monotonicity by pattern-matching
+over model transitions; prove threshold triggers by case analysis + `omega`.
+
+---
+
+### Target 56: Loss Detection Packet Threshold Bounds (RFC 9002 §6.1)
+
+**Phase**: 1 — Research
+**Location**: `quiche/src/recovery/mod.rs`
+  (`INITIAL_PACKET_THRESHOLD=3`, `MAX_PACKET_THRESHOLD=20`,
+  `pkt_thresh()`, threshold adaptation logic at lines 51–85)
+**Priority**: ⭐⭐ MEDIUM
+
+RFC 9002 §6.1 specifies that a packet is declared lost if a packet with a
+higher packet number has been acknowledged and the unacknowledged packet's
+packet number is ≤ `largest_acked - pkt_thresh`. The initial threshold is 3;
+the implementation adapts it based on observed reordering up to
+`MAX_PACKET_THRESHOLD=20`.
+
+**Benefit**: Loss detection threshold bounds directly affect retransmission
+behaviour. If `pkt_thresh` exceeds `MAX_PACKET_THRESHOLD` (a bug), packets
+that should be declared lost are not, violating RFC 9002 and potentially
+causing connection stalls. If it drops below 1, spurious retransmissions result.
+
+**Key properties**:
+- `pkt_thresh_initial`: initial threshold equals `INITIAL_PACKET_THRESHOLD` (3)
+- `pkt_thresh_ge_initial`: threshold never drops below initial value (3)
+- `pkt_thresh_le_max`: threshold never exceeds `MAX_PACKET_THRESHOLD` (20)
+- `pkt_thresh_in_range`: at all times, `3 ≤ pkt_thresh ≤ 20`
+- `time_thresh_initial`: initial time threshold equals `9/8` (rational spec)
+- `time_thresh_ge_one`: time threshold always ≥ 1.0
+
+**Specification size**: ~10–12 theorems, ~50 Lean lines.
+
+**Proof tractability**: MEDIUM. Integer bounds are `omega`. The time threshold
+requires approximation (represent as rational `p/q : Nat × Nat` with `q > 0`)
+to stay in the pure-integer model. Alternatively, focus on `pkt_thresh`
+(integer) and leave the time threshold as a future target.
+
+**Approximations needed**: Model packet threshold as `Nat` in `[3, 20]`.
+Represent the two adaptation modes (observed reordering → increase threshold)
+as a step function `adapt : Nat → Nat` that is bounded and non-decreasing.
+Ignore `time_thresh` floating-point entirely in the first pass.
+
+**Approach**: Define `pktThresh : Nat` as a bounded counter; prove range
+invariant by induction over adaptation steps; use `omega` for all arithmetic.
+
+---
+
+### Target 57: BBR2 ProbeBW Phase Cycle Ordering
+
+**Phase**: 1 — Research
+**Location**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs`
+  (phase transitions: PROBE_DOWN → PROBE_CRUISE → PROBE_REFILL → PROBE_UP
+  → PROBE_DOWN, lines 1–100)
+**Priority**: ⭐⭐ MEDIUM
+
+BBR2 `ProbeBW` cycles through four sub-phases in a fixed order. The transition
+logic (`enter_probe_down`, `enter_probe_cruise`, `enter_probe_refill`,
+`enter_probe_up`) enforces that only valid transitions occur. A bug in the
+phase sequencing could cause BBR2 to enter an incorrect phase, bypassing the
+drain phase (leaving queue unshed) or probing too aggressively.
+
+**Benefit**: The ProbeBW cycle is the dominant mode in BBR2. Phase ordering bugs
+would manifest as subtle performance regressions under certain network conditions
+— hard to detect through testing but provable from the transition rules.
+
+**Key properties**:
+- Phase type: `ProbeBWCyclePhase ∈ {Down, Cruise, Refill, Up}` (4-element enum)
+- **Valid transitions**: only Down→Cruise, Cruise→Refill, Refill→Up, Up→Down
+  are reachable (no skipping or reversals except restarting from Down)
+- **Cycle reachability**: from any phase, Down is reachable in at most 3 steps
+- **No self-loops** in the phase transition function
+
+**Specification size**: ~8–10 theorems, ~40 Lean lines.
+
+**Proof tractability**: LOW. Fully decidable: `decide` or `native_decide` closes
+all four transition properties since the state space is 4 elements. Reachability
+can be proved by explicit enumeration.
+
+**Approximations needed**: Abstract away cwnd/bandwidth parameters;
+model only the phase label and transition arrows.
+
+**Approach**: Define `ProbeBWPhase` as an inductive type with 4 constructors;
+define `nextPhase` as a pure function; prove cycle properties by `decide`.
+
+---
+
+### Critique-Driven Adjustments (run 138)
+
+The run 135 critique highlighted:
+1. **App-limited stamp end-to-end** (T52 gap) — noted as future work (complex)
+2. **NewReno multi-cycle AIMD convergence** — completed as T53 (run 136)
+3. **BBR2NetworkFilters** — completed as T54 (run 137)
+
+Run 138 targets T55/T56/T57 address the remaining congestion-control coverage
+gap (BBR2 startup exit) and add a decidable state-machine target (T57) for
+ProbeBW phase ordering.
+

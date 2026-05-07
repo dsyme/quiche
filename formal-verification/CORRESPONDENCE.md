@@ -2949,3 +2949,85 @@ in PTO.
 - `lake build` passed with Lean 4.29.1 (run 128), 0 sorry.
 - Informal spec: `formal-verification/specs/idle_timeout_informal.md`.
 - Route-B tests: not yet created (planned for a future run).
+
+---
+
+## `FVSquad/DeliveryRate.lean` → `quiche/src/recovery/congestion/delivery_rate.rs`
+
+### Last Updated
+- **Date**: 2026-05-06 10:36 UTC
+- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `elapsed_interval` | `send_elapsed.max(ack_elapsed)` | `delivery_rate.rs:139` | **exact** | Pure `max` of two durations → `max` of two Nats |
+| `delivery_rate` | implicit in `generate_rate_sample` | `delivery_rate.rs:155–161` | **abstraction** | f64/u64 division modelled as integer division; truncation direction preserved |
+
+### Known divergences
+
+1. **Duration type**: Rust `Duration` (u64 secs + u32 nanos) is modelled as
+   `Nat` nanoseconds. All arithmetic is monotone in the same direction.
+2. **f64 intermediate**: Rust uses `delivered as f64 / interval.as_secs_f64()`
+   then casts to `u64`. The Lean model uses `delivered * 1e9 / interval_ns`
+   (integer arithmetic). This gives the same result to within 1 unit due to
+   truncation, which is acceptable for monotonicity proofs.
+3. **app-limited guard logic**: not modelled in this file; see `AppLimitedGuard.lean`.
+
+### Impact on proofs
+
+13 theorems (none with `sorry`): `interval_ge_send`, `interval_ge_ack`,
+`interval_comm`, `interval_zero`, `interval_pos_of_send_pos`,
+`interval_pos_of_ack_pos`, `interval_mono_send`, `interval_mono_ack`,
+`rate_zero_no_delivery`, `rate_zero_no_elapsed`, `rate_mono_delivered`,
+`rate_anti_elapsed`, `rate_conservative_send`, `rate_conservative_ack`,
+`rate_max_interval_le_min_rate`. All monotonicity/conservatism results
+are valid under the integer-division abstraction.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 133), 0 sorry.
+- Informal spec: `formal-verification/specs/delivery_rate_informal.md`.
+- Route-B tests: not yet created (planned for a future run).
+
+---
+
+## `FVSquad/AppLimitedGuard.lean` → `quiche/src/recovery/congestion/delivery_rate.rs`
+
+### Last Updated
+- **Date**: 2026-05-06 10:36 UTC
+- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `State.end_of_app_limited` | `Rate.end_of_app_limited` | `delivery_rate.rs:42` | **exact** | `u64` → `Nat` |
+| `State.last_sent_packet` | `Rate.last_sent_packet` | `delivery_rate.rs:46` | **exact** | `u64` → `Nat` |
+| `State.largest_acked` | `Rate.largest_acked` | `delivery_rate.rs:49` | **exact** | `u64` → `Nat` |
+| `appLimited` | `Rate::app_limited` | `delivery_rate.rs:201` | **exact** | `!= 0` check |
+| `updateAppLimited` | `Rate::update_app_limited` | `delivery_rate.rs:195–199` | **exact** | `max(last_sent, 1)` or `0` |
+| `bubbleCheck` | bubble-check in `generate_rate_sample` | `delivery_rate.rs:125–129` | **exact** | conditional `update_app_limited(false)` |
+| `shouldUpdateRate` | rate-update guard in `generate_rate_sample` | `delivery_rate.rs:165–171` | **exact** | `!is_app_limited \|\| new > old` |
+
+### Known divergences
+
+1. **Isolated state model**: The full `Rate` struct contains additional fields
+   (`delivered`, `delivered_time`, `first_sent_time`, `rate_sample`). Only
+   the three fields relevant to app-limited guard logic are modelled.
+2. **`on_packet_sent` interaction**: the stamping of `is_app_limited` onto
+   sent packets (at send time) and its use in `update_rate_sample` are not
+   modelled. The guard state machine itself is verified in isolation.
+
+### Impact on proofs
+
+14 theorems (none with `sorry`) + 9 `native_decide` examples. All eight
+theorem groups (flag invariant, set-true, set-false, positivity, bubble-gone,
+bubble-preserved, rate-update guards, idempotence) are covered.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 135), 0 sorry.
+- Informal spec: `formal-verification/specs/delivery_rate_app_limited_informal.md`.
+- Route-B tests: not yet created.

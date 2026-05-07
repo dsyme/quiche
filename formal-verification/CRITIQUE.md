@@ -4,42 +4,39 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-05 10:30 UTC
-- **Commit**: `fed253fc75212144e31bb7b0151d72615551745c`
-- **Run**: run 132 — Task 3 (T50 TransportParamReserved, 15 thms, 0 sorry) +
-  Task 7 (Critique update). Also merges run 130 (Hystart, 13 thms) and
-  run 131 (WindowedFilter, 15 thms). Full suite: 43 Lean files, ~836 theorems,
-  0 sorry; 11 Route-B test targets (404+ PASS).
+- **Date**: 2026-05-07 10:54 UTC
+- **Commit**: `ad57ce4b`
+- **Run**: run 138 — Task 1 (Research T55/T56/T57) + Task 7 (Critique update).
+  Merges runs 136 (NewRenoAIMD T53, 17 thms; WindowedFilter Route-B 24/24 PASS)
+  and run 137 (BBR2NetworkFilters T54, 19 thms; REPORT update).
+  Full suite: **47 Lean files, 906 theorems, 0 sorry**;
+  13 Route-B test targets (455+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **38 Lean files with
-~770 theorems (+ examples), 0 sorry** 🎉 (Lean 4.29.0, no Mathlib), backed by
-**10 Route-B correspondence test targets (285+ cases PASS)**. Run 124 adds
-Route-B tests for `FrameAckEliciting` (T42, 33/33 PASS). Prior runs 122–123
-added Route-B tests for `QPACKInteger` (25/25 PASS) and `StreamStateMachine`
-(46/46 PASS). The full suite spans QUIC transport, congestion control (including
-BBR2), HTTP/3 codec, QPACK, and stream/frame state machines.
+The formal verification suite for `quiche` now covers **47 Lean files with
+906 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
+**13 Route-B correspondence test targets (455+ cases PASS)**. Run 136 adds
+`NewRenoAIMD.lean` (T53, 17 thms) formalising multi-cycle AIMD convergence
+in NewReno, and WindowedFilter Route-B tests (24/24 PASS). Run 137 adds
+`BBR2NetworkFilters.lean` (T54, 19 thms) formalising the two-slot
+MaxBandwidthFilter and RoundTripCounter invariants.
 
-This is a significant milestone: **the entire FV suite of ~770 theorems across 38
-Lean files is fully proved with zero outstanding sorry obligations**, and **10 of
-38 targets have independent Route-B executable correspondence tests confirming
-model fidelity.** Every theorem has been mechanically verified by `lake build`.
+The suite spans the full QUIC stack: byte-level framing, congestion control
+(NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
+HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
+HTTP/3 codec, QPACK, stream/frame state machines, and RFC compliance.
+Every theorem has been mechanically verified by `lake build`.
 
-The most notable results span the full QUIC stack: **`encode_decode_pktnum`**
-(end-to-end packet-number encode↔decode composition for all four lengths);
-**`short_long_first_byte_differ`** (type disambiguation); **`emitN_le_maxData`**
-(RFC 9000 §4.1 flow-control safety); **`decode_pktnum_correct`** (RFC §A.3);
-**`decodeAckBlocks_all_valid` + `decodeAckBlocks_bounded`** (ACK frame range
-safety); **`pacing_rate_le_cap`** (gcongestion pacing-rate cap invariant);
-**`h3f_goaway_roundtrip`/`h3f_cancel_push_roundtrip`/`h3f_max_push_id_roundtrip`**
-(HTTP/3 single-varint frame codec round-trips). Key findings include OQ-1
-(StreamPriorityKey antisymmetry, confirmed intentional) and OQ-T43-2 (uncapped
-ACK block_count — potential DoS vector, filed as finding).
+Run 138 (this run) identifies three new research targets (T55: BBR2 startup
+exit monotonicity, T56: loss-detection threshold bounds, T57: ProbeBW phase
+cycle) and updates this critique to reflect the current 47-file, 906-theorem
+state.
 
----
+
+## Proved Theorems
 
 ## Proved Theorems
 
@@ -1384,3 +1381,164 @@ belongs to the RFC 9000 §18.1 reserved arithmetic progression {27, 58, 89, ...}
   state machines, windowed filtering, RFC compliance (transport param IDs).
 - **Next priority**: Route-B tests for T48 (HyStart++) and T49 (WindowedFilter);
   update conference paper to 43 files / ~836 theorems.
+
+---
+
+## Run 133–135 Additions — Critique
+
+### Delivery Rate Conservative Interval (T51, run 133) — 13 theorems, 0 sorry
+
+`FVSquad/DeliveryRate.lean` formalises the `generate_rate_sample` interval
+computation in `quiche/src/recovery/congestion/delivery_rate.rs`.
+
+**Assessment (mid-level, medium-high bug-catching potential)**:
+- `rate_conservative_send` and `rate_conservative_ack` are the headline
+  results: `delivery_rate(d, max(s,a)) ≤ delivery_rate(d, s)` and
+  `≤ delivery_rate(d, a)` respectively. These directly verify the RFC
+  draft §4 intent: using the max of send/ack elapsed times ensures the
+  rate estimate is never inflated relative to either clock.
+- `rate_max_interval_le_min_rate` combines both: the max-interval rate equals
+  `min(rate_send, rate_ack)`, the most conservative possible estimate.
+- **Limitation**: The app-limited flag logic (which determines whether a
+  sample replaces the stored bandwidth) is NOT modelled in this file —
+  that is now captured in `AppLimitedGuard.lean` (T52). The bandwidth type
+  (f64 division → u64 truncation) is modelled as integer division, which
+  is a sound approximation given the truncation direction.
+- **Utility**: The conservatism theorems directly bear on network fairness.
+  If `max` were accidentally replaced by `min`, the rate estimate could
+  be spuriously high, causing excessive sending. The proofs rule this out.
+- **Recommendation**: Prove that the product
+  `delivery_rate(d, max(s,a)) * max(s,a) ≤ d * 1e9` holds, which is the
+  direct statement that "we never over-estimate total delivered data."
+
+### App-Limited Guard State Machine (T52, run 135) — 14 theorems + 9 examples
+
+`FVSquad/AppLimitedGuard.lean` formalises the app-limited guard in
+`delivery_rate.rs`: `update_app_limited`, `app_limited`, the bubble-check
+exit condition in `generate_rate_sample`, and the rate-sample update guard.
+
+**Assessment (mid-level, high bug-catching potential)**:
+- `app_limited_iff`: the flag is exactly `end_of_app_limited ≠ 0`. This
+  is the core representation invariant; if `app_limited()` ever returned
+  a stale true when `end_of_app_limited = 0`, congestion samples would be
+  incorrectly suppressed.
+- `set_true_marks_app_limited` / `set_false_clears_app_limited`: the setter
+  correctly enters/exits app-limited mode. Directly proves that calling
+  `update_app_limited(true)` always activates the flag, and `false` always
+  deactivates it — no partial update possible.
+- `end_of_app_limited_pos_when_set`: when entering app-limited mode,
+  `end_of_app_limited ≥ 1`. The `max(last_sent, 1)` guard in the Rust code
+  prevents `end_of_app_limited = 0` from being read as "not app-limited"
+  when `last_sent_packet = 0`. This theorem directly verifies that guard.
+- `bubble_gone_clears`: when `largest_acked > end_of_app_limited`, the
+  bubble-check exits app-limited mode. Proves that the RFC-mandated
+  "exit when bubble is ACKed" condition is correctly implemented.
+- `bubble_not_gone_preserves`: no state change when bubble is not yet gone.
+  Together with `bubble_gone_clears`, this is a complete case analysis of
+  `generate_rate_sample`'s app-limited exit logic.
+- `rate_update_when_not_app_limited` / `rate_update_iff_new_gt_old`: the
+  bandwidth sample guard is correctly formulated — non-app-limited samples
+  always update, app-limited samples only update if the new rate exceeds the
+  old one (Linux kernel behaviour, per the inline source comment).
+- **Limitation**: The interaction with `on_packet_sent` (which stamps each
+  sent packet with the current `is_app_limited` flag) is not modelled here;
+  this file only covers the guard state machine itself. The timing-based
+  elapsed-interval computation is in `DeliveryRate.lean`.
+- **Positive finding**: The `max(last_sent_packet, 1)` guard in
+  `update_app_limited(true)` is non-obvious and easy to miss in review. The
+  theorem `end_of_app_limited_pos_when_set` confirms this guard is always
+  active, preventing the flag from being silently cleared on the first ACK
+  when no packets have been sent yet.
+- **Utility**: High. The app-limited guard is a subtle piece of congestion
+  control logic that affects whether delivery-rate samples influence the
+  congestion window. A bug here could cause either unnecessary cwnd reduction
+  (app-limited samples suppressed too aggressively) or over-estimation
+  (app-limited samples accepted when they should not be).
+- **Recommendation**: Model the full interaction between `on_packet_sent`
+  (stamping `is_app_limited` onto sent packets) and `update_rate_sample`
+  (reading back the stamp on ACK), proving that the flag on the sample matches
+  the flag at send time. This end-to-end property would close the remaining
+  app-limited guard verification gap.
+
+### HyStart++ Route-B Tests (T48, run 133) — 27/27 PASS
+
+Route-B tests for `Hystart.lean` confirm that the Lean model's `rtt_thresh`,
+`css_cwnd_inc`, and `rtt_thresh_valid` functions agree with the Rust HyStart++
+implementation on 27 cases covering all boundary conditions (min/max clamp
+edges, CSS divisor, fractional increments). Model fidelity confirmed.
+
+
+### NewRenoAIMD Multi-Cycle Convergence (T53, run 136) — 17 theorems, 0 sorry
+
+`FVSquad/NewRenoAIMD.lean` formalises multi-cycle AIMD convergence properties
+for NewReno's congestion window in `quiche/src/recovery/congestion/reno.rs`.
+
+**Assessment (high-level, high bug-catching potential)**:
+- Proves that across multiple AIMD cycles, the cwnd approaches a stable
+  value determined by the loss rate — this is the RFC 5681 convergence claim.
+- Key theorems: `cwnd_increases_in_ca` (CA phase increments are positive),
+  `cwnd_decreases_on_loss` (multiplicative decrease is exact),
+  `aimd_cycle_bounded` (cwnd bounded above by `ssthresh` before next loss),
+  `multi_cycle_convergence` (cwnd sequence is eventually bounded in a finite
+  interval around the equilibrium).
+- **Utility**: Very high for the congestion-avoidance path, which is the
+  dominant mode in long-lived connections. These properties rule out entire
+  classes of implementation bugs (e.g., off-by-one in multiplicative decrease,
+  additive increment applied on wrong condition).
+
+### WindowedFilter Route-B Tests (T49, run 136) — 24/24 PASS
+
+Route-B tests for `WindowedFilter.lean` confirm the Lean 3-slot max-filter model
+agrees with the Rust `WindowedFilter` implementation on 24 cases covering
+`reset`, `clear`, `update` (multiple round trips), and `get_best`/ordering
+invariants. Model fidelity confirmed.
+
+### BBR2 MaxBandwidthFilter + RoundTripCounter (T54, run 137) — 19 theorems, 0 sorry
+
+`FVSquad/BBR2NetworkFilters.lean` formalises two data structures from
+`quiche/src/recovery/gcongestion/bbr2/network_model.rs`:
+- `MaxBandwidthFilter`: two-slot sliding-window maximum over consecutive
+  BBR2 round trips.
+- `RoundTripCounter`: counts completed BBR2 round trips, detects
+  round-trip boundaries, and advances the filter epoch on boundary.
+
+**Assessment (mid-level, medium-high bug-catching potential)**:
+- `get_ge_slot0` / `get_ge_slot1`: filter's `get()` output is always ≥ both
+  slots' values. Directly validates that the max-filter never under-reports
+  bandwidth — a regression here would cause BBR2 to underestimate available
+  bandwidth and under-utilise the pipe.
+- `update_then_advance_slot0` / `advance_slot0_eq_old_slot1`: the slot
+  rotation logic is correctly sequenced. An off-by-one in the advance step
+  would cause the second-best sample to be lost prematurely, making the
+  filter too aggressive in forgetting past measurements.
+- `round_trip_count_monotone_two` / `on_acked_count_nondecreasing`:
+  round-trip counter is non-decreasing; guarantees BBR2's internal
+  time-keeping never goes backwards.
+- **Utility**: Medium-high. The two-slot filter is simpler than the
+  three-slot `WindowedFilter` but carries the same ordering guarantee needed
+  for BBR2 bandwidth estimation. The RoundTripCounter theorems confirm correct
+  epoch tracking.
+- **Recommendation**: Add a theorem linking `RoundTripCounter` advances to
+  `MaxBandwidthFilter.advance` calls — proving that the filter advances
+  exactly once per completed round trip. This end-to-end property would
+  close the remaining gap between the two structures.
+
+### Overall Status (run 138)
+
+- **47 Lean files, 906 theorems, 0 sorry** (lake build ✅, Lean 4.29.0+)
+- Route-B: 13 targets, 455+ cases PASS
+- Coverage spans: QUIC transport, congestion control (NewReno with multi-cycle
+  AIMD convergence, Cubic, BBR2 with startup/probing model, pacing, HyStart++,
+  WindowedFilter max-filter, delivery-rate estimation, app-limited guard),
+  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
+  machines, RFC compliance (transport param IDs).
+- Run 136: T53 NewRenoAIMD (17 thms) + WindowedFilter Route-B (24/24 PASS)
+- Run 137: T54 BBR2NetworkFilters (19 thms: MaxBandwidthFilter + RoundTripCounter)
+- **Next priorities**:
+  1. T55: BBR2StartupExit.lean (~15 thms, HIGH — write specs + Lean file)
+  2. T56: LossDetectionThreshold.lean (~12 thms, MEDIUM)
+  3. T57: ProbeBWPhase.lean (~10 thms, trivial `decide`)
+  4. Update conference paper to 47 files / 906 theorems
+  5. Route-B tests for T50 (TransportParamReserved) or T54 (BBR2NetworkFilters)
+
+

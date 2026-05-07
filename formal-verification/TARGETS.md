@@ -211,3 +211,84 @@ RFC 9000 §18.1 reserved arithmetic progression {31*N+27 : N ≥ 0}.
 - Two distinct reserved IDs differ by ≥ 31 (`isReserved_spacing`)
 
 **Lean file**: `FVSquad/TransportParamReserved.lean` — 15 theorems, 0 sorry, `lake build` ✅
+
+---
+
+### Target 55: BBR2 Startup Exit — `full_bandwidth_reached` Monotonicity
+
+**Phase**: 1 — Research (run 138)
+**Location**: `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+  (`has_bandwidth_growth`, `check_persistent_queue`, `full_bandwidth_reached`)
+**Priority**: ⭐⭐⭐ HIGH
+
+BBR2 exits startup mode when `full_bandwidth_reached` is set by either:
+(a) `rounds_without_bandwidth_growth >= startup_full_bw_rounds` AND not
+app-limited, or (b) `rounds_with_queueing >= max_startup_queue_rounds`.
+
+**Key properties**:
+- `full_bandwidth_reached` is monotone (set-only, never cleared after setting)
+- Counter bounds: growth counter and queue counter bounded at trigger threshold
+- Threshold trigger correctness (both paths)
+
+**Specification size**: ~12–15 theorems, ~60 Lean lines.
+
+**Proof tractability**: LOW–MEDIUM — all `omega`/`simp`; monotonicity by
+structural induction on state transitions.
+
+**Approximations needed**: Abstract `Bandwidth` as `Nat`; ignore
+`full_bandwidth_baseline` internals; treat `is_app_limited` as `Bool` parameter.
+
+**Next action**: Write `formal-verification/specs/bbr2_startup_exit_informal.md`
+(Task 2), then `FVSquad/BBR2StartupExit.lean` (Task 3+5).
+
+---
+
+### Target 56: Loss Detection Packet Threshold Bounds (RFC 9002 §6.1)
+
+**Phase**: 1 — Research (run 138)
+**Location**: `quiche/src/recovery/mod.rs`
+  (`INITIAL_PACKET_THRESHOLD`, `MAX_PACKET_THRESHOLD`, `pkt_thresh()`)
+**Priority**: ⭐⭐ MEDIUM
+
+Packet-loss threshold adapts in `[3, 20]` per RFC 9002 §6.1. A threshold
+outside this range causes missed loss detection or spurious retransmits.
+
+**Key properties**:
+- `pkt_thresh` initially equals 3
+- `pkt_thresh` always in `[3, 20]`
+- Adaptation is non-decreasing until saturated at 20
+
+**Specification size**: ~10–12 theorems, ~50 Lean lines.
+
+**Proof tractability**: LOW — all `omega` on bounded `Nat`.
+
+**Approximations needed**: Treat threshold as `Nat` bounded counter;
+ignore time threshold (floating-point).
+
+**Next action**: Write `FVSquad/LossDetectionThreshold.lean` (Task 3+5).
+
+---
+
+### Target 57: BBR2 ProbeBW Phase Cycle Ordering
+
+**Phase**: 1 — Research (run 138)
+**Location**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs`
+  (phase transitions)
+**Priority**: ⭐⭐ MEDIUM
+
+ProbeBW cycles through 4 sub-phases in a fixed order. Phase transition bugs
+would cause incorrect pacing/probing behaviour.
+
+**Key properties**:
+- `nextPhase` maps only valid transitions (Down→Cruise→Refill→Up→Down)
+- No self-loops; Down reachable within 3 steps from any phase
+- All properties are `decide`-provable on 4-element enum
+
+**Specification size**: ~8–10 theorems, ~40 Lean lines.
+
+**Proof tractability**: TRIVIAL — all `decide`.
+
+**Approximations needed**: Abstract cwnd/bandwidth; model phase label only.
+
+**Next action**: Write `FVSquad/ProbeBWPhase.lean` (Task 3+5).
+
