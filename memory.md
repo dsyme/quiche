@@ -1,6 +1,6 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-07 (run 137)
+Last updated: 2026-05-07 (run 138)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
 FVSquad.lean: import manifest for all 47 modules
@@ -36,8 +36,11 @@ FVSquad.lean: import manifest for all 47 modules
 | 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run135 (14 thms + 9 examples, 0 sorry) |
 | 53 | NewReno AIMD multi-cycle theorems | FVSquad/NewRenoAIMD.lean | 5 | Done run136 (17 thms, 0 sorry) |
 | 54 | BBR2 MaxBandwidthFilter + RoundTripCounter | quiche/src/recovery/gcongestion/bbr2/network_model.rs | 5 | Done run137 (19 thms, 0 sorry) |
+| 55 | BBR2 startup exit full_bandwidth_reached monotonicity | quiche/src/recovery/gcongestion/bbr2/network_model.rs | 1 | Researched run138 — HIGH priority |
+| 56 | Loss detection packet threshold bounds RFC 9002 §6.1 | quiche/src/recovery/mod.rs | 1 | Researched run138 — MEDIUM |
+| 57 | BBR2 ProbeBW phase cycle ordering | quiche/src/recovery/gcongestion/bbr2/probe_bw.rs | 1 | Researched run138 — MEDIUM (trivial decide) |
 
-## MILESTONE: 47 Lean files, 906 theorems, 0 sorry; Route-B 13 targets, 472 PASS; REPORT updated run137
+## MILESTONE: 47 Lean files, 906 theorems, 0 sorry; Route-B 13 targets, 455+ PASS
 
 ## Lean File Registry
 
@@ -89,6 +92,7 @@ FVSquad.lean: import manifest for all 47 modules
 | FVSquad/TransportParamReserved.lean | 15 | Done run132 |
 | FVSquad/DeliveryRate.lean | 13 | Done run133 |
 | FVSquad/AppLimitedGuard.lean | 14 + 9 examples | Done run135 |
+| FVSquad/NewRenoAIMD.lean | 17 | Done run136 |
 | FVSquad/BBR2NetworkFilters.lean | 19 | Done run137 |
 | **TOTAL** | **~906** | **0 sorry** |
 
@@ -117,17 +121,30 @@ FVSquad.lean: import manifest for all 47 modules
 
 ## CORRESPONDENCE.md Status
 
-- All 46 Lean files have correspondence entries (updated run135)
-- BBR2NetworkFilters added run137 (needs CORRESPONDENCE.md update)
+- All 47 Lean files covered (updated run137 for BBR2NetworkFilters)
 - No mismatches identified
 
 ## Open PRs (lean-squad label)
 
-- run137: BBR2NetworkFilters + REPORT update (just created)
+- run138: Research T55/T56/T57 + Critique update (this run)
 
-## Next Actions
+## Status Issue
 
-1. Update CORRESPONDENCE.md with T54 entry (BBR2NetworkFilters)
-2. Route-B tests for T50 (TransportParamReserved)
-3. Update conference paper to 47 files / 906 theorems
-4. New target: BBR2 startup exit condition or QUIC loss detection threshold
+Issue #73 or equivalent (open)
+
+## Key Findings
+
+- OQ-1 (run49): StreamPriorityKey antisymmetry violation (intentional by design)
+- OQ-RT-1 (run68): zero-length retransmit with off > ackOff may not be no-op
+- OQ-FC-1 (run70): RESET_STREAM guard in RecvBuf not modelled
+- decode_pktnum_correct spec refinement (run39): non-strict bound counterexample found
+- OQ-T43-2 (run100): uncapped block_count in parse_ack_frame — potential DoS vector
+- OQ-T37-1 (run103): clock-monotonicity not asserted in BytesInFlight.add/subtract
+
+## Next Priority Actions
+
+1. T55: Write FVSquad/BBR2StartupExit.lean (~15 thms, HIGH — all omega)
+2. T57: Write FVSquad/ProbeBWPhase.lean (~10 thms, trivial decide) — fast win
+3. T56: Write FVSquad/LossDetectionThreshold.lean (~12 thms, MEDIUM)
+4. Update conference paper to 47 files / 906 theorems
+5. Route-B tests for T50 (TransportParamReserved) or T54 (BBR2NetworkFilters)
