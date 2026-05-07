@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-07 (run 136)
+Last updated: 2026-05-07 (run 137)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 45 modules
+FVSquad.lean: import manifest for all 47 modules
 
 ## FV Targets
 
@@ -32,11 +32,12 @@ FVSquad.lean: import manifest for all 45 modules
 | 48 | HyStart++ RTT threshold clamp + CSS divisor | quiche/src/recovery/congestion/hystart.rs | 5 | Done run130 (13 thms, 0 sorry); Route-B 27/27 PASS run133 |
 | 49 | WindowedFilter ordering invariant | quiche/src/recovery/gcongestion/bbr/windowed_filter.rs | 5 | Done run131 (15 thms, 0 sorry); Route-B 24/24 PASS run136 |
 | 50 | RFC 9000 §18.1 Reserved Transport Param IDs | quiche/src/transport_params.rs | 5 | Done run132 (15 thms, 0 sorry) |
-| 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry); max(send,ack) → conservative rate |
+| 51 | Delivery Rate conservative interval | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run133 (13 thms, 0 sorry) |
 | 52 | Delivery Rate app_limited guard state machine | quiche/src/recovery/congestion/delivery_rate.rs | 5 | Done run135 (14 thms + 9 examples, 0 sorry) |
-| 53 | NewReno AIMD multi-cycle theorems | formal-verification/lean/FVSquad/NewRenoAIMD.lean | 5 | Done run136 (17 thms, 0 sorry) |
+| 53 | NewReno AIMD multi-cycle theorems | FVSquad/NewRenoAIMD.lean | 5 | Done run136 (17 thms, 0 sorry) |
+| 54 | BBR2 MaxBandwidthFilter + RoundTripCounter | quiche/src/recovery/gcongestion/bbr2/network_model.rs | 5 | Done run137 (19 thms, 0 sorry) |
 
-## MILESTONE: 46 Lean files, ~880 theorems, 0 sorry; Route-B 13 targets, 455+ PASS; CORRESPONDENCE.md covers all 46 files
+## MILESTONE: 47 Lean files, 906 theorems, 0 sorry; Route-B 13 targets, 472 PASS; REPORT updated run137
 
 ## Lean File Registry
 
@@ -88,7 +89,8 @@ FVSquad.lean: import manifest for all 45 modules
 | FVSquad/TransportParamReserved.lean | 15 | Done run132 |
 | FVSquad/DeliveryRate.lean | 13 | Done run133 |
 | FVSquad/AppLimitedGuard.lean | 14 + 9 examples | Done run135 |
-| **TOTAL** | **~863** | **0 sorry** |
+| FVSquad/BBR2NetworkFilters.lean | 19 | Done run137 |
+| **TOTAL** | **~906** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -106,25 +108,26 @@ FVSquad.lean: import manifest for all 45 modules
 | T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 124 | 33 | 33/33 PASS |
 | T33 (H3Settings) | tests/h3_settings/ | 125 | 43 | 43/43 PASS |
 | T48 (HyStart++) | tests/hystart/ | 133 | 27 | 27/27 PASS |
+| T49 (WindowedFilter) | tests/windowed_filter/ | 136 | 24 | 24/24 PASS |
 
 ## CI Status
 
 - lean-ci.yml: exists, working, path-triggered on formal-verification/lean/**
-- Audited run131: CI workflow healthy, correct triggers, cache keyed on lake-manifest.json
+- Audited run136: CI workflow healthy
 
 ## CORRESPONDENCE.md Status
 
-- All 45 Lean files now have correspondence entries (updated run135)
+- All 46 Lean files have correspondence entries (updated run135)
+- BBR2NetworkFilters added run137 (needs CORRESPONDENCE.md update)
 - No mismatches identified
-- Key approximations documented per file
 
 ## Open PRs (lean-squad label)
 
-- run135: AppLimitedGuard + critique update (just created)
+- run137: BBR2NetworkFilters + REPORT update (just created)
 
 ## Next Actions
 
-1. Route-B correspondence tests for T49 (WindowedFilter) and T50 (TransportParamReserved)
-2. T53 — NewReno multi-cycle AIMD convergence (reno cwnd AIMD state machine)
-3. Update conference paper to 45 files / ~863 theorems
-4. Model end-to-end app-limited stamp interaction (T52 recommendation from CRITIQUE.md)
+1. Update CORRESPONDENCE.md with T54 entry (BBR2NetworkFilters)
+2. Route-B tests for T50 (TransportParamReserved)
+3. Update conference paper to 47 files / 906 theorems
+4. New target: BBR2 startup exit condition or QUIC loss detection threshold
