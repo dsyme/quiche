@@ -4,43 +4,39 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-06 10:36 UTC
-- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
-- **Run**: run 135 — Task 3 (T52 AppLimitedGuard, 14 thms, 0 sorry) +
-  Task 7 (Critique update). Merges run 133 (DeliveryRate T51, 13 thms;
-  HyStart++ Route-B 27/27 PASS) and run 134 (CORRESPONDENCE.md update,
-  T52 informal spec). Full suite: **45 Lean files, ~863 theorems, 0 sorry**;
-  12 Route-B test targets (431+ PASS).
+- **Date**: 2026-05-07 10:54 UTC
+- **Commit**: `ad57ce4b`
+- **Run**: run 138 — Task 1 (Research T55/T56/T57) + Task 7 (Critique update).
+  Merges runs 136 (NewRenoAIMD T53, 17 thms; WindowedFilter Route-B 24/24 PASS)
+  and run 137 (BBR2NetworkFilters T54, 19 thms; REPORT update).
+  Full suite: **47 Lean files, 906 theorems, 0 sorry**;
+  13 Route-B test targets (455+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **45 Lean files with
-~863 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**12 Route-B correspondence test targets (431+ cases PASS)**. Run 133 adds
-`DeliveryRate.lean` (T51, 13 thms) formalising the conservative max-interval
-property in `generate_rate_sample`, and HyStart++ Route-B tests (27/27 PASS).
-Run 134 updates CORRESPONDENCE.md to cover all 44 files and adds the T52
-informal spec for the app-limited guard state machine. Run 135 (this run) adds
-`AppLimitedGuard.lean` (T52, 14 thms + 9 examples) formalising the full
-app-limited guard state machine: `update_app_limited`, `app_limited`, the
-bubble-check exit condition, and the rate-sample update guard.
+The formal verification suite for `quiche` now covers **47 Lean files with
+906 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
+**13 Route-B correspondence test targets (455+ cases PASS)**. Run 136 adds
+`NewRenoAIMD.lean` (T53, 17 thms) formalising multi-cycle AIMD convergence
+in NewReno, and WindowedFilter Route-B tests (24/24 PASS). Run 137 adds
+`BBR2NetworkFilters.lean` (T54, 19 thms) formalising the two-slot
+MaxBandwidthFilter and RoundTripCounter invariants.
 
-The suite spans the full QUIC stack: transport, congestion control (NewReno,
-Cubic, BBR2 with pacing and windowed filter, HyStart++), HTTP/3 codec, QPACK
-(static table + integer codec), stream/frame state machines, and delivery-rate
-estimation.  Every theorem has been mechanically verified by `lake build`.
+The suite spans the full QUIC stack: byte-level framing, congestion control
+(NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
+HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
+HTTP/3 codec, QPACK, stream/frame state machines, and RFC compliance.
+Every theorem has been mechanically verified by `lake build`.
 
-The most notable results remain: `encode_decode_pktnum` (end-to-end
-packet-number codec composition); `emitN_le_maxData` (RFC 9000 §4.1
-flow-control safety); `decodeAckBlocks_all_valid + bounded` (ACK safety);
-`pacing_rate_le_cap` (BBR2 pacing invariant); `update_pure_preserves_ordered`
-(WindowedFilter ordering invariant, critical for BBR2 bandwidth estimation);
-`delivery_rate_max_interval_le_min_rate` (conservative rate estimation);
-`appLimited_iff + bubble_gone_clears` (app-limited guard state machine).
+Run 138 (this run) identifies three new research targets (T55: BBR2 startup
+exit monotonicity, T56: loss-detection threshold bounds, T57: ProbeBW phase
+cycle) and updates this critique to reflect the current 47-file, 906-theorem
+state.
 
----
+
+## Proved Theorems
 
 ## Proved Theorems
 
@@ -1471,16 +1467,78 @@ Route-B tests for `Hystart.lean` confirm that the Lean model's `rtt_thresh`,
 implementation on 27 cases covering all boundary conditions (min/max clamp
 edges, CSS divisor, fractional increments). Model fidelity confirmed.
 
-### Overall Status (run 135)
 
-- **45 Lean files, ~863 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
-- Route-B: 12 targets, 431+ cases PASS
-- Coverage spans: QUIC transport, congestion control (NewReno, Cubic, BBR2
-  with pacing, HyStart++, WindowedFilter, delivery-rate estimation including
-  app-limited guard), HTTP/3 codec, QPACK (static table + integer codec),
-  stream/frame state machines, RFC compliance (transport param IDs).
+### NewRenoAIMD Multi-Cycle Convergence (T53, run 136) — 17 theorems, 0 sorry
+
+`FVSquad/NewRenoAIMD.lean` formalises multi-cycle AIMD convergence properties
+for NewReno's congestion window in `quiche/src/recovery/congestion/reno.rs`.
+
+**Assessment (high-level, high bug-catching potential)**:
+- Proves that across multiple AIMD cycles, the cwnd approaches a stable
+  value determined by the loss rate — this is the RFC 5681 convergence claim.
+- Key theorems: `cwnd_increases_in_ca` (CA phase increments are positive),
+  `cwnd_decreases_on_loss` (multiplicative decrease is exact),
+  `aimd_cycle_bounded` (cwnd bounded above by `ssthresh` before next loss),
+  `multi_cycle_convergence` (cwnd sequence is eventually bounded in a finite
+  interval around the equilibrium).
+- **Utility**: Very high for the congestion-avoidance path, which is the
+  dominant mode in long-lived connections. These properties rule out entire
+  classes of implementation bugs (e.g., off-by-one in multiplicative decrease,
+  additive increment applied on wrong condition).
+
+### WindowedFilter Route-B Tests (T49, run 136) — 24/24 PASS
+
+Route-B tests for `WindowedFilter.lean` confirm the Lean 3-slot max-filter model
+agrees with the Rust `WindowedFilter` implementation on 24 cases covering
+`reset`, `clear`, `update` (multiple round trips), and `get_best`/ordering
+invariants. Model fidelity confirmed.
+
+### BBR2 MaxBandwidthFilter + RoundTripCounter (T54, run 137) — 19 theorems, 0 sorry
+
+`FVSquad/BBR2NetworkFilters.lean` formalises two data structures from
+`quiche/src/recovery/gcongestion/bbr2/network_model.rs`:
+- `MaxBandwidthFilter`: two-slot sliding-window maximum over consecutive
+  BBR2 round trips.
+- `RoundTripCounter`: counts completed BBR2 round trips, detects
+  round-trip boundaries, and advances the filter epoch on boundary.
+
+**Assessment (mid-level, medium-high bug-catching potential)**:
+- `get_ge_slot0` / `get_ge_slot1`: filter's `get()` output is always ≥ both
+  slots' values. Directly validates that the max-filter never under-reports
+  bandwidth — a regression here would cause BBR2 to underestimate available
+  bandwidth and under-utilise the pipe.
+- `update_then_advance_slot0` / `advance_slot0_eq_old_slot1`: the slot
+  rotation logic is correctly sequenced. An off-by-one in the advance step
+  would cause the second-best sample to be lost prematurely, making the
+  filter too aggressive in forgetting past measurements.
+- `round_trip_count_monotone_two` / `on_acked_count_nondecreasing`:
+  round-trip counter is non-decreasing; guarantees BBR2's internal
+  time-keeping never goes backwards.
+- **Utility**: Medium-high. The two-slot filter is simpler than the
+  three-slot `WindowedFilter` but carries the same ordering guarantee needed
+  for BBR2 bandwidth estimation. The RoundTripCounter theorems confirm correct
+  epoch tracking.
+- **Recommendation**: Add a theorem linking `RoundTripCounter` advances to
+  `MaxBandwidthFilter.advance` calls — proving that the filter advances
+  exactly once per completed round trip. This end-to-end property would
+  close the remaining gap between the two structures.
+
+### Overall Status (run 138)
+
+- **47 Lean files, 906 theorems, 0 sorry** (lake build ✅, Lean 4.29.0+)
+- Route-B: 13 targets, 455+ cases PASS
+- Coverage spans: QUIC transport, congestion control (NewReno with multi-cycle
+  AIMD convergence, Cubic, BBR2 with startup/probing model, pacing, HyStart++,
+  WindowedFilter max-filter, delivery-rate estimation, app-limited guard),
+  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
+  machines, RFC compliance (transport param IDs).
+- Run 136: T53 NewRenoAIMD (17 thms) + WindowedFilter Route-B (24/24 PASS)
+- Run 137: T54 BBR2NetworkFilters (19 thms: MaxBandwidthFilter + RoundTripCounter)
 - **Next priorities**:
-  1. Route-B tests for T49 (WindowedFilter) and T50 (TransportParamReserved)
-  2. T53: NewReno multi-cycle AIMD convergence (reno cwnd AIMD state machine)
-  3. Update conference paper to 45 files / ~863 theorems
-  4. Model end-to-end app-limited stamp interaction (see T52 recommendation)
+  1. T55: BBR2StartupExit.lean (~15 thms, HIGH — write specs + Lean file)
+  2. T56: LossDetectionThreshold.lean (~12 thms, MEDIUM)
+  3. T57: ProbeBWPhase.lean (~10 thms, trivial `decide`)
+  4. Update conference paper to 47 files / 906 theorems
+  5. Route-B tests for T50 (TransportParamReserved) or T54 (BBR2NetworkFilters)
+
+
