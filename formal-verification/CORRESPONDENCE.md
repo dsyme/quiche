@@ -4,9 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-02 10:00 UTC
-- **Commit**: `51434be1`
-- **Lean build**: `lake build` passed with Lean 4.30.0-rc2 — 38 files, **0 sorry** 🎉
+- **Date**: 2026-05-07 18:20 UTC
+- **Commit**: `a3073cdb`
+- **Lean build**: `lake build` passed with Lean 4.29.1 — 48 files, **0 sorry** 🎉
+  (run 139: added 3 entries — NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
   (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
   StreamStateMachine, QPACKInteger)
 - **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
@@ -2949,3 +2950,189 @@ in PTO.
 - `lake build` passed with Lean 4.29.1 (run 128), 0 sorry.
 - Informal spec: `formal-verification/specs/idle_timeout_informal.md`.
 - Route-B tests: not yet created (planned for a future run).
+
+---
+
+## `FVSquad/DeliveryRate.lean` → `quiche/src/recovery/congestion/delivery_rate.rs`
+
+### Last Updated
+- **Date**: 2026-05-06 10:36 UTC
+- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `elapsed_interval` | `send_elapsed.max(ack_elapsed)` | `delivery_rate.rs:139` | **exact** | Pure `max` of two durations → `max` of two Nats |
+| `delivery_rate` | implicit in `generate_rate_sample` | `delivery_rate.rs:155–161` | **abstraction** | f64/u64 division modelled as integer division; truncation direction preserved |
+
+### Known divergences
+
+1. **Duration type**: Rust `Duration` (u64 secs + u32 nanos) is modelled as
+   `Nat` nanoseconds. All arithmetic is monotone in the same direction.
+2. **f64 intermediate**: Rust uses `delivered as f64 / interval.as_secs_f64()`
+   then casts to `u64`. The Lean model uses `delivered * 1e9 / interval_ns`
+   (integer arithmetic). This gives the same result to within 1 unit due to
+   truncation, which is acceptable for monotonicity proofs.
+3. **app-limited guard logic**: not modelled in this file; see `AppLimitedGuard.lean`.
+
+### Impact on proofs
+
+13 theorems (none with `sorry`): `interval_ge_send`, `interval_ge_ack`,
+`interval_comm`, `interval_zero`, `interval_pos_of_send_pos`,
+`interval_pos_of_ack_pos`, `interval_mono_send`, `interval_mono_ack`,
+`rate_zero_no_delivery`, `rate_zero_no_elapsed`, `rate_mono_delivered`,
+`rate_anti_elapsed`, `rate_conservative_send`, `rate_conservative_ack`,
+`rate_max_interval_le_min_rate`. All monotonicity/conservatism results
+are valid under the integer-division abstraction.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 133), 0 sorry.
+- Informal spec: `formal-verification/specs/delivery_rate_informal.md`.
+- Route-B tests: not yet created (planned for a future run).
+
+---
+
+## `FVSquad/AppLimitedGuard.lean` → `quiche/src/recovery/congestion/delivery_rate.rs`
+
+### Last Updated
+- **Date**: 2026-05-06 10:36 UTC
+- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `State.end_of_app_limited` | `Rate.end_of_app_limited` | `delivery_rate.rs:42` | **exact** | `u64` → `Nat` |
+| `State.last_sent_packet` | `Rate.last_sent_packet` | `delivery_rate.rs:46` | **exact** | `u64` → `Nat` |
+| `State.largest_acked` | `Rate.largest_acked` | `delivery_rate.rs:49` | **exact** | `u64` → `Nat` |
+| `appLimited` | `Rate::app_limited` | `delivery_rate.rs:201` | **exact** | `!= 0` check |
+| `updateAppLimited` | `Rate::update_app_limited` | `delivery_rate.rs:195–199` | **exact** | `max(last_sent, 1)` or `0` |
+| `bubbleCheck` | bubble-check in `generate_rate_sample` | `delivery_rate.rs:125–129` | **exact** | conditional `update_app_limited(false)` |
+| `shouldUpdateRate` | rate-update guard in `generate_rate_sample` | `delivery_rate.rs:165–171` | **exact** | `!is_app_limited \|\| new > old` |
+
+### Known divergences
+
+1. **Isolated state model**: The full `Rate` struct contains additional fields
+   (`delivered`, `delivered_time`, `first_sent_time`, `rate_sample`). Only
+   the three fields relevant to app-limited guard logic are modelled.
+2. **`on_packet_sent` interaction**: the stamping of `is_app_limited` onto
+   sent packets (at send time) and its use in `update_rate_sample` are not
+   modelled. The guard state machine itself is verified in isolation.
+
+### Impact on proofs
+
+14 theorems (none with `sorry`) + 9 `native_decide` examples. All eight
+theorem groups (flag invariant, set-true, set-false, positivity, bubble-gone,
+bubble-preserved, rate-update guards, idempotence) are covered.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 135), 0 sorry.
+- Informal spec: `formal-verification/specs/delivery_rate_app_limited_informal.md`.
+- Route-B tests: not yet created.
+
+---
+
+## `FVSquad/NewRenoAIMD.lean` → `quiche/src/recovery/congestion/newreno.rs`
+
+### Last Updated
+- **Date**: 2026-05-07 18:00 UTC
+- **Commit**: `a3073cdb`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `NewReno.ack_n` | (derived, multi-ACK iteration) | `newreno.rs:40–80` | **abstraction** | Functional iteration of single-step `on_packet_acked` |
+| theorems on `ack_n_*` | — | `newreno.rs` | **abstraction** | Properties of iterated ACK sequences |
+| `ssthresh_after_event` | `NewReno::on_congestion_event` | `newreno.rs:95–112` | **exact** | ssthresh = cwnd/2 after event |
+| `ca_accumulates` | CA byte-counter logic | `newreno.rs:55–70` | **exact** | bytes_acked_ca increments until cwnd |
+| `FloorInv` (invariant) | (implicit) | `newreno.rs:40–80` | **abstraction** | cwnd ≥ ssthresh modelled as derived invariant |
+
+### Known divergences
+
+1. **Inherits NewReno.lean approximations**: `usize` → `Nat`; `in_recovery` is a `Bool`; HyStart++ CSS and `app_limited` are abstracted away.
+2. **Multi-ACK iteration**: `ack_n` iterates `on_packet_acked` uniformly; the real code is called once per ACKed packet with varying sizes. This models the homogeneous case.
+3. **No inter-event state**: `event_then_acks_*` theorems assume a single congestion event followed by ACKs; complex interleaving is not modelled.
+
+### Impact on proofs
+
+17 theorems (0 sorry). All multi-cycle AIMD properties (ssthresh/cwnd ratio, CA counter progression, FloorInv invariant, slow-start growth) are proved at the level of the functional model. Divergences do not invalidate the proved properties — they are stated in terms of the model functions directly.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 136), 0 sorry.
+- Informal spec: `formal-verification/specs/newreno_informal.md` (via `FVSquad/NewReno.lean`).
+- Route-B tests: not yet created for AIMD multi-cycle specifically.
+
+---
+
+## `FVSquad/BBR2NetworkFilters.lean` → `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+
+### Last Updated
+- **Date**: 2026-05-07 18:00 UTC
+- **Commit**: `a3073cdb`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `MaxBandwidthFilter` | `MaxBandwidthFilter` | `network_model.rs:106–129` | **exact** | Two-slot array; Nat replaces Bandwidth |
+| `MaxBandwidthFilter.get` | `MaxBandwidthFilter::get` | `network_model.rs:116` | **exact** | max of two slots |
+| `MaxBandwidthFilter.update` | `MaxBandwidthFilter::update` | `network_model.rs:120` | **exact** | update slot0 with max(sample, slot0) |
+| `MaxBandwidthFilter.advance` | `MaxBandwidthFilter::advance` | `network_model.rs:125` | **exact** | slot0 ← slot1, slot1 ← 0 |
+| `RoundTripCounter` | `RoundTripCounter` | `network_model.rs:47–75` | **exact** | round_trip_count, last_sent_packet, end_of_round_trip |
+| `RoundTripCounter.onPacketSent` | `RoundTripCounter::on_packet_sent` | `network_model.rs:57` | **exact** | last_sent_packet update |
+| `RoundTripCounter.onPacketsAcked` | `RoundTripCounter::on_packets_acked` | `network_model.rs:62` | **exact** | round-trip count increment logic |
+| `RoundTripCounter.restartRound` | `RoundTripCounter::restart_round` | `network_model.rs:73` | **exact** | resets end_of_round_trip |
+
+### Known divergences
+
+1. **Bandwidth → Nat**: Rust `Bandwidth` wraps an `f64`-weighted type; modelled as `Nat` (bits/s, integer). Float rounding not captured, but the filter's max-selection logic is exact.
+2. **`MinRttFilter` not included**: the min-RTT filter in `network_model.rs` is not modelled here (separate concerns).
+3. **`BBRv2NetworkModel` struct wrapper**: only the two sub-structures are modelled; the large parent struct and its other fields are out of scope.
+
+### Impact on proofs
+
+19 theorems (0 sorry) covering `MaxBandwidthFilter` invariants (11) and `RoundTripCounter` invariants (8). Float-precision divergence does not affect the max-selection or round-counting logic.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 137), 0 sorry.
+- Route-B tests: not yet created.
+
+---
+
+## `FVSquad/BBR2StartupExit.lean` → `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+
+### Last Updated
+- **Date**: 2026-05-07 18:20 UTC
+- **Commit**: `a3073cdb`
+
+### Lean definitions vs. Rust source
+
+| Lean name | Rust name | Rust location | Correspondence | Notes |
+|-----------|-----------|---------------|----------------|-------|
+| `StartupState` | (fields of `BBRv2NetworkModel`) | `network_model.rs:179–185` | **exact** | 4 startup-exit fields extracted |
+| `StartupParams` | (fields of `Params`) | `network_model.rs:*` | **exact** | startup_full_bw_rounds, max_startup_queue_rounds, threshold ratio |
+| `setFullBwReached` | `BBRv2NetworkModel::set_full_bandwidth_reached` | `network_model.rs:708` | **exact** | unconditional setter |
+| `hasBandwidthGrowth` | `BBRv2NetworkModel::has_bandwidth_growth` | `network_model.rs:632–659` | **abstraction** | integer threshold replaces f32 multiplication |
+| `checkPersistentQueue` | `BBRv2NetworkModel::check_persistent_queue` | `network_model.rs:661–685` | **abstraction** | BDP calculation replaced by caller-supplied `target` |
+
+### Known divergences
+
+1. **f32 threshold → integer ratio**: `full_bw_threshold` is an `f32` in Rust; modelled as a `Nat` numerator/denominator pair. Threshold crossings are equivalent for well-formed rational parameters.
+2. **`ignore_app_limited_for_no_bandwidth_growth`**: the flag is threaded through but the `is_app_limited` conditional branch is fully preserved.
+3. **BDP pre-computation**: `checkPersistentQueue` in Lean takes `target : Nat` directly; the actual BDP computation (`bdp(max_bandwidth, target_gain)`) is abstracted away. This is documented in the function comment.
+4. **`check_persistent_queue` queue-based path**: `absurd_extreme_comparisons` lint override in Rust (line 683) suggests `max_startup_queue_rounds` may be 0; this edge case is covered by theorem `check_queue_sets_on_threshold` with `hthresh : 0 + 1 ≥ 0`.
+
+### Impact on proofs
+
+15 theorems (0 sorry) covering `full_bandwidth_reached` monotonicity under all three mutation paths. The key safety property — once set true, `full_bandwidth_reached` is never cleared — is proved for all three operations individually (thms 3, 9, 15) and for arbitrary sequences (thms 13, 14).
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1 (run 139), 0 sorry.
+- Route-B tests: not yet created.
