@@ -4,12 +4,13 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-08 04:04 UTC
-- **Commit**: `1a5f8fd1`
-- **Run**: run 140 — Task 5 (T57 ProbeBWPhase, 12 thms) + Task 7 (Critique update).
-  Merges run 139 (BBR2StartupExit T55, 15 thms; Correspondence update).
-  Full suite: **49 Lean files, 933 theorems, 0 sorry**;
-  13 Route-B test targets (455+ PASS).
+- **Date**: 2026-05-06 10:36 UTC
+- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
+- **Run**: run 135 — Task 3 (T52 AppLimitedGuard, 14 thms, 0 sorry) +
+  Task 7 (Critique update). Merges run 133 (DeliveryRate T51, 13 thms;
+  HyStart++ Route-B 27/27 PASS) and run 134 (CORRESPONDENCE.md update,
+  T52 informal spec). Full suite: **45 Lean files, ~863 theorems, 0 sorry**;
+  12 Route-B test targets (431+ PASS).
 
 ---
 
@@ -1461,6 +1462,19 @@ Route-B tests for `Hystart.lean` confirm that the Lean model's `rtt_thresh`,
 implementation on 27 cases covering all boundary conditions (min/max clamp
 edges, CSS divisor, fractional increments). Model fidelity confirmed.
 
+### Overall Status (run 135)
+
+- **45 Lean files, ~863 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 12 targets, 431+ cases PASS
+- Coverage spans: QUIC transport, congestion control (NewReno, Cubic, BBR2
+  with pacing, HyStart++, WindowedFilter, delivery-rate estimation including
+  app-limited guard), HTTP/3 codec, QPACK (static table + integer codec),
+  stream/frame state machines, RFC compliance (transport param IDs).
+- **Next priorities**:
+  1. Route-B tests for T49 (WindowedFilter) and T50 (TransportParamReserved)
+  2. T53: NewReno multi-cycle AIMD convergence (reno cwnd AIMD state machine)
+  3. Update conference paper to 45 files / ~863 theorems
+  4. Model end-to-end app-limited stamp interaction (see T52 recommendation)
 
 ### NewRenoAIMD Multi-Cycle Convergence (T53, run 136) — 17 theorems, 0 sorry
 
