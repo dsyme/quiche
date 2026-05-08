@@ -4,36 +4,30 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-07 10:54 UTC
-- **Commit**: `ad57ce4b`
-- **Run**: run 138 — Task 1 (Research T55/T56/T57) + Task 7 (Critique update).
-  Merges runs 136 (NewRenoAIMD T53, 17 thms; WindowedFilter Route-B 24/24 PASS)
-  and run 137 (BBR2NetworkFilters T54, 19 thms; REPORT update).
-  Full suite: **47 Lean files, 906 theorems, 0 sorry**;
+- **Date**: 2026-05-08 04:04 UTC
+- **Commit**: `1a5f8fd1`
+- **Run**: run 140 — Task 5 (T57 ProbeBWPhase, 12 thms) + Task 7 (Critique update).
+  Merges run 139 (BBR2StartupExit T55, 15 thms; Correspondence update).
+  Full suite: **49 Lean files, 933 theorems, 0 sorry**;
   13 Route-B test targets (455+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **47 Lean files with
-906 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
-**13 Route-B correspondence test targets (455+ cases PASS)**. Run 136 adds
-`NewRenoAIMD.lean` (T53, 17 thms) formalising multi-cycle AIMD convergence
-in NewReno, and WindowedFilter Route-B tests (24/24 PASS). Run 137 adds
-`BBR2NetworkFilters.lean` (T54, 19 thms) formalising the two-slot
-MaxBandwidthFilter and RoundTripCounter invariants.
+The formal verification suite for `quiche` now covers **49 Lean files with
+933 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
+**13 Route-B correspondence test targets (455+ cases PASS)**. Run 139 adds
+`BBR2StartupExit.lean` (T55, 15 thms) formalising BBR2 startup-exit and
+full-bandwidth-reached monotonicity, and a Correspondence update. Run 140
+(this run) adds `ProbeBWPhase.lean` (T57, 12 thms) proving the pacing-gain
+and cwnd-gain assignments for all five CyclePhase variants.
 
 The suite spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
 HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
 HTTP/3 codec, QPACK, stream/frame state machines, and RFC compliance.
 Every theorem has been mechanically verified by `lake build`.
-
-Run 138 (this run) identifies three new research targets (T55: BBR2 startup
-exit monotonicity, T56: loss-detection threshold bounds, T57: ProbeBW phase
-cycle) and updates this critique to reflect the current 47-file, 906-theorem
-state.
 
 
 ## Proved Theorems
@@ -1523,22 +1517,47 @@ invariants. Model fidelity confirmed.
   exactly once per completed round trip. This end-to-end property would
   close the remaining gap between the two structures.
 
-### Overall Status (run 138)
+### BBR2 ProbeBW Phase Cycle Ordering (T57, run 140) — 12 theorems, 0 sorry
 
-- **47 Lean files, 906 theorems, 0 sorry** (lake build ✅, Lean 4.29.0+)
+`FVSquad/ProbeBWPhase.lean` formalises the per-phase pacing-gain and
+cwnd-gain assignments for BBR2's `CyclePhase` enum in
+`quiche/src/recovery/gcongestion/bbr2/mode.rs` (L49–L75) against the
+default `Params` values from `bbr2.rs` (L291–L300).
+
+**Assessment (mid-level, medium bug-catching potential)**:
+- `pacingGain_gt_100_iff_up`: only the Up phase uses an aggressive pacing
+  gain (125/100 = 1.25); all others use ≤ 1.0. Any accidental application
+  of the Up gain in Down/Cruise/Refill would be caught by this biconditional.
+- `cwndGain_gt_200_iff_up`: only the Up phase uses an elevated cwnd gain
+  (225/100 = 2.25); all others use exactly 2.0. Catches incorrect cwnd scaling.
+- Five per-phase pacing-gain lemmas and five cwnd-gain lemmas serve as
+  regression guards: if the default param values change in a future refactor,
+  these theorems immediately break CI.
+- **Utility**: Medium. The properties are decidable and verified by `rfl`,
+  making them strong regression guards for the hard-coded constants. They
+  confirm that the Up phase is the only one that exceeds neutral gain, which
+  is a key invariant of the ProbeBW design (Up probes up, Down slows down,
+  Cruise/Refill are neutral).
+- **Recommendation**: Extend with phase-transition ordering theorems proving
+  the canonical cycle sequence Down → Cruise → Refill → Up → Down. This
+  would require modelling the `enter_probe_*` functions and is a worthwhile
+  next step.
+
+### Overall Status (run 140)
+
+- **49 Lean files, 933 theorems, 0 sorry** (lake build ✅, Lean 4.29.0+)
 - Route-B: 13 targets, 455+ cases PASS
 - Coverage spans: QUIC transport, congestion control (NewReno with multi-cycle
   AIMD convergence, Cubic, BBR2 with startup/probing model, pacing, HyStart++,
   WindowedFilter max-filter, delivery-rate estimation, app-limited guard),
   HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
   machines, RFC compliance (transport param IDs).
-- Run 136: T53 NewRenoAIMD (17 thms) + WindowedFilter Route-B (24/24 PASS)
-- Run 137: T54 BBR2NetworkFilters (19 thms: MaxBandwidthFilter + RoundTripCounter)
+- Run 139: T55 BBR2StartupExit (15 thms: full_bandwidth_reached monotonicity)
+- Run 140: T57 ProbeBWPhase (12 thms: pacing/cwnd-gain per-phase assignments)
 - **Next priorities**:
-  1. T55: BBR2StartupExit.lean (~15 thms, HIGH — write specs + Lean file)
-  2. T56: LossDetectionThreshold.lean (~12 thms, MEDIUM)
-  3. T57: ProbeBWPhase.lean (~10 thms, trivial `decide`)
-  4. Update conference paper to 47 files / 906 theorems
-  5. Route-B tests for T50 (TransportParamReserved) or T54 (BBR2NetworkFilters)
+  1. T56: LossDetectionThreshold.lean (~12 thms, MEDIUM — RFC 9002 §6.1)
+  2. Route-B tests for T55 (BBR2StartupExit) or T57 (ProbeBWPhase)
+  3. Extend ProbeBWPhase with phase-transition ordering (Down→Cruise→Refill→Up)
+  4. Update conference paper to 49 files / 933 theorems
 
 
