@@ -16,31 +16,22 @@
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **45 Lean files with
-~863 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**12 Route-B correspondence test targets (431+ cases PASS)**. Run 133 adds
-`DeliveryRate.lean` (T51, 13 thms) formalising the conservative max-interval
-property in `generate_rate_sample`, and HyStart++ Route-B tests (27/27 PASS).
-Run 134 updates CORRESPONDENCE.md to cover all 44 files and adds the T52
-informal spec for the app-limited guard state machine. Run 135 (this run) adds
-`AppLimitedGuard.lean` (T52, 14 thms + 9 examples) formalising the full
-app-limited guard state machine: `update_app_limited`, `app_limited`, the
-bubble-check exit condition, and the rate-sample update guard.
+The formal verification suite for `quiche` now covers **49 Lean files with
+933 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
+**13 Route-B correspondence test targets (455+ cases PASS)**. Run 139 adds
+`BBR2StartupExit.lean` (T55, 15 thms) formalising BBR2 startup-exit and
+full-bandwidth-reached monotonicity, and a Correspondence update. Run 140
+(this run) adds `ProbeBWPhase.lean` (T57, 12 thms) proving the pacing-gain
+and cwnd-gain assignments for all five CyclePhase variants.
 
-The suite spans the full QUIC stack: transport, congestion control (NewReno,
-Cubic, BBR2 with pacing and windowed filter, HyStart++), HTTP/3 codec, QPACK
-(static table + integer codec), stream/frame state machines, and delivery-rate
-estimation.  Every theorem has been mechanically verified by `lake build`.
+The suite spans the full QUIC stack: byte-level framing, congestion control
+(NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
+HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
+HTTP/3 codec, QPACK, stream/frame state machines, and RFC compliance.
+Every theorem has been mechanically verified by `lake build`.
 
-The most notable results remain: `encode_decode_pktnum` (end-to-end
-packet-number codec composition); `emitN_le_maxData` (RFC 9000 §4.1
-flow-control safety); `decodeAckBlocks_all_valid + bounded` (ACK safety);
-`pacing_rate_le_cap` (BBR2 pacing invariant); `update_pure_preserves_ordered`
-(WindowedFilter ordering invariant, critical for BBR2 bandwidth estimation);
-`delivery_rate_max_interval_le_min_rate` (conservative rate estimation);
-`appLimited_iff + bubble_gone_clears` (app-limited guard state machine).
 
----
+## Proved Theorems
 
 ## Proved Theorems
 
@@ -1484,3 +1475,103 @@ edges, CSS divisor, fractional increments). Model fidelity confirmed.
   2. T53: NewReno multi-cycle AIMD convergence (reno cwnd AIMD state machine)
   3. Update conference paper to 45 files / ~863 theorems
   4. Model end-to-end app-limited stamp interaction (see T52 recommendation)
+
+### NewRenoAIMD Multi-Cycle Convergence (T53, run 136) — 17 theorems, 0 sorry
+
+`FVSquad/NewRenoAIMD.lean` formalises multi-cycle AIMD convergence properties
+for NewReno's congestion window in `quiche/src/recovery/congestion/reno.rs`.
+
+**Assessment (high-level, high bug-catching potential)**:
+- Proves that across multiple AIMD cycles, the cwnd approaches a stable
+  value determined by the loss rate — this is the RFC 5681 convergence claim.
+- Key theorems: `cwnd_increases_in_ca` (CA phase increments are positive),
+  `cwnd_decreases_on_loss` (multiplicative decrease is exact),
+  `aimd_cycle_bounded` (cwnd bounded above by `ssthresh` before next loss),
+  `multi_cycle_convergence` (cwnd sequence is eventually bounded in a finite
+  interval around the equilibrium).
+- **Utility**: Very high for the congestion-avoidance path, which is the
+  dominant mode in long-lived connections. These properties rule out entire
+  classes of implementation bugs (e.g., off-by-one in multiplicative decrease,
+  additive increment applied on wrong condition).
+
+### WindowedFilter Route-B Tests (T49, run 136) — 24/24 PASS
+
+Route-B tests for `WindowedFilter.lean` confirm the Lean 3-slot max-filter model
+agrees with the Rust `WindowedFilter` implementation on 24 cases covering
+`reset`, `clear`, `update` (multiple round trips), and `get_best`/ordering
+invariants. Model fidelity confirmed.
+
+### BBR2 MaxBandwidthFilter + RoundTripCounter (T54, run 137) — 19 theorems, 0 sorry
+
+`FVSquad/BBR2NetworkFilters.lean` formalises two data structures from
+`quiche/src/recovery/gcongestion/bbr2/network_model.rs`:
+- `MaxBandwidthFilter`: two-slot sliding-window maximum over consecutive
+  BBR2 round trips.
+- `RoundTripCounter`: counts completed BBR2 round trips, detects
+  round-trip boundaries, and advances the filter epoch on boundary.
+
+**Assessment (mid-level, medium-high bug-catching potential)**:
+- `get_ge_slot0` / `get_ge_slot1`: filter's `get()` output is always ≥ both
+  slots' values. Directly validates that the max-filter never under-reports
+  bandwidth — a regression here would cause BBR2 to underestimate available
+  bandwidth and under-utilise the pipe.
+- `update_then_advance_slot0` / `advance_slot0_eq_old_slot1`: the slot
+  rotation logic is correctly sequenced. An off-by-one in the advance step
+  would cause the second-best sample to be lost prematurely, making the
+  filter too aggressive in forgetting past measurements.
+- `round_trip_count_monotone_two` / `on_acked_count_nondecreasing`:
+  round-trip counter is non-decreasing; guarantees BBR2's internal
+  time-keeping never goes backwards.
+- **Utility**: Medium-high. The two-slot filter is simpler than the
+  three-slot `WindowedFilter` but carries the same ordering guarantee needed
+  for BBR2 bandwidth estimation. The RoundTripCounter theorems confirm correct
+  epoch tracking.
+- **Recommendation**: Add a theorem linking `RoundTripCounter` advances to
+  `MaxBandwidthFilter.advance` calls — proving that the filter advances
+  exactly once per completed round trip. This end-to-end property would
+  close the remaining gap between the two structures.
+
+### BBR2 ProbeBW Phase Cycle Ordering (T57, run 140) — 12 theorems, 0 sorry
+
+`FVSquad/ProbeBWPhase.lean` formalises the per-phase pacing-gain and
+cwnd-gain assignments for BBR2's `CyclePhase` enum in
+`quiche/src/recovery/gcongestion/bbr2/mode.rs` (L49–L75) against the
+default `Params` values from `bbr2.rs` (L291–L300).
+
+**Assessment (mid-level, medium bug-catching potential)**:
+- `pacingGain_gt_100_iff_up`: only the Up phase uses an aggressive pacing
+  gain (125/100 = 1.25); all others use ≤ 1.0. Any accidental application
+  of the Up gain in Down/Cruise/Refill would be caught by this biconditional.
+- `cwndGain_gt_200_iff_up`: only the Up phase uses an elevated cwnd gain
+  (225/100 = 2.25); all others use exactly 2.0. Catches incorrect cwnd scaling.
+- Five per-phase pacing-gain lemmas and five cwnd-gain lemmas serve as
+  regression guards: if the default param values change in a future refactor,
+  these theorems immediately break CI.
+- **Utility**: Medium. The properties are decidable and verified by `rfl`,
+  making them strong regression guards for the hard-coded constants. They
+  confirm that the Up phase is the only one that exceeds neutral gain, which
+  is a key invariant of the ProbeBW design (Up probes up, Down slows down,
+  Cruise/Refill are neutral).
+- **Recommendation**: Extend with phase-transition ordering theorems proving
+  the canonical cycle sequence Down → Cruise → Refill → Up → Down. This
+  would require modelling the `enter_probe_*` functions and is a worthwhile
+  next step.
+
+### Overall Status (run 140)
+
+- **49 Lean files, 933 theorems, 0 sorry** (lake build ✅, Lean 4.29.0+)
+- Route-B: 13 targets, 455+ cases PASS
+- Coverage spans: QUIC transport, congestion control (NewReno with multi-cycle
+  AIMD convergence, Cubic, BBR2 with startup/probing model, pacing, HyStart++,
+  WindowedFilter max-filter, delivery-rate estimation, app-limited guard),
+  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
+  machines, RFC compliance (transport param IDs).
+- Run 139: T55 BBR2StartupExit (15 thms: full_bandwidth_reached monotonicity)
+- Run 140: T57 ProbeBWPhase (12 thms: pacing/cwnd-gain per-phase assignments)
+- **Next priorities**:
+  1. T56: LossDetectionThreshold.lean (~12 thms, MEDIUM — RFC 9002 §6.1)
+  2. Route-B tests for T55 (BBR2StartupExit) or T57 (ProbeBWPhase)
+  3. Extend ProbeBWPhase with phase-transition ordering (Down→Cruise→Refill→Up)
+  4. Update conference paper to 49 files / 933 theorems
+
+
