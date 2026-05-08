@@ -1216,3 +1216,32 @@ Run 138 targets T55/T56/T57 address the remaining congestion-control coverage
 gap (BBR2 startup exit) and add a decidable state-machine target (T57) for
 ProbeBW phase ordering.
 
+
+## Run 142 Research Update
+
+### Critique Incorporation
+
+No new critique since run 139. The project has 50 Lean files (949+ theorems, 0 sorry),
+with strong coverage of congestion control (HyStart, BBR2 startup, ProbeBW, loss
+detection). The main gap identified is protocol-layer properties: stream management,
+error handling, and state machines above the congestion layer.
+
+### New Targets Identified (T58–T60)
+
+**T58: QUIC Stream Limit Enforcement** (`stream/mod.rs`)
+High-priority. Stream limits are a security boundary (DoS protection) and RFC 9000
+compliance requirement. Lean model uses `Finset` of IDs + `Nat` counters. All key
+properties are omega-provable.
+
+**T59: QUIC Transport Error Code Mapping** (`lib.rs` + `ffi.rs`)
+Medium-priority. Decidable `decide`-provable injectivity and round-trip property.
+Could be completed in a single run (Task 3+5 combined).
+
+**T60: BBR2 ProbeRTT State Machine** (`gcongestion/bbr2/probe_rtt.rs`)
+Medium-priority. Extends BBR2 coverage beyond ProbeBW. Requires modelling time
+as abstract Nat ticks. More proof engineering than T58/T59.
+
+### Recommendation for Next Run
+
+Prioritise **T59** (Transport Error Code) as an easy win — fully decidable, small
+spec, 0 approximations. Then **T58** (Stream Limit) for security-relevant coverage.

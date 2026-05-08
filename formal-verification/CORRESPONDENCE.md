@@ -3136,3 +3136,94 @@ bubble-preserved, rate-update guards, idempotence) are covered.
 
 - `lake build` passed with Lean 4.29.1 (run 139), 0 sorry.
 - Route-B tests: not yet created.
+
+---
+
+## T57: BBR2 ProbeBW Phase Gains — `FVSquad/ProbeBWPhase.lean`
+
+**Last updated**: 2026-05-08 (run 142)
+
+### Lean model
+
+- File: `formal-verification/lean/FVSquad/ProbeBWPhase.lean`
+- Types: `CyclePhase` (5 variants)
+- Functions: `pacingGain`, `cwndGain`
+- Theorems: 12 (0 sorry)
+
+### Rust source
+
+- `quiche/src/recovery/gcongestion/bbr2/mode.rs` (L49–L75) — `CyclePhase` enum, `gain_for_phase` logic
+- `quiche/src/recovery/gcongestion/bbr2.rs` (L291–L300) — default `Params` gain constants
+
+### Correspondence type: **exact**
+
+The gain table is modelled exactly. Each `CyclePhase` variant maps to the
+corresponding `f32` constant multiplied by 100 (integer representation). No
+floating-point arithmetic is needed in the model because all values are exact
+multiples of 0.01 representable as small integers.
+
+### Field-by-field mapping
+
+| Lean function          | Rust expression                              | Fidelity   |
+|------------------------|----------------------------------------------|------------|
+| `pacingGain .up`       | `params.probe_bw_probe_up_pacing_gain` = 1.25 | **exact** |
+| `pacingGain .down`     | `params.probe_bw_probe_down_pacing_gain` = 0.90 | **exact** |
+| `pacingGain _`         | `params.probe_bw_default_pacing_gain` = 1.00 | **exact** |
+| `cwndGain .up`         | `params.probe_bw_up_cwnd_gain` = 2.25        | **exact** |
+| `cwndGain _`           | `params.probe_bw_cwnd_gain` = 2.00           | **exact** |
+
+### Known divergences
+
+1. **f32 → ×100 integer**: Lean uses `Nat` (×100); Rust uses `f32`. Values are equivalent for all 5 phases.
+2. **Default params only**: `Params` is configurable; model covers only default values. Override paths are excluded.
+3. **Phase transitions excluded**: `enter_probe_down/up/cruise/refill` state-machine transitions are not modelled; only per-phase gain lookup is verified.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B test: `formal-verification/tests/probe_bw_phase/probe_bw_phase_test.rs` — 10 PASS cases.
+
+---
+
+## T56: Loss Detection Packet Threshold — `FVSquad/LossDetectionThreshold.lean`
+
+**Last updated**: 2026-05-08 (run 142)
+
+### Lean model
+
+- File: `formal-verification/lean/FVSquad/LossDetectionThreshold.lean`
+- Types: `pktThreshInv` (predicate)
+- Functions: `clampToMax`, `updatePktThresh`
+- Constants: `INITIAL_PACKET_THRESHOLD = 3`, `MAX_PACKET_THRESHOLD = 20`
+- Theorems: 16 (0 sorry)
+
+### Rust source
+
+- `quiche/src/recovery/mod.rs` (L51, L53) — constants `INITIAL_PACKET_THRESHOLD`, `MAX_PACKET_THRESHOLD`
+- `quiche/src/recovery/congestion/recovery.rs` (L655–L660) — `pkt_thresh` update
+
+### Correspondence type: **exact** (arithmetic) + **abstraction** (context)
+
+The threshold clamping arithmetic is modelled exactly. The broader loss-detection
+pipeline (packet enumeration, time comparison) is excluded.
+
+### Field-by-field mapping
+
+| Lean definition            | Rust expression                                        | Fidelity      |
+|----------------------------|--------------------------------------------------------|---------------|
+| `INITIAL_PACKET_THRESHOLD` | `INITIAL_PACKET_THRESHOLD = 3`                         | **exact**     |
+| `MAX_PACKET_THRESHOLD`     | `MAX_PACKET_THRESHOLD = 20`                            | **exact**     |
+| `clampToMax s`             | `thresh.min(MAX_PACKET_THRESHOLD)`                     | **exact**     |
+| `updatePktThresh cur spu`  | `self.pkt_thresh = self.pkt_thresh.max(thresh.min(MAX_PACKET_THRESHOLD))` | **exact** |
+| `pktThreshInv`             | invariant: INITIAL ≤ pkt_thresh ≤ MAX                  | **exact**     |
+
+### Known divergences
+
+1. **time_thresh excluded**: the `f64` time multiplier in RFC 9002 §6.1.1 is not modelled (requires floating-point).
+2. **Detection pipeline excluded**: packet enumeration and time-based comparison are abstracted away; only the threshold value update is modelled.
+3. **spurious_loss_count source**: the `spurious` parameter in Lean represents `thresh` from `on_spurious_loss_detected`; the source of this value is outside the model.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B tests: not yet created (simple arithmetic model; #eval spot-checks in-file).
