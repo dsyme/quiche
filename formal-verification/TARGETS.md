@@ -292,3 +292,82 @@ would cause incorrect pacing/probing behaviour.
 
 **Next action**: Write `FVSquad/ProbeBWPhase.lean` (Task 3+5).
 
+
+---
+
+### Target 58: QUIC Stream Limit Enforcement
+
+**Phase**: 1 — Research (run 142)
+**Location**: `quiche/src/stream/mod.rs`, `quiche/src/lib.rs`
+**Priority**: ⭐⭐⭐ HIGH
+
+QUIC connections enforce limits on the number of concurrent streams
+(`max_streams_bidi`, `max_streams_uni`). Incorrect enforcement could allow
+stream exhaustion attacks or break the RFC 9000 §4.6 invariant.
+
+**Key properties**:
+- Stream ID assignment is monotonically increasing
+- Never exceed the negotiated `max_streams` limit
+- `streams_blocked` is raised iff the limit is reached
+- Peer-initiated vs. local-initiated counts stay disjoint (even/odd ID split)
+
+**Specification size**: ~12 theorems, ~60 Lean lines.
+
+**Proof tractability**: MEDIUM — omega-provable once modelled as Nat counters.
+
+**Approximations needed**: Model stream table as a `Finset` of IDs; ignore
+per-stream flow control (covered separately).
+
+**Next action**: Write informal spec, then `FVSquad/StreamLimit.lean` (Task 2+3).
+
+---
+
+### Target 59: QUIC Transport Error Code Mapping
+
+**Phase**: 1 — Research (run 142)
+**Location**: `quiche/src/lib.rs` (`Error` enum), `quiche/src/ffi.rs`
+**Priority**: ⭐⭐ MEDIUM
+
+The `Error` enum maps QUIC transport errors to Rust error variants and to
+wire-format error codes. An incorrect mapping would cause RFC 9000 non-compliance.
+
+**Key properties**:
+- `Error::to_wire()` is injective (no two variants map to the same code)
+- Every wire code returned is a valid QUIC transport error code (≤ 0x1c)
+- Round-trip: `from_wire(to_wire(e)) = Some(e)` for all defined variants
+
+**Specification size**: ~8 theorems, ~50 Lean lines.
+
+**Proof tractability**: TRIVIAL — `decide` on a finite enum.
+
+**Approximations needed**: Model only the named QUIC error codes; crypto-level
+TLS alerts use a different mapping (excluded).
+
+**Next action**: Write `FVSquad/TransportErrorCode.lean` (Task 3+5 — immediately).
+
+---
+
+### Target 60: BBR2 ProbeRTT State Machine
+
+**Phase**: 1 — Research (run 142)
+**Location**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs`
+**Priority**: ⭐⭐ MEDIUM
+
+ProbeRTT periodically reduces cwnd to probe min-RTT. The state machine has
+a timing invariant: ProbeRTT mode must be held for at least `PROBE_RTT_DURATION`
+before exiting.
+
+**Key properties**:
+- Enter condition: min_rtt estimate expired AND not already in ProbeRTT
+- Exit condition: held for ≥ `PROBE_RTT_DURATION` AND inflight ≤ probe_rtt_cwnd
+- `cwnd_during_probe_rtt` ≤ regular cwnd (cwnd reduction guaranteed)
+- No re-entry during the hold period
+
+**Specification size**: ~10 theorems, ~55 Lean lines.
+
+**Proof tractability**: MEDIUM — requires modelling `Instant` as abstract Nat ticks.
+
+**Approximations needed**: Time represented as monotone Nat counter; f32 RTT
+stored as Nat microseconds; cwnd as Nat bytes.
+
+**Next action**: Write informal spec first (Task 2).
