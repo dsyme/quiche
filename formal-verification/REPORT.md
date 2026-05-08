@@ -2,41 +2,42 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — 769 named theorems + examples, **0 `sorry`**
-(all proofs complete), 38 Lean files (Lean 4.29.0+, no Mathlib).
+**Status**: ✅ ACTIVE — 906 named theorems, **0 `sorry`**
+(all proofs complete), 47 Lean files (Lean 4.29.0+, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-05-02 10:00 UTC
-- **Commit**: `51434be1`
+- **Date**: 2026-05-07 04:30 UTC
+- **Commit**: `fe536817`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **769 named theorems**
-across **38 Lean 4 files** covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **906 named theorems**
+across **47 Lean 4 files** covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
-`OctetsRoundtrip`) through congestion control (`NewReno`, `CUBIC`, `PRR`,
-`Bandwidth`, `Pacer`, `BBR2Limits`) to stream management (`RecvBuf`, `SendBuf`,
-`CidMgmt`, `StreamStateMachine`) and wire encoding (`StreamId`, `PacketNumLen`,
-`AckRanges`, `FrameAckEliciting`), plus HTTP/3 layer coverage (`H3Frame`,
-`H3Settings`, `H3ParseSettings`, `QPACKStaticTable`, `QPACKInteger`).
+`OctetsRoundtrip`) through congestion control (`NewReno`, `NewRenoAIMD`,
+`CUBIC`, `PRR`, `Bandwidth`, `Pacer`, `BBR2Limits`, `BBR2NetworkFilters`,
+`DeliveryRate`, `AppLimitedGuard`, `HyStart`, `WindowedFilter`) to stream
+management (`RecvBuf`, `SendBuf`, `CidMgmt`, `StreamStateMachine`) and wire
+encoding (`StreamId`, `PacketNumLen`, `AckRanges`, `FrameAckEliciting`), plus
+HTTP/3 layer coverage (`H3Frame`, `H3Settings`, `H3ParseSettings`,
+`QPACKStaticTable`, `QPACKInteger`).
 Highlights include: formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
 violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); full QPACK/HPACK
 integer codec round-trip by strong induction (`QPACKInteger`); RFC 9000 §2.1
 stream-ID classification laws (`StreamId`); and the full long-header buffer
 round-trip (`PacketHeader`). **Run 105 closed the last `sorry`**, achieving 0
-sorry — maintained across all subsequent runs including run 123. Nine targets
-have Route-B executable correspondence tests (46 new cases for StreamStateMachine
-added in run 123), all passing.
+sorry — maintained across all subsequent runs including run 137. Thirteen
+targets have Route-B executable correspondence tests (455+ cases), all passing.
 
 ---
 
 ## Proof Architecture
 
-The 38 files form four logical layers:
+The 47 files form four logical layers:
 
 ```mermaid
 graph TD
@@ -283,7 +284,16 @@ graph LR
 | `QPACKStaticTable.lean` | 12 | ✅ | `static_table_bounds` |
 | `StreamStateMachine.lean` | 15 | ✅ | `bidi_complete_not_writable` |
 | `QPACKInteger.lean` | 10 | ✅ | `encode_decode_roundtrip` |
-| **Total** | **769** | **0 sorry** | **38 files** |
+| `IdleTimeout.lean` | 12 | ✅ | `idle_timeout_negotiation` |
+| `Pmtud.lean` | 12 | ✅ | `probe_size_in_range` |
+| `Hystart.lean` | 13 | ✅ | `css_divisor_clamp` |
+| `WindowedFilter.lean` | 15 | ✅ | `update_ge_best` |
+| `TransportParamReserved.lean` | 15 | ✅ | `reserved_id_invalid` |
+| `DeliveryRate.lean` | 13 | ✅ | `sample_conservative` |
+| `AppLimitedGuard.lean` | 14 | ✅ | `bubble_check_bounded` |
+| `NewRenoAIMD.lean` | 17 | ✅ | `aimd_convergence` |
+| `BBR2NetworkFilters.lean` | 19 | ✅ | `update_get_ge_sample` (run 137) |
+| **Total** | **906** | **0 sorry** | **47 files** |
 
 ### Route-B Correspondence Tests
 
@@ -298,8 +308,12 @@ graph LR
 | T38 (PathState) | `tests/path_state/` | 75 | ✅ 75/75 PASS |
 | T45 (QPACKInteger) | `tests/qpack_integer/` | 25 | ✅ 25/25 PASS |
 | T44 (StreamStateMachine) | `tests/stream_state_machine/` | 46 | ✅ 46/46 PASS |
+| T42 (FrameAckEliciting) | `tests/frame_ack_eliciting/` | 33 | ✅ 33/33 PASS |
+| T33 (H3Settings) | `tests/h3_settings/` | 43 | ✅ 43/43 PASS |
+| T48 (HyStart++) | `tests/hystart/` | 27 | ✅ 27/27 PASS |
+| T49 (WindowedFilter) | `tests/windowed_filter/` | 24 | ✅ 24/24 PASS |
 
-**Total Route-B cases**: 285/285 PASS across 9 targets.
+**Total Route-B cases**: 472/472 PASS across 13 targets.
 
 ---
 
@@ -443,6 +457,10 @@ timeline
         BBR2Limits T32 (14 thms — run 113), H3Settings T33 (20 thms — run 114), H3ParseSettings T35 (21 thms — run 116), FrameAckEliciting T42 (32 thms — run 118), Route-B PathState 75/75 (run 118) : 87 new theorems
     section Runs 119–123
         QPACKStaticTable T34 (12 thms — run 119), StreamStateMachine T44 (15 thms — run 120), QPACKInteger T45 (10 thms — run 121), Route-B QPACKInteger 25/25 (run 122), CORRESPONDENCE 4 entries, Route-B StreamStateMachine 46/46 PASS + REPORT update (run 123) : 37 new theorems; total 769 theorems, 38 files, 0 sorry
+    section Runs 124–133
+        Route-B FrameAckEliciting 33/33 (run 124), Route-B H3Settings 43/43 (run 125), IdleTimeout T46 (12 thms — run 128), Pmtud T47 (12 thms — run 129), HyStart++ T48 (13 thms — run 130), WindowedFilter T49 (15 thms — run 131), TransportParamReserved T50 (15 thms — run 132), DeliveryRate T51 (13 thms — run 133), Route-B HyStart++ 27/27 (run 133) : 80 new theorems
+    section Runs 134–137
+        AppLimitedGuard T52 (14 thms — run 135), NewRenoAIMD T53 (17 thms — run 136), Route-B WindowedFilter 24/24 (run 136), BBR2NetworkFilters T54 (19 thms — run 137), REPORT update (run 137) : 50 new theorems; total 906 theorems, 47 files, 0 sorry
 ```
 
 ---
