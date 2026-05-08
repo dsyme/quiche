@@ -1,9 +1,9 @@
 # Lean Squad Memory -- dsyme/quiche
 
-Last updated: 2026-05-08 (run 140)
+Last updated: 2026-05-08 (run 141)
 Lean toolchain: leanprover/lean4:v4.29.0 (lean-toolchain file); elan installs v4.29.1 (stable)
 Lake project: formal-verification/lean/
-FVSquad.lean: import manifest for all 49 modules
+FVSquad.lean: import manifest for all 50 modules
 
 ## FV Targets
 
@@ -37,10 +37,10 @@ FVSquad.lean: import manifest for all 49 modules
 | 53 | NewReno AIMD multi-cycle theorems | FVSquad/NewRenoAIMD.lean | 5 | Done run136 (17 thms, 0 sorry) |
 | 54 | BBR2 MaxBandwidthFilter + RoundTripCounter | quiche/src/recovery/gcongestion/bbr2/network_model.rs | 5 | Done run137 (19 thms, 0 sorry) |
 | 55 | BBR2 startup exit full_bandwidth_reached monotonicity | quiche/src/recovery/gcongestion/bbr2/network_model.rs | 5 | Done run139 (15 thms, 0 sorry) |
-| 56 | Loss detection packet threshold bounds RFC 9002 §6.1 | quiche/src/recovery/mod.rs | 1 | Researched run138 — MEDIUM |
+| 56 | Loss detection packet threshold bounds RFC 9002 §6.1 | quiche/src/recovery/congestion/recovery.rs | 3 | Done run141 — 15 thms, 0 sorry; informal spec written |
 | 57 | BBR2 ProbeBW phase cycle ordering | quiche/src/recovery/gcongestion/bbr2/mode.rs | 5 | Done run140 (12 thms, 0 sorry) |
 
-## MILESTONE: 49 Lean files, ~933 theorems, 0 sorry; Route-B 13 targets, 455+ PASS
+## MILESTONE: 50 Lean files, ~948 theorems, 0 sorry; Route-B 13 targets, 455+ PASS
 
 ## Lean File Registry
 
@@ -95,7 +95,8 @@ FVSquad.lean: import manifest for all 49 modules
 | FVSquad/BBR2NetworkFilters.lean | 19 | Done run137 |
 | FVSquad/BBR2StartupExit.lean | 15 | Done run139 |
 | FVSquad/ProbeBWPhase.lean | 12 | Done run140 |
-| **TOTAL** | **~933** | **0 sorry** |
+| FVSquad/LossDetectionThreshold.lean | 15 | Done run141 |
+| **TOTAL** | **~948** | **0 sorry** |
 
 ## Route-B Correspondence Tests
 
@@ -122,17 +123,17 @@ FVSquad.lean: import manifest for all 49 modules
 
 ## CORRESPONDENCE.md Status
 
-- All 49 Lean files covered (updated run139 for NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
-- ProbeBWPhase needs CORRESPONDENCE entry (next run)
-- No mismatches identified
+- All 49 prior Lean files covered (updated run139 for NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
+- ProbeBWPhase (T57): needs CORRESPONDENCE entry
+- LossDetectionThreshold (T56): needs CORRESPONDENCE entry (run141 added file)
 
 ## Open PRs (lean-squad label)
 
-- run140: T57 ProbeBWPhase (12 thms) + CRITIQUE.md update (this run)
+- run141: T56 informal spec + Lean spec (15 thms, 0 sorry)
 
 ## Status Issue
 
-Issue #4 (open) — updated run140
+Issue #4 (open) — updated run141
 
 ## Key Findings
 
@@ -145,8 +146,7 @@ Issue #4 (open) — updated run140
 
 ## Next Priority Actions
 
-1. T56: Write FVSquad/LossDetectionThreshold.lean (~12 thms, MEDIUM — RFC 9002 §6.1)
-2. Extend ProbeBWPhase with phase-transition ordering theorems (Down→Cruise→Refill→Up)
-3. Route-B tests for T55 (BBR2StartupExit) or T57 (ProbeBWPhase)
-4. Update conference paper to 49 files / 933 theorems
-5. Add ProbeBWPhase to CORRESPONDENCE.md
+1. Add ProbeBWPhase and LossDetectionThreshold to CORRESPONDENCE.md
+2. Route-B tests for T56 (LossDetectionThreshold) or T57 (ProbeBWPhase)
+3. Update conference paper to 50 files / 948 theorems
+4. Extend T56 with time_thresh coordination (OQ-T56-1)
