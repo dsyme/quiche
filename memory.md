@@ -1,21 +1,28 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 144 (workflow 25598205203, 2026-05-09)
+Run 145 (workflow 25607386363, 2026-05-09)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 144)
-- Lean files: 50
-- Total theorems: ~949
-- Total sorry: 11 (across 10 files)
-- Route-B test targets: 14
+## Repository State (after run 145)
+- Lean files: 51
+- Total theorems: ~986
+- Total sorry: 0
+- Route-B test targets: 15
 - Status issue: #4 (open)
 
 ## Targets
+
+### T59: Transport Error Code Mapping
+- Phase: 5 (Done — run 145)
+- File: formal-verification/lean/FVSquad/TransportErrorCode.lean
+- Theorems: 37, sorry: 0
+- Key findings: toWire NOT injective (13 variants → ProtocolViolation 0xa); toC IS injective; range bounds proved
+- PR: lean-squad-run145-25607386363-transport-error-code
 
 ### T56: Loss Detection Packet Threshold
 - Phase: 5 (Done — run 142; Route-B run 144)
@@ -43,17 +50,6 @@ Run 144 (workflow 25598205203, 2026-05-09)
 - Priority: HIGH
 - Next: Task 2 (informal spec) then Task 3+5
 
-### T59: QUIC Transport Error Code Mapping
-- Phase: 2 (Informal Spec — run 143)
-- Source: quiche/src/error.rs (Error::to_wire, Error::to_c)
-- Informal spec: formal-verification/specs/transport_error_code_informal.md
-- Priority: MEDIUM — write FVSquad/TransportErrorCode.lean next run
-- Key finding: to_wire is NOT injective (many → ProtocolViolation 0xa);
-  to_c IS injective (all 22 variants → distinct [-23, -1])
-- OQs: OQ-T59-1 (OutOfIdentifiers asymmetry), OQ-T59-2 (C API stability),
-  OQ-T59-3 (Error::Done reachability)
-- Next: Task 3+5 (fully decidable with decide/native_decide)
-
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 1 (Research — run 142)
 - Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
@@ -63,12 +59,14 @@ Run 144 (workflow 25598205203, 2026-05-09)
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
 ## CORRESPONDENCE.md Status (run 143)
-- ALL 50 Lean files now have entries — NO GAPS
+- ALL 50 Lean files now have entries — NO GAPS (T59 not yet added)
 - Known mismatches: none
+- T59 needs CORRESPONDENCE.md entry next run
 
 ## Open PRs (lean-squad label)
 - run 143: CORRESPONDENCE.md 4 new entries + T59 informal spec (pending)
 - run 144: REPORT update (50 files, 949 thms) + Route-B T56 991/991
+- run 145: T59 TransportErrorCode.lean (37 thms, 0 sorry)
 
 ## Status Issue
 - #4 open — updated each run
@@ -100,10 +98,11 @@ Total: 1463 cases, all PASS
 - Best pattern for if-then-else proofs: define with explicit ite + `by_cases h : cond <;> simp [h] <;> omega`
 - `simp only [h1, ite_true]` may close goal completely — check before adding more tactics
 - `Min.min a b` ≠ `Nat.min a b` for rewriting purposes — use unfolded ite
+- `decide` CANNOT handle ∀ n : Nat — use `simp [toWire/toC]` for parameterised cases
+- `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
 
 ## Next Run Priorities
-1. T59: Transport Error Code Mapping — write FVSquad/TransportErrorCode.lean (Task 3+5)
-   All proofs should be decide/native_decide. ~15 theorems, ~80 lines.
-2. T58: Stream Limit Enforcement — write informal spec (Task 2)
-3. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
+1. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
+2. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
+3. Add CORRESPONDENCE.md entry for T59 TransportErrorCode (Task 6)
 4. Close sorry in BBR2StartupExit, ProbeBWPhase, LossDetectionThreshold (Task 5)
