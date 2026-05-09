@@ -4,9 +4,11 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-07 18:20 UTC
-- **Commit**: `a3073cdb`
-- **Lean build**: `lake build` passed with Lean 4.29.1 — 48 files, **0 sorry** 🎉
+- **Date**: 2026-05-09 04:20 UTC
+- **Commit**: `5ddbc9ae`
+- **Lean build**: `lake build` passed with Lean 4.29.1 — 50 files, **0 sorry** 🎉
+  (run 143: added 4 entries — Hystart, Pmtud, TransportParamReserved, WindowedFilter)
+  (run 142: added LossDetectionThreshold, ProbeBWPhase)
   (run 139: added 3 entries — NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
   (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
   StreamStateMachine, QPACKInteger)
@@ -3227,3 +3229,165 @@ pipeline (packet enumeration, time comparison) is excluded.
 
 - `lake build` passed with Lean 4.29.1, 0 sorry.
 - Route-B tests: not yet created (simple arithmetic model; #eval spot-checks in-file).
+
+---
+
+## `FVSquad/Hystart.lean`
+
+**Rust source**: `quiche/src/recovery/congestion/hystart.rs`
+
+### Purpose
+
+Models the HyStart++ algorithm (draft-ietf-tcpm-hystartplusplus-04) — a
+mechanism to safely increase the congestion window during slow start by
+clamping the RTT threshold and reducing the per-packet cwnd increment
+during Conservative Slow Start (CSS).
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust source | Correspondence |
+|-----------|-----------|-----------|-------------|---------------|
+| `MIN_RTT_THRESH` | `Nat` (ms) | `MIN_RTT_THRESH` (`Duration::from_millis(4)`) | `hystart.rs:L40` | **exact** — same numeric value |
+| `MAX_RTT_THRESH` | `Nat` (ms) | `MAX_RTT_THRESH` (`Duration::from_millis(16)`) | `hystart.rs:L43` | **exact** |
+| `CSS_GROWTH_DIVISOR` | `Nat` | `CSS_GROWTH_DIVISOR = 4` | `hystart.rs:L46` | **exact** |
+| `CSS_ROUNDS` | `Nat` | `CSS_ROUNDS = 5` | `hystart.rs:L49` | **exact** |
+| `N_RTT_SAMPLE` | `Nat` | `N_RTT_SAMPLE = 8` | `hystart.rs:L37` | **exact** |
+| `rtt_thresh last_ms` | `Nat → Nat` | `cmp::min(cmp::max(rtt/8, MIN), MAX)` | `hystart.rs:L142-L144` | **abstraction** — Duration replaced by Nat (ms); integer division matches Rust |
+| `css_cwnd_inc pkt_size` | `Nat → Nat` | `pkt_size / CSS_GROWTH_DIVISOR` | `hystart.rs:L192` | **exact** |
+
+### Approximations
+
+1. **`Duration` → `Nat`**: Rust uses `std::time::Duration`; the model uses
+   plain `Nat` milliseconds. Integer division semantics match exactly for
+   whole-millisecond values.
+2. **Mutable HyStart state omitted**: round tracking, sample counts, and the
+   CSS counter are not modelled. Only the two pure arithmetic expressions
+   (`rtt_thresh`, `css_cwnd_inc`) are verified.
+3. **Saturating arithmetic**: `last_round_min_rtt.saturating_add(rtt_thresh)`
+   in the Rust (line 148) is not modelled; the model only verifies the clamped
+   threshold, not its use in the round-trip comparison.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B tests: not yet created (constant-arithmetic model; `#eval` spot-checks in-file).
+
+---
+
+## `FVSquad/Pmtud.lean`
+
+**Rust source**: `quiche/src/pmtud.rs`
+
+### Purpose
+
+Models the Packetization Layer Path MTU Discovery (PLPMTUD) binary-search
+algorithm (RFC 8899). The Lean model verifies that `update_probe_size` keeps
+the probe size within `[MIN_PLPMTU, max_mtu]`, that the midpoint is strictly
+between the success and failure bounds, and that the algorithm converges
+correctly.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust source | Correspondence |
+|-----------|-----------|-----------|-------------|---------------|
+| `MIN_PLPMTU` | `Nat` | `MIN_PLPMTU = 1200` | `pmtud.rs:L27` | **exact** |
+| `PmtudState` | `structure` | `Pmtud` struct fields | `pmtud.rs:L37-L46` | **abstraction** — only `max_mtu`, `smallest_failed_probe_size`, `largest_successful_probe_size` modelled |
+| `updateProbeSize` | `PmtudState → Nat` | `Pmtud::update_probe_size` | `pmtud.rs:L117` | **abstraction** — see §Approximations |
+| `WellFormed` | `Prop` | (implicit struct invariants) | — | **abstraction** |
+
+### Approximations
+
+1. **State mutation omitted**: `update_probe_size` mutates the `Pmtud` struct
+   in Rust; `updateProbeSize` is a pure function returning the new probe size
+   only. The writes to `smallest_failed_probe_size` and `largest_successful_probe_size`
+   are not modelled.
+2. **`probe_size` field omitted**: the `Pmtud.probe_size` field is not part
+   of `PmtudState`; `updateProbeSize` returns the *value* that would be assigned
+   to it.
+3. **Error logging omitted**: the `inconsistent state` log message (line 126)
+   is abstracted away.
+4. **`set_probe_size` clamping omitted**: `set_probe_size` clamps to
+   `maximum_supported_mtu` (line 94); the Lean model treats `max_mtu` as an
+   upper bound enforced by `WellFormed` rather than by a clamp call.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B tests: not yet created.
+
+---
+
+## `FVSquad/TransportParamReserved.lean`
+
+**Rust source**: `quiche/src/transport_params.rs`
+
+### Purpose
+
+Verifies `UnknownTransportParameter::is_reserved` (line 63) — the predicate
+that detects RFC 9000 §18.1 reserved transport parameter IDs of the form
+`31 * N + 27` for N ≥ 0.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust source | Correspondence |
+|-----------|-----------|-----------|-------------|---------------|
+| `isReserved` | `Nat → Bool` | `UnknownTransportParameter::is_reserved` | `transport_params.rs:L63` | **abstraction** — `id` is `Nat` (no struct wrapper, no u64 overflow) |
+| `isReservedAlt` | `Nat → Bool` | *(equivalent modular formulation)* | — | **abstraction** — alternative characterisation |
+
+### Approximations
+
+1. **`u64` → `Nat`**: the Rust `id` field is `u64`; the Lean model uses `Nat`.
+   For `id < 27`, Rust computes `(id - 27)` as a wrapping underflow producing
+   a large `u64`, which can accidentally match reserved IDs. The Lean model
+   uses saturating subtraction (which gives 0 for `id < 27`), so it correctly
+   returns `false` for all `id < 27` — matching the *intended* semantics but
+   not the *actual* Rust behaviour in that range.
+2. **Struct wrapper omitted**: `self` (an `UnknownTransportParameter<T>`) is
+   reduced to its `id` field alone.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B tests: not yet created (fully decidable; `decide` spot-checks cover 27, 58, 89, 120).
+
+---
+
+## `FVSquad/WindowedFilter.lean`
+
+**Rust source**: `quiche/src/recovery/gcongestion/bbr/windowed_filter.rs`
+
+### Purpose
+
+Models the three-slot Windowed Filter (Kathleen Nichols' algorithm) used by
+BBR to track the best, second-best, and third-best estimates of a stream
+quantity (RTT or bandwidth) over a sliding window. The Lean model verifies
+the ordering invariant and correctness of each update case.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust source | Correspondence |
+|-----------|-----------|-----------|-------------|---------------|
+| `Estimates` | `structure {best second third : Nat}` | `[Option<Sample<T,I>>; 3]` | `windowed_filter.rs:L44` | **abstraction** — option wrapper and timestamps omitted; values only |
+| `ordered` | `Prop` | *(implicit invariant: best ≥ second ≥ third)* | — | **abstraction** |
+| `reset` | `Nat → Estimates` | `WindowedFilter::reset` | `windowed_filter.rs:L62` | **abstraction** — timestamp parameter omitted |
+| `update_pure` | `Estimates → Nat → Estimates` | `WindowedFilter::update` | `windowed_filter.rs:L88` | **abstraction** — time-expiry checks omitted; only sample-value comparisons modelled |
+| `promote` | `Estimates → Nat → Estimates` | rotation in `reset` after best expiry | `windowed_filter.rs:L88` | **abstraction** |
+
+### Approximations
+
+1. **Timestamps and window expiry omitted**: the Rust `update` logic checks
+   whether estimates are older than `window_length`. This time-based branch
+   (`new_time - estimates[2].time > window_length`) is not modelled; the Lean
+   `update_pure` models only the sample-value comparison path.
+2. **Generic types → `Nat`**: the Rust struct is generic over `T: Ord`, `I`,
+   `D`. The Lean model instantiates `T = Nat` (natural number); no overflow
+   or signed comparison is possible.
+3. **`Option` wrapper omitted**: Rust stores `Option<Sample<T,I>>`; the Lean
+   model assumes estimates are always present (the `None` (uninitialized) case
+   maps to `reset` being called first, which is the normal initialization path).
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry.
+- Route-B tests: not yet created.
+

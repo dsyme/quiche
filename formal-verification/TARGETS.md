@@ -324,26 +324,28 @@ per-stream flow control (covered separately).
 
 ### Target 59: QUIC Transport Error Code Mapping
 
-**Phase**: 1 — Research (run 142)
-**Location**: `quiche/src/lib.rs` (`Error` enum), `quiche/src/ffi.rs`
+**Phase**: 2 — Informal Spec (run 143)
+**Location**: `quiche/src/error.rs` (`Error::to_wire`, `Error::to_c`)
+**Informal spec**: `formal-verification/specs/transport_error_code_informal.md`
 **Priority**: ⭐⭐ MEDIUM
 
 The `Error` enum maps QUIC transport errors to Rust error variants and to
 wire-format error codes. An incorrect mapping would cause RFC 9000 non-compliance.
 
-**Key properties**:
-- `Error::to_wire()` is injective (no two variants map to the same code)
-- Every wire code returned is a valid QUIC transport error code (≤ 0x1c)
-- Round-trip: `from_wire(to_wire(e)) = Some(e)` for all defined variants
+**Key properties** (updated from informal spec):
+- `Error::to_wire()` is NOT globally injective — multiple variants map to `0xa` (ProtocolViolation)
+- `Error::to_c()` IS globally injective — all 22 variants map to distinct values in [-23, -1]
+- Every wire code returned is a valid RFC 9000 error code (in [0x0, 0x10])
+- `Error::to_c()` never returns 0 (reserved for success in C)
 
-**Specification size**: ~8 theorems, ~50 Lean lines.
+**Specification size**: ~15 theorems, ~80 Lean lines.
 
 **Proof tractability**: TRIVIAL — `decide` on a finite enum.
 
-**Approximations needed**: Model only the named QUIC error codes; crypto-level
-TLS alerts use a different mapping (excluded).
+**Approximations needed**: Parametric variants (InvalidStreamState, StreamStopped,
+StreamReset) may need to ignore their associated data for decidability.
 
-**Next action**: Write `FVSquad/TransportErrorCode.lean` (Task 3+5 — immediately).
+**Next action**: Write `FVSquad/TransportErrorCode.lean` (Task 3+5).
 
 ---
 
