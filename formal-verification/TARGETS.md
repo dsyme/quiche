@@ -373,3 +373,73 @@ before exiting.
 stored as Nat microseconds; cwnd as Nat bytes.
 
 **Next action**: Write informal spec first (Task 2).
+
+---
+
+### Target 61: QUIC STREAM Frame Type Byte Encoding
+
+**Phase**: 1 — Research (run 146)
+**Location**: `quiche/src/frame.rs` — `encode_stream_header` (L1326–L1350)
+**Priority**: ⭐⭐ MEDIUM-LOW
+
+`encode_stream_header` constructs the STREAM frame type byte by OR-ing fixed
+flag bits. In quiche's implementation, offset and length fields are *always*
+encoded, so the type byte is always either `0x0e` (no FIN) or `0x0f` (FIN set).
+
+**Key properties**:
+- Type byte always has bits `0x08 | 0x04 | 0x02` set (STREAM + offset + length)
+- If `fin = true`, bit `0x01` is additionally set
+- Type byte ∈ {`0x0e`, `0x0f`} — only two possible values
+- `fin` flag is fully recoverable from the type byte: `ty & 0x01 ≠ 0 ↔ fin`
+- The high nibble `0x08` always identifies the frame as STREAM
+
+**Specification size**: ~8 theorems, ~50 Lean lines.
+
+**Proof tractability**: TRIVIAL — two-case `bool` enumeration on `fin`;
+all properties decidable by `decide` or `by_cases`.
+
+**Approximations needed**: Model produces only the type byte (first byte of
+encoded header); stream_id, offset, and length encoding is inherited from
+`toWire`/varint targets already verified.
+
+**Approach**: Define `streamFrameTypeByte : Bool → Nat` matching the OR logic;
+prove it equals `0x0e` or `0x0f`; prove FIN recoverability from the byte.
+
+**Status**: ✅ Phase 5 — DONE (run 147)
+- Lean file: `formal-verification/lean/FVSquad/StreamFrameType.lean`
+- 12 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
+- Route-B tests: `formal-verification/tests/stream_frame_type/` — 19/19 PASS
+- CORRESPONDENCE.md: entry added (run 147)
+
+---
+
+### Target 62: BBR2 ProbeRTT Phase Parameter Constants
+
+**Phase**: 1 — Research (run 146)
+**Location**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs`
+**Priority**: ⭐⭐ MEDIUM
+
+Similar to T57 (ProbeBW phase gains), this target formalises the fixed parameter
+constants used during BBR2's ProbeRTT mode: the pacing gain (`0.8`) and cwnd
+gain (`0.5`) applied when entering ProbeRTT to reduce inflight and probe min-RTT.
+
+**Key properties**:
+- `probe_rtt_pacing_gain = 0.8` → 80 (×100 integer model)
+- `probe_rtt_cwnd_gain = 0.5` → 50 (×100 integer model)
+- ProbeRTT pacing gain < 1.0 (conservatively below unity — forces inflight drain)
+- ProbeRTT cwnd gain < 1.0 (cwnd reduction guaranteed during probe)
+- Both gains are strictly less than the ProbeBW Up phase gains (125, 225)
+
+**Specification size**: ~10 theorems, ~60 Lean lines.
+
+**Proof tractability**: TRIVIAL — numeric constant comparison; `decide` or `omega`
+closes all goals.
+
+**Approximations needed**: Same as T57 — f32 constants × 100 to integer model.
+ProbeRTT duration and inflight target modelled as Nat (not f64).
+
+**Approach**: Define `ProbeRTTParams` struct with integer-scaled constants;
+prove gain < 100 (below unity); prove ordering w.r.t. ProbeBW Up gains.
+
+**Next action**: Write `FVSquad/ProbeRTTPhase.lean` (Task 3+5 combined) after
+informal spec.

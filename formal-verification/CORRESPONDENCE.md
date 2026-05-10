@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-09 04:20 UTC
-- **Commit**: `5ddbc9ae`
-- **Lean build**: `lake build` passed with Lean 4.29.1 — 50 files, **0 sorry** 🎉
-  (run 143: added 4 entries — Hystart, Pmtud, TransportParamReserved, WindowedFilter)
+- **Date**: 2026-05-10 04:40 UTC
+- **Commit**: `74efb61e`
+- **Lean build**: `lake build` passed with Lean 4.29.1 — 51 files, **0 sorry** 🎉
+  (run 146: added T59 TransportErrorCode entry + Route-B 50/50 PASS)
   (run 142: added LossDetectionThreshold, ProbeBWPhase)
   (run 139: added 3 entries — NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
   (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
@@ -3391,3 +3391,120 @@ the ordering invariant and correctness of each update case.
 - `lake build` passed with Lean 4.29.1, 0 sorry.
 - Route-B tests: not yet created.
 
+
+---
+
+## T59: Transport Error Code Mapping — `FVSquad/TransportErrorCode.lean`
+
+### Last Updated
+- **Date**: 2026-05-10 04:40 UTC
+- **Commit**: `74efb61e`
+
+### Overview
+
+The Lean model formalises two functions from `quiche/src/error.rs`:
+
+- `Error::to_wire` (L185–L202): maps `quiche::Error` variants to RFC 9000
+  §20.1 QUIC transport error codes (u64).
+- `Error::to_c` (L205–L228): maps `quiche::Error` variants to C FFI ssize_t
+  codes (negative integers -1 through -23).
+
+The model captures the complete 23-variant `Error` enum including three
+parameterised variants (`InvalidStreamState(u64)`, `StreamStopped { stream_id: u64, .. }`,
+`StreamReset { stream_id: u64, .. }`). The associated stream-ID data is treated
+as opaque `Nat` — proofs universally quantify over it, confirming the mapping
+is data-independent.
+
+### Type mapping
+
+| Lean name | Lean type | Rust name | Rust source | Correspondence |
+|-----------|-----------|-----------|-------------|---------------|
+| `QuicheError` | `inductive` (23 variants) | `quiche::Error` | `error.rs:L38–L182` | **exact** — all variants present; parameterised data modelled as `Nat` (was `u64`) |
+| `toWire` | `QuicheError → Nat` | `Error::to_wire` | `error.rs:L185–L202` | **exact** — match arms are structurally identical |
+| `toC` | `QuicheError → Int` | `Error::to_c` | `error.rs:L205–L228` | **exact** — match arms are structurally identical; `libc::ssize_t` modelled as `Int` |
+| `wireNoError` … `wireKeyUpdateError` | `Nat` constants | `WireErrorCode` enum variants | `error.rs:L124–L181` | **exact** — values match RFC 9000 §20.1 |
+
+### Approximations
+
+1. **`u64` data → `Nat`**: `InvalidStreamState(u64)`, `StreamStopped { stream_id: u64 }`,
+   `StreamReset { stream_id: u64 }` carry stream IDs in Rust. The Lean model
+   uses `Nat`, which is unbounded. Since neither `to_wire` nor `to_c` inspects
+   the data, this is semantics-preserving for all proved theorems.
+2. **`libc::ssize_t` → `Int`**: `to_c` returns `ssize_t` (platform-dependent
+   signed integer, typically 64-bit). The Lean model uses unbounded `Int`.
+   All returned values are in `[-23, -1]` so no width difference is observable.
+3. **`#[cfg(feature = "ffi")]` guard on `to_c`**: the Lean model always
+   provides `toC`; whether it is compiled into Rust is feature-gated. The
+   proved properties hold whenever `to_c` is compiled.
+4. **`StreamStopped`/`StreamReset` struct fields**: the Rust variants use
+   anonymous struct syntax (`StreamStopped { stream_id: u64, .. }`); the Lean
+   model uses positional `Nat`. This has no impact on the proved properties.
+
+### Key findings (from proofs)
+
+- **`toWire` is NOT injective**: 13 of 23 variants map to `ProtocolViolation (0xa)`.
+  The Lean theorem `toWire_not_injective` makes this explicit. This is
+  intentional: QUIC does not require finer error discrimination at the wire level.
+- **`toC` IS injective** on all ground-term variants and has data-independent
+  behaviour on parameterised variants (Lean: `toC_injective_groundterms`,
+  `toC_invalidStreamState_const`, etc.).
+- **Range bounds**: `toWire e ≤ 0x10` for all `e` (Lean: `toWire_range`);
+  `toC e < 0` and `-23 ≤ toC e ≤ -1` (Lean: `toC_negative`, `toC_ge_neg23`,
+  `toC_le_neg1`). These are safety properties confirming no out-of-range codes
+  are produced.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (run 145).
+- **Route-B tests**: `formal-verification/tests/transport_error_code/` — 50/50 PASS (run 146).
+  ```bash
+  rustc formal-verification/tests/transport_error_code/transport_error_code_test.rs \
+    -o /tmp/transport_error_code_test
+  /tmp/transport_error_code_test
+  # Output: 50 × PASS + "=== All 50 checks PASS ==="
+  ```
+
+---
+
+## T61: StreamFrameType (`StreamFrameType.lean`)
+
+**Last Updated**: 2026-05-10 UTC · commit HEAD (run 147)
+
+### Lean definitions → Rust functions
+
+| Lean name | Rust function | File + lines | Correspondence | Notes |
+|-----------|---------------|-------------|----------------|-------|
+| `streamTypeByte` | `encode_stream_header` (type-byte prefix only) | `quiche/src/frame.rs:1326-1340` | Exact | Mirrors the bit-OR sequence identically |
+
+### Divergences
+
+1. **`stream_id`, `offset`, `length` encoding omitted**: the Lean model covers
+   only the 1-byte type tag; the varint fields written afterward are not
+   modelled.
+2. **`OctetsMut` buffer omitted**: Lean model is a pure function returning a
+   `UInt8`; no buffer mutation is modelled.
+
+### Impact on proofs
+
+All 12 Lean theorems depend only on the type-byte computation. The omissions
+above do not affect the validity of any proved theorem: they concern orthogonal
+parts of the function that are not modelled or claimed.
+
+### Key findings
+
+- The type byte is always exactly one of two values: `0x0E` (fin=false) or
+  `0x0F` (fin=true). All four protocol flags (BASE 0x08, OFF 0x04, LEN 0x02,
+  and FIN 0x01) are correctly set or cleared by the implementation.
+- `streamTypeByte_injective`: distinct `fin` values always produce distinct
+  bytes — the encoding is reversible.
+- `streamTypeByte_decode_fin`: a parser can recover `fin` by testing bit 0.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (run 147).
+- **Route-B tests**: `formal-verification/tests/stream_frame_type/` — 19/19 PASS (run 147).
+  ```bash
+  cd formal-verification/tests/stream_frame_type
+  rustc --edition 2021 stream_frame_type_test.rs && ./stream_frame_type_test
+  # Output: 19 / 19 PASS
+  ```
