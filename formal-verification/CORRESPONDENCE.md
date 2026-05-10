@@ -3463,3 +3463,48 @@ is data-independent.
   /tmp/transport_error_code_test
   # Output: 50 × PASS + "=== All 50 checks PASS ==="
   ```
+
+---
+
+## T61: StreamFrameType (`StreamFrameType.lean`)
+
+**Last Updated**: 2026-05-10 UTC · commit HEAD (run 147)
+
+### Lean definitions → Rust functions
+
+| Lean name | Rust function | File + lines | Correspondence | Notes |
+|-----------|---------------|-------------|----------------|-------|
+| `streamTypeByte` | `encode_stream_header` (type-byte prefix only) | `quiche/src/frame.rs:1326-1340` | Exact | Mirrors the bit-OR sequence identically |
+
+### Divergences
+
+1. **`stream_id`, `offset`, `length` encoding omitted**: the Lean model covers
+   only the 1-byte type tag; the varint fields written afterward are not
+   modelled.
+2. **`OctetsMut` buffer omitted**: Lean model is a pure function returning a
+   `UInt8`; no buffer mutation is modelled.
+
+### Impact on proofs
+
+All 12 Lean theorems depend only on the type-byte computation. The omissions
+above do not affect the validity of any proved theorem: they concern orthogonal
+parts of the function that are not modelled or claimed.
+
+### Key findings
+
+- The type byte is always exactly one of two values: `0x0E` (fin=false) or
+  `0x0F` (fin=true). All four protocol flags (BASE 0x08, OFF 0x04, LEN 0x02,
+  and FIN 0x01) are correctly set or cleared by the implementation.
+- `streamTypeByte_injective`: distinct `fin` values always produce distinct
+  bytes — the encoding is reversible.
+- `streamTypeByte_decode_fin`: a parser can recover `fin` by testing bit 0.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (run 147).
+- **Route-B tests**: `formal-verification/tests/stream_frame_type/` — 19/19 PASS (run 147).
+  ```bash
+  cd formal-verification/tests/stream_frame_type
+  rustc --edition 2021 stream_frame_type_test.rs && ./stream_frame_type_test
+  # Output: 19 / 19 PASS
+  ```
