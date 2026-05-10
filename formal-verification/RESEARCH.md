@@ -1245,3 +1245,42 @@ as abstract Nat ticks. More proof engineering than T58/T59.
 
 Prioritise **T59** (Transport Error Code) as an easy win — fully decidable, small
 spec, 0 approximations. Then **T58** (Stream Limit) for security-relevant coverage.
+
+---
+
+## Run 146 Research Update
+
+### Critique Incorporation
+
+Prior critique (run 140) recommended:
+1. Extending ProbeBW phase-cycle ordering to cover phase-transition sequencing — noted for T57
+2. Closing the remaining sorry in LossDetectionThreshold (float time_thresh) — still open
+3. Adding Route-B tests for all completed targets — T59 Route-B test added this run
+
+### Task 8 Outcome (run 146)
+
+- **T59 CORRESPONDENCE.md entry** added — all 51 Lean files now have correspondence entries.
+- **T59 Route-B tests** created under `formal-verification/tests/transport_error_code/`.
+  50/50 checks PASS, confirming the Lean model's `toWire` and `toC` functions exactly
+  match the Rust source.
+
+### New Targets Identified (T61–T62)
+
+**T61: QUIC STREAM Frame Type Byte Encoding** (`frame.rs`)
+`encode_stream_header` always OR-combines bits `0x08 | 0x04 | 0x02 | fin`.
+This produces only two possible output values (`0x0e` / `0x0f`). Very small,
+pure, and decidable — ideal for a combined Task 3+5 run.
+
+**T62: BBR2 ProbeRTT Phase Parameter Constants** (`probe_rtt.rs`)
+Extends the pattern of T57 (ProbeBW phase gains) to ProbeRTT: pacing gain
+`0.8` and cwnd gain `0.5` guarantee that ProbeRTT always reduces inflight
+below steady-state. Same integer-scaling approach as T57; fully decidable.
+
+### Recommendation for Next Run
+
+1. **T61** (STREAM Frame Type Byte) — quickest path to a new verified file;
+   write Task 3+5 in a single run.
+2. **T58** (Stream Limit Enforcement) — highest security value; write informal
+   spec (Task 2) then Task 3+5.
+3. **T60** (BBR2 ProbeRTT State Machine) — moderate complexity; write informal
+   spec (Task 2) to continue BBR2 coverage.
