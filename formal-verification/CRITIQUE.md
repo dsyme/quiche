@@ -4,30 +4,31 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-06 10:36 UTC
-- **Commit**: `f951be71e130026f5c2b3777cc308a6fa9d4af1e`
-- **Run**: run 135 — Task 3 (T52 AppLimitedGuard, 14 thms, 0 sorry) +
-  Task 7 (Critique update). Merges run 133 (DeliveryRate T51, 13 thms;
-  HyStart++ Route-B 27/27 PASS) and run 134 (CORRESPONDENCE.md update,
-  T52 informal spec). Full suite: **45 Lean files, ~863 theorems, 0 sorry**;
-  12 Route-B test targets (431+ PASS).
+- **Date**: 2026-05-10 17:50 UTC
+- **Commit**: `9701296bd48e197c81af5bb2efe5656f9ae77d2a`
+- **Run**: run 148 — Task 7 (Critique update: T56/T59/T61 + IdleTimeout Route-B entry) +
+  Task 8 (IdleTimeout Route-B 38/38 PASS). Full suite: **52 Lean files, ~998 theorems, 0 sorry**;
+  18 Route-B test targets (1570+ PASS).
 
 ---
 
 ## Overall Assessment
 
 The formal verification suite for `quiche` now covers **49 Lean files with
-933 theorems, 0 sorry** 🎉 (Lean 4.29.0+, no Mathlib), backed by
-**13 Route-B correspondence test targets (455+ cases PASS)**. Run 139 adds
-`BBR2StartupExit.lean` (T55, 15 thms) formalising BBR2 startup-exit and
-full-bandwidth-reached monotonicity, and a Correspondence update. Run 140
-(this run) adds `ProbeBWPhase.lean` (T57, 12 thms) proving the pacing-gain
-and cwnd-gain assignments for all five CyclePhase variants.
+~998 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+**18 Route-B correspondence test targets (1570+ cases PASS)**. Run 142 adds
+`LossDetectionThreshold.lean` (T56, 16 thms) formalising RFC 9002 §6.1.1
+packet-threshold invariants. Run 145 adds `TransportErrorCode.lean` (T59,
+37 thms) proving wire/FFI encoding properties including non-injectivity of
+`toWire`. Run 147 adds `StreamFrameType.lean` (T61, 12 thms) verifying the
+STREAM type byte bit-flag construction. Run 148 (this run) adds IdleTimeout
+Route-B tests (38/38 PASS) and updates the critique.
 
 The suite spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
 HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
-HTTP/3 codec, QPACK, stream/frame state machines, and RFC compliance.
+HTTP/3 codec, QPACK, stream/frame state machines, transport error codes,
+idle-timeout negotiation, PMTUD binary search, and RFC compliance.
 Every theorem has been mechanically verified by `lake build`.
 
 
@@ -1575,3 +1576,116 @@ default `Params` values from `bbr2.rs` (L291–L300).
   4. Update conference paper to 49 files / 933 theorems
 
 
+
+### Loss Detection Packet Threshold (T56, run 142) — 16 theorems, 0 sorry
+
+`FVSquad/LossDetectionThreshold.lean` formalises the RFC 9002 §6.1.1
+packet-threshold update logic from `quiche/src/recovery/congestion/recovery.rs`
+(lines 655–660).  The key constants are `INITIAL_PACKET_THRESHOLD = 3` and
+`MAX_PACKET_THRESHOLD = 20`.  The modelled operation `updatePktThresh` clamps
+the next threshold to `min(max(current, spurious), MAX)`.
+
+**Assessment (mid-level, medium-high bug-catching potential)**:
+- `pktThreshInv_initial`: the initial threshold satisfies the invariant
+  (INITIAL ≤ thresh ≤ MAX) by definition — a regression guard.
+- `updatePktThresh_preserves_inv`: every update step preserves the invariant
+  across the entire parameter space, including the boundary constants.
+  A missing clamp to MAX would break this theorem.
+- `multi_update_preserves_inv`: the invariant is maintained after any sequence
+  of threshold updates (modelled as a `List.foldl`).  This proves that no
+  matter how many spurious-loss events occur, the threshold stays bounded.
+- `updatePktThresh_mono_spurious`: a higher spurious-loss observation can only
+  raise (or maintain) the threshold — the update is monotone.
+- `update_at_max`: once the threshold reaches MAX, all further updates are
+  no-ops — confirming the MAX bound is a fixed point.
+- `foldl_update_preserves_inv`: multi-step invariant preservation via `List.foldl`.
+- **Utility**: Medium-high.  The invariant-preservation chain is directly useful:
+  it rules out an unbounded-growth bug and a below-INITIAL bug in the threshold
+  management.  Route-B tests (991/991 PASS, run 144) confirm model fidelity.
+- **Limitation**: `time_thresh` (the floating-point time-based threshold from
+  RFC 9002 §6.1.2) is omitted — only the integer packet threshold is modelled.
+  A future target should cover the time-threshold branch.
+
+### Transport Error Code Encoding (T59, run 145) — 37 theorems, 0 sorry
+
+`FVSquad/TransportErrorCode.lean` formalises the QUIC transport error code
+wire encoding from `quiche/src/error.rs`.  The Lean model covers the `toWire`
+(Lean variant → wire u64) and `toC` (Lean variant → C FFI integer) mappings
+for all 13 error code variants.
+
+**Assessment (high-level, high bug-catching potential)**:
+- **37 theorems** is the largest theorem count of any single Lean file in the
+  suite, reflecting the breadth of the error-code space.
+- `toC_injective`: the C FFI mapping is injective — no two error codes share
+  the same C integer.  A regression here would cause silent misidentification
+  of transport errors at the FFI boundary.
+- `toWire_not_injective` / `toWire_all_protocol_violation_on_wire`: 13
+  Lean variants map to only 12 distinct wire codes.  Specifically,
+  `ProtocolViolation (n)` and all unknown-variant fallbacks map to 0xa.
+  This is intentional per RFC 9000 §20.1 (application-specific errors may
+  share the ProtocolViolation code), but the proof makes the non-injectivity
+  explicit and auditable.
+- Per-variant round-trip theorems for all 12 distinct wire values directly
+  guard the decode/encode round-trip.
+- **Utility**: Very high.  Incorrect error code mapping breaks QUIC connection
+  close semantics; an off-by-one in the wire mapping would silently corrupt
+  error reporting.  Route-B tests (50/50 PASS, run 146) confirm model fidelity.
+- **Recommendation**: Add a decoder model and `decode ∘ encode = id` round-trip
+  theorem (when unique) — this would close the remaining correctness gap.
+
+### QUIC STREAM Frame Type Byte Encoding (T61, run 147) — 12 theorems, 0 sorry
+
+`FVSquad/StreamFrameType.lean` formalises the 1-byte type-tag computation
+for QUIC STREAM frames from `quiche/src/frame.rs` (`encode_stream_header`,
+lines 1326–1350).  The Lean model covers the bit-OR construction of the byte
+using the BASE (0x08), OFF (0x04), LEN (0x02), and FIN (0x01) flags.
+
+**Assessment (mid-level, medium bug-catching potential)**:
+- `streamTypeByte_def_false/true`: the byte is exactly 0x0E (fin=false) or
+  0x0F (fin=true).  Any accidental mutation of the constant flags would break
+  these rfl-closed theorems immediately at CI.
+- `streamTypeByte_base_set/off_set/len_set/fin_iff`: each protocol flag bit
+  is individually verified — orthogonal regression guards for the bit-OR
+  construction.
+- `streamTypeByte_injective`: distinct `fin` values produce distinct bytes —
+  the encoding is bijective on Bool.
+- `streamTypeByte_decode_fin`: the FIN flag is recoverable by testing bit 0 —
+  a parser can correctly reconstruct the `fin` boolean.
+- **Utility**: Medium.  The encoding is simple (two fixed byte values), so
+  the theorem density per line of source is high.  The main value is as a
+  regression guard: any unintentional flag change is caught immediately.
+- **Coverage note**: the model covers the type byte only; the varint fields
+  (`stream_id`, `offset`, `length`) written after the type byte are not modelled.
+  Route-B tests (19/19 PASS, run 147) confirm exact byte-value agreement.
+
+### IdleTimeout Route-B Tests (run 148) — 38/38 PASS
+
+Route-B tests for `IdleTimeout.lean` confirm the Lean `idleTimeout` model
+agrees with the pure-function extraction from `quiche/src/lib.rs:8757` on
+38 cases covering: both-zero → None (3), loc=0 with various PTO clamp levels
+(6), peer=0 (5), both-nonzero no-clamp (4), both-nonzero PTO-clamp (4),
+commutativity swaps (4), and Lean-model/Rust-extraction direct agreement (12).
+Model fidelity confirmed.
+
+### Overall Status (run 148)
+
+- **52 Lean files, ~998 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 18 targets, 1570+ cases PASS
+- Coverage spans: QUIC transport (connection negotiation, idle-timeout RFC 9000
+  §10.1.1, PMTUD binary search, STREAM frame type byte, transport error codes),
+  congestion control (NewReno with multi-cycle AIMD convergence, Cubic, BBR2
+  with startup/probing model, pacing, HyStart++, WindowedFilter max-filter,
+  delivery-rate estimation, app-limited guard, BBR2 MaxBandwidthFilter +
+  RoundTripCounter, BBR2 ProbeBW phase gains, loss-detection threshold),
+  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
+  machines, RFC compliance (transport param IDs, reserved param ID pattern).
+- Run 142: T56 LossDetectionThreshold (16 thms: packet-threshold invariant)
+- Run 145: T59 TransportErrorCode (37 thms: wire/FFI encoding injectivity)
+- Run 147: T61 StreamFrameType (12 thms: STREAM type byte bit-flags)
+- Run 148: IdleTimeout Route-B 38/38 PASS
+- **Next priorities**:
+  1. T62 (BBR2 ProbeRTT Phase Params): write `FVSquad/ProbeRTTPhase.lean` (~14 thms)
+  2. T58 (Stream Limit Enforcement): informal spec then Lean spec
+  3. T60 (BBR2 ProbeRTT State Machine): informal spec
+  4. Route-B for BBR2NetworkFilters or BBR2Limits (no Route-B yet)
+  5. Close floating-point gap in LossDetectionThreshold (time_thresh)

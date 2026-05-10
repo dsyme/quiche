@@ -2951,7 +2951,7 @@ in PTO.
 
 - `lake build` passed with Lean 4.29.1 (run 128), 0 sorry.
 - Informal spec: `formal-verification/specs/idle_timeout_informal.md`.
-- Route-B tests: not yet created (planned for a future run).
+- **Route-B tests**: `formal-verification/tests/idle_timeout/` — 38/38 PASS (run 148).
 
 ---
 
