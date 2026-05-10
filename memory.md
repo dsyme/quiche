@@ -1,28 +1,29 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 146 (workflow 25619893713, 2026-05-10)
+Run 147 (workflow 25625838967, 2026-05-10)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 146)
-- Lean files: 51
-- Total theorems: ~986
+## Repository State (after run 147)
+- Lean files: 52
+- Total theorems: ~998
 - Total sorry: 0
-- Route-B test targets: 16 (T59 added this run)
+- Route-B test targets: 17 (T61 added this run)
 - Status issue: #4 (open)
 
 ## Targets
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
-- Phase: 1 (Research — run 146)
-- Source: quiche/src/frame.rs encode_stream_header (L1326-L1350)
-- Priority: MEDIUM-LOW
-- Key: encode_stream_header always produces 0x0e or 0x0f — only 2 possible values
-- Next: Task 3+5 (write FVSquad/StreamFrameType.lean directly)
+- Phase: 5 (Done — run 147)
+- File: formal-verification/lean/FVSquad/StreamFrameType.lean
+- Theorems: 12, sorry: 0
+- CORRESPONDENCE.md: ✅ entry (run 147)
+- Route-B tests: ✅ formal-verification/tests/stream_frame_type/ (19 PASS)
+- Key findings: type byte always 0x0E or 0x0F; fully bijective on Bool; FIN recoverable
 
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
 - Phase: 1 (Research — run 146)
@@ -73,12 +74,12 @@ Run 146 (workflow 25619893713, 2026-05-10)
 
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
-## CORRESPONDENCE.md Status (run 146)
-- ALL 51 Lean files now have entries — NO GAPS
+## CORRESPONDENCE.md Status (run 147)
+- ALL 52 Lean files now have entries — NO GAPS
 - Known mismatches: none
 
 ## Open PRs (lean-squad label)
-- run 146: T59 Route-B tests + CORRESPONDENCE.md T59 entry + research T61/T62
+- run 147: T61 StreamFrameType (12 thms, 0 sorry) + Route-B 19/19
 
 ## Status Issue
 - #4 open — updated each run
@@ -102,8 +103,9 @@ Run 146 (workflow 25619893713, 2026-05-10)
 | T57 (ProbeBWPhase) | tests/probe_bw_phase/ | 10 | 142 |
 | T56 (LossDetectionThreshold) | tests/loss_detection_threshold/ | 991 | 144 |
 | T59 (TransportErrorCode) | tests/transport_error_code/ | 50 | 146 |
+| T61 (StreamFrameType) | tests/stream_frame_type/ | 19 | 147 |
 
-Total: 1513 cases, all PASS
+Total: 1532 cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -113,9 +115,10 @@ Total: 1513 cases, all PASS
 - `Min.min a b` ≠ `Nat.min a b` for rewriting purposes — use unfolded ite
 - `decide` CANNOT handle ∀ n : Nat — use `simp [toWire/toC]` for parameterised cases
 - `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
+- UInt8 bit-ops work cleanly with `decide` for small types — good for byte-encoding proofs
 
 ## Next Run Priorities
-1. T61: STREAM Frame Type Byte Encoding — write FVSquad/StreamFrameType.lean (Task 3+5)
+1. T62: BBR2 ProbeRTT Phase Params — write FVSquad/ProbeRTTPhase.lean (Task 3+5)
 2. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
-3. T62: BBR2 ProbeRTT Phase Params — write informal spec (Task 2)
-4. Close sorry in BBR2StartupExit, ProbeBWPhase, LossDetectionThreshold (Task 5)
+3. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
+4. T55: close BBR2StartupExit sorry (Task 5)
