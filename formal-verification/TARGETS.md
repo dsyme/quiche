@@ -405,6 +405,7 @@ encoded header); stream_id, offset, and length encoding is inherited from
 **Approach**: Define `streamFrameTypeByte : Bool → Nat` matching the OR logic;
 prove it equals `0x0e` or `0x0f`; prove FIN recoverability from the byte.
 
+**Next action**: Write `FVSquad/StreamFrameType.lean` (Task 3+5 combined).
 **Status**: ✅ Phase 5 — DONE (run 147)
 - Lean file: `formal-verification/lean/FVSquad/StreamFrameType.lean`
 - 12 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
