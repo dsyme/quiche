@@ -1,28 +1,55 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 145 (workflow 25607386363, 2026-05-09)
+Run 146 (workflow 25619893713, 2026-05-10)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 145)
+## Repository State (after run 146)
 - Lean files: 51
 - Total theorems: ~986
 - Total sorry: 0
-- Route-B test targets: 15
+- Route-B test targets: 16 (T59 added this run)
 - Status issue: #4 (open)
 
 ## Targets
 
+### T61: QUIC STREAM Frame Type Byte Encoding
+- Phase: 1 (Research — run 146)
+- Source: quiche/src/frame.rs encode_stream_header (L1326-L1350)
+- Priority: MEDIUM-LOW
+- Key: encode_stream_header always produces 0x0e or 0x0f — only 2 possible values
+- Next: Task 3+5 (write FVSquad/StreamFrameType.lean directly)
+
+### T62: BBR2 ProbeRTT Phase Parameter Constants
+- Phase: 1 (Research — run 146)
+- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
+- Priority: MEDIUM
+- Key: pacing_gain=0.8, cwnd_gain=0.5 (both sub-unity → inflight drain guaranteed)
+- Next: Write informal spec (Task 2) then Task 3+5
+
 ### T59: Transport Error Code Mapping
-- Phase: 5 (Done — run 145)
+- Phase: 5 (Done — run 145; Route-B run 146)
 - File: formal-verification/lean/FVSquad/TransportErrorCode.lean
 - Theorems: 37, sorry: 0
-- Key findings: toWire NOT injective (13 variants → ProtocolViolation 0xa); toC IS injective; range bounds proved
-- PR: lean-squad-run145-25607386363-transport-error-code
+- CORRESPONDENCE.md: ✅ entry (run 146)
+- Route-B tests: ✅ formal-verification/tests/transport_error_code/ (50 PASS)
+- Key findings: toWire NOT injective (13 variants → ProtocolViolation 0xa); toC IS injective
+
+### T60: BBR2 ProbeRTT State Machine
+- Phase: 1 (Research — run 142)
+- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
+- Priority: MEDIUM
+- Next: Task 2 (informal spec)
+
+### T58: QUIC Stream Limit Enforcement
+- Phase: 1 (Research — run 142)
+- Source: quiche/src/stream/mod.rs, quiche/src/lib.rs
+- Priority: HIGH
+- Next: Task 2 (informal spec) then Task 3+5
 
 ### T56: Loss Detection Packet Threshold
 - Phase: 5 (Done — run 142; Route-B run 144)
@@ -44,29 +71,14 @@ Run 145 (workflow 25607386363, 2026-05-09)
 - File: formal-verification/lean/FVSquad/BBR2StartupExit.lean
 - Theorems: 15, sorry: 1
 
-### T58: QUIC Stream Limit Enforcement
-- Phase: 1 (Research — run 142)
-- Source: quiche/src/stream/mod.rs, quiche/src/lib.rs
-- Priority: HIGH
-- Next: Task 2 (informal spec) then Task 3+5
-
-### T60: BBR2 ProbeRTT State Machine
-- Phase: 1 (Research — run 142)
-- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
-- Priority: MEDIUM
-- Next: Task 2 (informal spec)
-
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
-## CORRESPONDENCE.md Status (run 143)
-- ALL 50 Lean files now have entries — NO GAPS (T59 not yet added)
+## CORRESPONDENCE.md Status (run 146)
+- ALL 51 Lean files now have entries — NO GAPS
 - Known mismatches: none
-- T59 needs CORRESPONDENCE.md entry next run
 
 ## Open PRs (lean-squad label)
-- run 143: CORRESPONDENCE.md 4 new entries + T59 informal spec (pending)
-- run 144: REPORT update (50 files, 949 thms) + Route-B T56 991/991
-- run 145: T59 TransportErrorCode.lean (37 thms, 0 sorry)
+- run 146: T59 Route-B tests + CORRESPONDENCE.md T59 entry + research T61/T62
 
 ## Status Issue
 - #4 open — updated each run
@@ -89,8 +101,9 @@ Run 145 (workflow 25607386363, 2026-05-09)
 | T49 (WindowedFilter) | tests/windowed_filter/ | 24 | 136 |
 | T57 (ProbeBWPhase) | tests/probe_bw_phase/ | 10 | 142 |
 | T56 (LossDetectionThreshold) | tests/loss_detection_threshold/ | 991 | 144 |
+| T59 (TransportErrorCode) | tests/transport_error_code/ | 50 | 146 |
 
-Total: 1463 cases, all PASS
+Total: 1513 cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -102,7 +115,7 @@ Total: 1463 cases, all PASS
 - `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
 
 ## Next Run Priorities
-1. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
-2. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
-3. Add CORRESPONDENCE.md entry for T59 TransportErrorCode (Task 6)
+1. T61: STREAM Frame Type Byte Encoding — write FVSquad/StreamFrameType.lean (Task 3+5)
+2. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
+3. T62: BBR2 ProbeRTT Phase Params — write informal spec (Task 2)
 4. Close sorry in BBR2StartupExit, ProbeBWPhase, LossDetectionThreshold (Task 5)
