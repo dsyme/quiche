@@ -1,18 +1,18 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 148 (workflow 25635242805, 2026-05-10)
+Run 149 (workflow 25650816934, 2026-05-11)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 148)
+## Repository State (after run 149)
 - Lean files: 52
 - Total theorems: ~998
 - Total sorry: 0
-- Route-B test targets: 18 (IdleTimeout added this run)
+- Route-B test targets: 18
 - Status issue: #4 (open)
 
 ## Targets
@@ -30,7 +30,6 @@ Run 148 (workflow 25635242805, 2026-05-10)
 - Theorems: 12, sorry: 0
 - CORRESPONDENCE.md: ✅ entry (run 147)
 - Route-B tests: ✅ formal-verification/tests/stream_frame_type/ (19 PASS)
-- Key findings: type byte always 0x0E or 0x0F; fully bijective on Bool; FIN recoverable
 
 ### T59: Transport Error Code Mapping
 - Phase: 5 (Done — run 145; Route-B run 146)
@@ -38,7 +37,6 @@ Run 148 (workflow 25635242805, 2026-05-10)
 - Theorems: 37, sorry: 0
 - CORRESPONDENCE.md: ✅ entry (run 146)
 - Route-B tests: ✅ formal-verification/tests/transport_error_code/ (50 PASS)
-- Key findings: toWire NOT injective (13 variants → ProtocolViolation 0xa); toC IS injective
 
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 1 (Research — run 142)
@@ -55,7 +53,7 @@ Run 148 (workflow 25635242805, 2026-05-10)
 ### T56: Loss Detection Packet Threshold
 - Phase: 5 (Done — run 142; Route-B run 144)
 - File: formal-verification/lean/FVSquad/LossDetectionThreshold.lean
-- Theorems: 16, sorry: 0 (was 1 sorry for time_thresh, now 0)
+- Theorems: 16, sorry: 0
 - CORRESPONDENCE.md: ✅ entry (run 143)
 - Route-B tests: ✅ formal-verification/tests/loss_detection_threshold/ (991 PASS)
 
@@ -69,28 +67,25 @@ Run 148 (workflow 25635242805, 2026-05-10)
 ### T57: BBR2 ProbeBW Phase Gains
 - Phase: 5 (Done — run 140; Route-B run 142)
 - File: formal-verification/lean/FVSquad/ProbeBWPhase.lean
-- Theorems: 12, sorry: 1
+- Theorems: 12, sorry: 0
 - Route-B tests: ✅ formal-verification/tests/probe_bw_phase/ (10 PASS)
-
-### T55: BBR2 Startup Exit
-- Phase: 5 (Done — run 139)
-- File: formal-verification/lean/FVSquad/BBR2StartupExit.lean
-- Theorems: 15, sorry: 1
 
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
-## CRITIQUE.md Status (run 148)
-- Updated to cover T56, T59, T61
+## CRITIQUE.md Status (run 149)
+- Updated to cover PRR (20 thms, RFC 6937 rate-control) and Pmtud (15 thms, RFC 8899)
 - Overall status: 52 files, ~998 theorems, 0 sorry
 - 18 Route-B targets, 1570+ cases PASS
+- PRR gap: no Route-B tests yet; caller contract (sent_bytes ≤ snd_cnt) not enforced
+- Pmtud gap: no inductive termination theorem; no Route-B tests yet
 
-## CORRESPONDENCE.md Status (run 148)
+## CORRESPONDENCE.md Status (run 149)
 - ALL 52 Lean files have entries
-- IdleTimeout: updated with Route-B validation evidence
+- Last Updated refreshed: 2026-05-11, all 52 files, 0 sorry
 - Known mismatches: none
 
 ## Open PRs (lean-squad label)
-- run 148: Critique update (T56/T59/T61) + IdleTimeout Route-B 38/38 PASS
+- run 149: Critique (PRR + Pmtud) + CORRESPONDENCE.md refresh
 
 ## Status Issue
 - #4 open — updated each run
@@ -128,10 +123,11 @@ Total: 1570+ cases, all PASS
 - `decide` CANNOT handle ∀ n : Nat — use `simp [toWire/toC]` for parameterised cases
 - `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
 - UInt8 bit-ops work cleanly with `decide` for small types — good for byte-encoding proofs
+- Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
 
 ## Next Run Priorities
 1. T62: BBR2 ProbeRTT Phase Params — write FVSquad/ProbeRTTPhase.lean (Task 3+5)
 2. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
 3. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
-4. Route-B for BBR2NetworkFilters or BBR2Limits (no Route-B yet, good candidates)
-5. Close sorry in ProbeBWPhase and BBR2StartupExit
+4. Route-B for PRR or Pmtud (good candidates, no Route-B yet)
+5. Inductive termination theorem for Pmtud binary search
