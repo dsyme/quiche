@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-10 17:50 UTC
-- **Commit**: `9701296bd48e197c81af5bb2efe5656f9ae77d2a`
-- **Run**: run 148 — Task 7 (Critique update: T56/T59/T61 + IdleTimeout Route-B entry) +
-  Task 8 (IdleTimeout Route-B 38/38 PASS). Full suite: **52 Lean files, ~998 theorems, 0 sorry**;
+- **Date**: 2026-05-11 05:00 UTC
+- **Commit**: `a0421a9218c86eebf11498af96cf222ca79a2c7c`
+- **Run**: run 149 — Task 6 (Correspondence review) + Task 7 (Critique: PRR, Pmtud).
+  Full suite: **52 Lean files, ~998 theorems, 0 sorry**;
   18 Route-B test targets (1570+ PASS).
 
 ---
@@ -1658,6 +1658,98 @@ using the BASE (0x08), OFF (0x04), LEN (0x02), and FIN (0x01) flags.
   (`stream_id`, `offset`, `length`) written after the type byte are not modelled.
   Route-B tests (19/19 PASS, run 147) confirm exact byte-value agreement.
 
+### Proportional Rate Reduction (`FVSquad/PRR.lean`, run ~107) — 20 theorems, 0 sorry
+
+**Source**: `quiche/src/recovery/congestion/prr.rs` — RFC 6937 PRR algorithm.
+
+PRR paces the sender during loss recovery by limiting transmissions
+proportionally to the fraction of the `recoverfs` (bytes in flight at congestion
+start) that has been delivered. The Lean model covers two modes: PRR (pipe >
+ssthresh) and PRR-SSRB (pipe ≤ ssthresh), plus the full lifecycle of
+`congestion_event`, `on_packet_sent`, and `on_packet_acked`.
+
+**Assessment (high-level, high bug-catching potential)**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `congestion_event_prr_delivered` | low | low | Reset postcondition (rfl) |
+| `congestion_event_recoverfs` | low | low | Reset postcondition (rfl) |
+| `congestion_event_prr_out` | low | low | Reset postcondition (rfl) |
+| `congestion_event_snd_cnt` | low | low | Reset postcondition (rfl) |
+| `congestion_event_twice` | mid | medium | Two resets collapse to one — idempotence guard |
+| `sent_prr_out_increases` | low | low | Field update (rfl) |
+| `sent_snd_cnt_saturating` | low | low | Saturating decrement (rfl) |
+| `acked_prr_delivered_increases` | low | low | Field update (rfl) |
+| `acked_prr_out_unchanged` | low | low | Immutability guard (rfl) |
+| `prr_mode_snd_cnt_zero_when_recoverfs_zero` | mid | **high** | Division-by-zero guard: no sends when `recoverfs=0` |
+| `prr_mode_snd_cnt_formula` | **high** | **high** | Exact RFC 6937 §3 formula for PRR mode |
+| `prr_mode_snd_cnt_le_ratio` | **high** | **high** | Central rate control: sender never exceeds proportional target |
+| `ssrb_snd_cnt_le_gap` | **high** | **high** | SSRB gap bound: never overshoots ssthresh by more than allowed |
+| `ssrb_snd_cnt_le_limit` | **high** | **high** | SSRB per-round delivery limit |
+| `ssrb_snd_cnt_ge_min_gap_mss` | **high** | **high** | SSRB liveness: at least one MSS always permitted when gap > 0 |
+| `ssrb_snd_cnt_formula` | **high** | **high** | Exact RFC 6937 §3 formula for SSRB mode |
+| `fresh_epoch_sent_prr_out` | mid | medium | Sequence: reset then send sets `prr_out = sent_bytes` |
+| `divCeil_zero_left` / `divCeil_eq_of_pos` / `divCeil_ge_div` | low | low | Helpers for ceiling division |
+
+**Positive findings**: The rate-bounding theorems (`prr_mode_snd_cnt_le_ratio`,
+`ssrb_snd_cnt_le_gap`, `ssrb_snd_cnt_le_limit`, `ssrb_snd_cnt_ge_min_gap_mss`)
+are genuinely high-value safety properties — they correspond directly to the
+"send no faster than proportional delivery" invariant of RFC 6937 and the
+"always allow at least MSS in SSRB" liveness guarantee. A regression in the
+Rust `on_packet_acked` formula would break these theorems at CI.
+
+**Gap**: The caller contract — that `on_packet_sent` is only called with
+`sent_bytes ≤ snd_cnt` — is NOT enforced by the model. A theorem capturing
+that the counter does not underflow under this assumption would improve
+coverage. No Route-B tests exist yet for PRR.
+
+---
+
+### PMTUD Binary-Search Bounds (`FVSquad/Pmtud.lean`, run ~125) — 15 theorems, 0 sorry
+
+**Source**: `quiche/src/pmtud.rs` — RFC 8899 PLPMTUD binary search.
+
+PMTUD discovers the path MTU (PLPMTU) by binary-searching between a minimum
+(MIN_PLPMTU = 1200) and maximum (max_mtu). The Lean model covers the pure
+`updateProbeSize` logic across all four state combinations
+(both/none/failed-only/success-only) and the convergence condition
+(gap ≤ 1 → PMTU found).
+
+**Assessment (mid/high-level, high bug-catching potential)**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `updateProbeSize_ge_min` | **high** | **high** | probe_size ≥ 1200 in all well-formed states — safety invariant |
+| `updateProbeSize_le_max` | **high** | **high** | probe_size ≤ max_mtu — no out-of-range probes |
+| `updateProbeSize_lt_failed` | **high** | **high** | Binary search narrows from above: new probe < smallest_failed |
+| `updateProbeSize_gt_success` | **high** | **high** | Binary search narrows from below: new probe > largest_success |
+| `updateProbeSize_only_failed_lt` | mid | **high** | Failed-only: new probe < smallest_failed (strict narrowing) |
+| `updateProbeSize_only_failed_ge_min` | mid | medium | Failed-only: result ≥ MIN_PLPMTU |
+| `updateProbeSize_converged` | **high** | **high** | Convergence: gap ≤ 1 → returns largest_success (the PMTU) |
+| `updateProbeSize_no_history` | mid | medium | No history → probe at max_mtu (normal initial case) |
+| `updateProbeSize_only_success` | mid | medium | Only success → returns that success (PMTU immediately known) |
+| `binary_search_midpoint_bounds` | **high** | **high** | Core: g < (g+f)/2 < f when gap > 1 — search terminates |
+| `binary_search_midpoint_ge_min` | mid | medium | Midpoint ≥ MIN_PLPMTU when both bounds ≥ MIN_PLPMTU |
+| `failed_only_midpoint_bounds` | mid | medium | Failed-only midpoint within [MIN_PLPMTU, f] |
+| `updateProbeSize_both` (private helper) | — | — | Private; enables readable proofs |
+| `div2_le_of_le_sum` / `le_div2_of_mul2_le` (private) | — | — | Division helpers (omega cannot reason about Nat division) |
+
+**Positive findings**: The four range-bounding theorems (`ge_min`, `le_max`,
+`lt_failed`, `gt_success`) collectively prove that the binary search is
+**monotonically terminating** — every probe is strictly inside the current
+search interval. The convergence theorem (`updateProbeSize_converged`) confirms
+the RFC 8899 stopping condition is correctly implemented: when `f − g ≤ 1`, the
+algorithm returns `g` as the PLPMTU. A bug that used `<` instead of `≤` in the
+convergence guard, or that computed `(g + f) / 2` as `(g + f + 1) / 2`
+(rounding the wrong direction), would break these theorems.
+
+**Gap**: The model covers a single `updateProbeSize` step. No inductive theorem
+proves that after O(log(max_mtu − min_mtu)) steps the interval converges. A
+termination argument or bounded-steps theorem would be the highest-value next
+addition. No Route-B tests exist yet for Pmtud.
+
+---
+
 ### IdleTimeout Route-B Tests (run 148) — 38/38 PASS
 
 Route-B tests for `IdleTimeout.lean` confirm the Lean `idleTimeout` model
@@ -1667,7 +1759,7 @@ agrees with the pure-function extraction from `quiche/src/lib.rs:8757` on
 commutativity swaps (4), and Lean-model/Rust-extraction direct agreement (12).
 Model fidelity confirmed.
 
-### Overall Status (run 148)
+### Overall Status (run 149)
 
 - **52 Lean files, ~998 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
 - Route-B: 18 targets, 1570+ cases PASS
@@ -1676,16 +1768,16 @@ Model fidelity confirmed.
   congestion control (NewReno with multi-cycle AIMD convergence, Cubic, BBR2
   with startup/probing model, pacing, HyStart++, WindowedFilter max-filter,
   delivery-rate estimation, app-limited guard, BBR2 MaxBandwidthFilter +
-  RoundTripCounter, BBR2 ProbeBW phase gains, loss-detection threshold),
-  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
-  machines, RFC compliance (transport param IDs, reserved param ID pattern).
-- Run 142: T56 LossDetectionThreshold (16 thms: packet-threshold invariant)
-- Run 145: T59 TransportErrorCode (37 thms: wire/FFI encoding injectivity)
-- Run 147: T61 StreamFrameType (12 thms: STREAM type byte bit-flags)
+  RoundTripCounter, BBR2 ProbeBW phase gains, loss-detection threshold,
+  **PRR rate-control formula**), HTTP/3 codec, QPACK (static table + integer
+  codec), stream/frame state machines, RFC compliance (transport param IDs,
+  reserved param ID pattern), **PMTUD binary-search bounds**.
 - Run 148: IdleTimeout Route-B 38/38 PASS
+- Run 149: Critique extended to cover PRR (20 thms, RFC 6937 rate-control) and
+  Pmtud (15 thms, RFC 8899 binary-search bounds); CORRESPONDENCE.md last-updated refreshed.
 - **Next priorities**:
   1. T62 (BBR2 ProbeRTT Phase Params): write `FVSquad/ProbeRTTPhase.lean` (~14 thms)
   2. T58 (Stream Limit Enforcement): informal spec then Lean spec
   3. T60 (BBR2 ProbeRTT State Machine): informal spec
-  4. Route-B for BBR2NetworkFilters or BBR2Limits (no Route-B yet)
-  5. Close floating-point gap in LossDetectionThreshold (time_thresh)
+  4. Route-B for PRR or Pmtud (no Route-B yet for either)
+  5. Inductive termination theorem for Pmtud binary search

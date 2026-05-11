@@ -4,18 +4,18 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-10 04:40 UTC
-- **Commit**: `74efb61e`
-- **Lean build**: `lake build` passed with Lean 4.29.1 — 51 files, **0 sorry** 🎉
+- **Date**: 2026-05-11 05:10 UTC
+- **Commit**: `a0421a9218c86eebf11498af96cf222ca79a2c7c`
+- **Lean build**: `lake build` passed with Lean 4.29.1 — 52 files, **0 sorry** 🎉
+  (run 149: last-updated refresh; all 52 files verified)
+  (run 148: added T61 StreamFrameType entry + IdleTimeout Route-B 38/38 PASS)
   (run 146: added T59 TransportErrorCode entry + Route-B 50/50 PASS)
   (run 142: added LossDetectionThreshold, ProbeBWPhase)
   (run 139: added 3 entries — NewRenoAIMD, BBR2NetworkFilters, BBR2StartupExit)
   (run 122: added 4 missing correspondence entries for H3ParseSettings, QPACKStaticTable,
   StreamStateMachine, QPACKInteger)
-- **Route-B tests**: `tests/pkt_num_len/` 18/18 PASS; `tests/bandwidth_arithmetic/` 25/25 PASS;
-  `tests/rangeset_insert/` 21/21 PASS; `tests/ack_ranges/` 25/25 PASS;
-  `tests/h3_frame/` 25/25 PASS (run 103); `tests/bytes_in_flight/` 25/25 PASS (run 112);
-  `tests/path_state/` 75/75 PASS (run 118); `tests/qpack_integer/` 25/25 PASS (run 122)
+- **Route-B tests**: 18 targets, 1570+ cases PASS (see individual sections and
+  `formal-verification/tests/` for full details)
 
 ---
 
