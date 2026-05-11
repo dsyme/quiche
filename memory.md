@@ -1,28 +1,30 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 149 (workflow 25650816934, 2026-05-11)
+Run 150 (workflow 25668100138, 2026-05-11)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 149)
-- Lean files: 52
-- Total theorems: ~998
+## Repository State (after run 150)
+- Lean files: 53
+- Total theorems: ~1024
 - Total sorry: 0
-- Route-B test targets: 18
+- Route-B test targets: 19
 - Status issue: #4 (open)
 
 ## Targets
 
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
-- Phase: 1 (Research — run 146)
-- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
-- Priority: MEDIUM
-- Key: pacing_gain=0.8, cwnd_gain=0.5 (both sub-unity → inflight drain guaranteed)
-- Next: Write informal spec (Task 2) then Task 3+5
+- Phase: 5 (Done — run 150)
+- File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
+- Theorems: 26, sorry: 0
+- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs, bbr2.rs
+- Key: Gain struct (num/den), sub-unity predicates, inflightTarget ≤ BDP, drain guarantee
+- CORRESPONDENCE.md: not yet updated (do next run)
+- Route-B tests: not yet (no standalone Rust extraction needed — gains are pure consts)
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
 - Phase: 5 (Done — run 147)
@@ -76,16 +78,15 @@ Run 149 (workflow 25650816934, 2026-05-11)
 - Updated to cover PRR (20 thms, RFC 6937 rate-control) and Pmtud (15 thms, RFC 8899)
 - Overall status: 52 files, ~998 theorems, 0 sorry
 - 18 Route-B targets, 1570+ cases PASS
-- PRR gap: no Route-B tests yet; caller contract (sent_bytes ≤ snd_cnt) not enforced
+- PRR gap: no Route-B tests yet → CLOSED run 150 (25/25 PASS)
 - Pmtud gap: no inductive termination theorem; no Route-B tests yet
 
 ## CORRESPONDENCE.md Status (run 149)
-- ALL 52 Lean files have entries
-- Last Updated refreshed: 2026-05-11, all 52 files, 0 sorry
-- Known mismatches: none
+- ALL 52 Lean files have entries (run 149 refresh)
+- T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md — needs run 151 update
 
 ## Open PRs (lean-squad label)
-- run 149: Critique (PRR + Pmtud) + CORRESPONDENCE.md refresh
+- run 150: ProbeRTTPhase.lean (26 thms) + PRR Route-B tests (25/25)
 
 ## Status Issue
 - #4 open — updated each run
@@ -111,8 +112,9 @@ Run 149 (workflow 25650816934, 2026-05-11)
 | T59 (TransportErrorCode) | tests/transport_error_code/ | 50 | 146 |
 | T61 (StreamFrameType) | tests/stream_frame_type/ | 19 | 147 |
 | IdleTimeout | tests/idle_timeout/ | 38 | 148 |
+| PRR | tests/prr/ | 25 | 150 |
 
-Total: 1570+ cases, all PASS
+Total: 1595+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -124,10 +126,14 @@ Total: 1570+ cases, all PASS
 - `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
 - UInt8 bit-ops work cleanly with `decide` for small types — good for byte-encoding proofs
 - Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
+- `decide` CANNOT prove `Gain.isSubUnity/isAtMostUnity` — use `simp [Gain.isSubUnity, gainConst]`
+- For `n * k / (k * m) = n / m`: use `Nat.mul_div_mul_left` with `mul_comm` to align
+- `Nat.div_lt_iff_lt_mul hd : x / k < y ↔ x < y * k` — useful for strict div bounds
+- `Nat.div_le_div_right` works directly for ≤ goals on nat division
 
 ## Next Run Priorities
-1. T62: BBR2 ProbeRTT Phase Params — write FVSquad/ProbeRTTPhase.lean (Task 3+5)
+1. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
 2. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
-3. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
-4. Route-B for PRR or Pmtud (good candidates, no Route-B yet)
+3. Add CORRESPONDENCE.md entry for T62 (ProbeRTTPhase) — Task 6
+4. Pmtud Route-B tests (no Route-B yet)
 5. Inductive termination theorem for Pmtud binary search
