@@ -1,30 +1,47 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 150 (workflow 25668100138, 2026-05-11)
+Run 151 (workflow 25688964827, 2026-05-11)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 150)
-- Lean files: 53
-- Total theorems: ~1024
+## Repository State (after run 151)
+- Lean files: 54 (53 merged + ProbeRTTStateMachine in open PR)
+- Total theorems: ~1048 (1024 + 24 new)
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
 
 ## Targets
 
+### T63: QUIC Peer Stream-Count Limit Update Monotonicity
+- Phase: 1 (Research — run 151)
+- Source: quiche/src/stream/mod.rs L529–L590
+- Priority: HIGH
+- Key finding: bare u64 subtraction in peer_streams_left_bidi() (line 578)
+  is unsafe if local_opened > peer_max (underflow wraps to huge value)
+- Next: Task 2 (informal spec) then Task 3+5
+
+### T60: BBR2 ProbeRTT State Machine
+- Phase: 5 (Done — run 151)
+- File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
+- Theorems: 24, sorry: 0
+- Informal spec: formal-verification/specs/probe_rtt_state_machine_informal.md
+- State: ProbeRttState (draining | waiting t), ProbeRttResult (stay | exitToProbeBW)
+- Models: congestionStep, quiescenceStep
+- Key theorems: draining→waiting, waiting→exit, quiescence fast-path,
+  exit time immutability, exhaustive case dichotomy, cross-function agreement
+- CORRESPONDENCE.md: not yet updated
+- Route-B tests: not yet
+
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
 - Phase: 5 (Done — run 150)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
 - Theorems: 26, sorry: 0
-- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs, bbr2.rs
-- Key: Gain struct (num/den), sub-unity predicates, inflightTarget ≤ BDP, drain guarantee
-- CORRESPONDENCE.md: not yet updated (do next run)
-- Route-B tests: not yet (no standalone Rust extraction needed — gains are pure consts)
+- CORRESPONDENCE.md: not yet updated
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
 - Phase: 5 (Done — run 147)
@@ -40,12 +57,6 @@ Run 150 (workflow 25668100138, 2026-05-11)
 - CORRESPONDENCE.md: ✅ entry (run 146)
 - Route-B tests: ✅ formal-verification/tests/transport_error_code/ (50 PASS)
 
-### T60: BBR2 ProbeRTT State Machine
-- Phase: 1 (Research — run 142)
-- Source: quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs
-- Priority: MEDIUM
-- Next: Task 2 (informal spec)
-
 ### T58: QUIC Stream Limit Enforcement
 - Phase: 1 (Research — run 142)
 - Source: quiche/src/stream/mod.rs, quiche/src/lib.rs
@@ -54,23 +65,15 @@ Run 150 (workflow 25668100138, 2026-05-11)
 
 ### T56: Loss Detection Packet Threshold
 - Phase: 5 (Done — run 142; Route-B run 144)
-- File: formal-verification/lean/FVSquad/LossDetectionThreshold.lean
-- Theorems: 16, sorry: 0
-- CORRESPONDENCE.md: ✅ entry (run 143)
-- Route-B tests: ✅ formal-verification/tests/loss_detection_threshold/ (991 PASS)
+- Theorems: 16, sorry: 0; Route-B 991 PASS
 
 ### IdleTimeout (T46)
-- Phase: 5 (Done — proof run 128; Route-B run 148)
-- File: formal-verification/lean/FVSquad/IdleTimeout.lean
-- Theorems: 12, sorry: 0
-- CORRESPONDENCE.md: ✅ updated (run 148)
-- Route-B tests: ✅ formal-verification/tests/idle_timeout/ (38 PASS, run 148)
+- Phase: 5 (Done — run 128; Route-B run 148)
+- Theorems: 12, sorry: 0; Route-B 38 PASS
 
 ### T57: BBR2 ProbeBW Phase Gains
 - Phase: 5 (Done — run 140; Route-B run 142)
-- File: formal-verification/lean/FVSquad/ProbeBWPhase.lean
-- Theorems: 12, sorry: 0
-- Route-B tests: ✅ formal-verification/tests/probe_bw_phase/ (10 PASS)
+- Theorems: 12, sorry: 0; Route-B 10 PASS
 
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
@@ -78,15 +81,14 @@ Run 150 (workflow 25668100138, 2026-05-11)
 - Updated to cover PRR (20 thms, RFC 6937 rate-control) and Pmtud (15 thms, RFC 8899)
 - Overall status: 52 files, ~998 theorems, 0 sorry
 - 18 Route-B targets, 1570+ cases PASS
-- PRR gap: no Route-B tests yet → CLOSED run 150 (25/25 PASS)
-- Pmtud gap: no inductive termination theorem; no Route-B tests yet
 
 ## CORRESPONDENCE.md Status (run 149)
 - ALL 52 Lean files have entries (run 149 refresh)
-- T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md — needs run 151 update
+- T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md
+- T60 (ProbeRTTStateMachine) NOT YET in CORRESPONDENCE.md
 
 ## Open PRs (lean-squad label)
-- run 150: ProbeRTTPhase.lean (26 thms) + PRR Route-B tests (25/25)
+- run 151 (PR pending): ProbeRTTStateMachine.lean (24 thms) + T63 research
 
 ## Status Issue
 - #4 open — updated each run
@@ -119,21 +121,19 @@ Total: 1595+ cases, all PASS
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
-- Best pattern for if-then-else proofs: define with explicit ite + `by_cases h : cond <;> simp [h] <;> omega`
-- `simp only [h1, ite_true]` may close goal completely — check before adding more tactics
+- Best pattern for if-then-else proofs: `by_cases h : cond <;> simp [h] <;> omega`
+- `simp only [h1, ite_true]` may close goal completely — check before adding more
+- `push_neg` NOT available without Mathlib — use `omega` instead
+- `split at h` fails on hypothesis goals — use `by_cases` pattern instead
+- Use `simp only [defn]` followed by `by_cases` for conditional definitions
 - `Min.min a b` ≠ `Nat.min a b` for rewriting purposes — use unfolded ite
-- `decide` CANNOT handle ∀ n : Nat — use `simp [toWire/toC]` for parameterised cases
-- `cases e <;> decide` fails for parameterised variants — use `cases e <;> simp [f]`
-- UInt8 bit-ops work cleanly with `decide` for small types — good for byte-encoding proofs
+- UInt8 bit-ops work cleanly with `decide` for small types
+- `cases ht` works for `ht : .waiting exitTime = .waiting t` injections
 - Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
-- `decide` CANNOT prove `Gain.isSubUnity/isAtMostUnity` — use `simp [Gain.isSubUnity, gainConst]`
-- For `n * k / (k * m) = n / m`: use `Nat.mul_div_mul_left` with `mul_comm` to align
-- `Nat.div_lt_iff_lt_mul hd : x / k < y ↔ x < y * k` — useful for strict div bounds
-- `Nat.div_le_div_right` works directly for ≤ goals on nat division
 
 ## Next Run Priorities
-1. T60: BBR2 ProbeRTT State Machine — write informal spec (Task 2)
-2. T58: Stream Limit Enforcement — write informal spec (Task 2) then Task 3+5
-3. Add CORRESPONDENCE.md entry for T62 (ProbeRTTPhase) — Task 6
+1. T63: Stream Count Limit — write informal spec then FVSquad/StreamCountLimit.lean
+2. T58: Stream Limit Enforcement — write informal spec (Task 2)
+3. Add CORRESPONDENCE.md entries for T60 (ProbeRTTStateMachine) and T62 (ProbeRTTPhase)
 4. Pmtud Route-B tests (no Route-B yet)
 5. Inductive termination theorem for Pmtud binary search
