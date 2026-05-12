@@ -1,16 +1,16 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 151 (workflow 25688964827, 2026-05-11)
+Run 152 (workflow 25713287243, 2026-05-12)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 151)
-- Lean files: 54 (53 merged + ProbeRTTStateMachine in open PR)
-- Total theorems: ~1048 (1024 + 24 new)
+## Repository State (after run 152)
+- Lean files: 54
+- Total theorems: ~1256
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
@@ -18,22 +18,22 @@ Run 151 (workflow 25688964827, 2026-05-11)
 ## Targets
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
-- Phase: 1 (Research — run 151)
+- Phase: 2 (Informal spec — run 152)
+- Spec: formal-verification/specs/stream_count_limit_informal.md
 - Source: quiche/src/stream/mod.rs L529–L590
 - Priority: HIGH
 - Key finding: bare u64 subtraction in peer_streams_left_bidi() (line 578)
   is unsafe if local_opened > peer_max (underflow wraps to huge value)
-- Next: Task 2 (informal spec) then Task 3+5
+- Open question OQ-T63-1: no explicit runtime guard against underflow
+- Next: Task 3 — write FVSquad/StreamCountLimit.lean (~8 thms, all omega)
+  update_mono, update_idem, update_comm, streams_left_no_underflow,
+  streams_left_after_update, open_respects_limit, count invariant
 
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 5 (Done — run 151)
 - File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
-- Theorems: 24, sorry: 0
-- Informal spec: formal-verification/specs/probe_rtt_state_machine_informal.md
-- State: ProbeRttState (draining | waiting t), ProbeRttResult (stay | exitToProbeBW)
-- Models: congestionStep, quiescenceStep
-- Key theorems: draining→waiting, waiting→exit, quiescence fast-path,
-  exit time immutability, exhaustive case dichotomy, cross-function agreement
+- Theorems: 27, sorry: 0
+- Critique: run 152 (key: waiting_exit_time_immutable, exhaustive case coverage)
 - CORRESPONDENCE.md: not yet updated
 - Route-B tests: not yet
 
@@ -41,7 +41,9 @@ Run 151 (workflow 25688964827, 2026-05-11)
 - Phase: 5 (Done — run 150)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
 - Theorems: 26, sorry: 0
+- Critique: run 152 (key: inflightTarget_bdpFraction_eq_half, sub-unity drain)
 - CORRESPONDENCE.md: not yet updated
+- Route-B tests: not yet
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
 - Phase: 5 (Done — run 147)
@@ -77,18 +79,19 @@ Run 151 (workflow 25688964827, 2026-05-11)
 
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
-## CRITIQUE.md Status (run 149)
-- Updated to cover PRR (20 thms, RFC 6937 rate-control) and Pmtud (15 thms, RFC 8899)
-- Overall status: 52 files, ~998 theorems, 0 sorry
-- 18 Route-B targets, 1570+ cases PASS
+## CRITIQUE.md Status (run 152)
+- Updated to cover ProbeRTTPhase (26 thms) and ProbeRTTStateMachine (27 thms)
+- Overall status: 54 files, ~1256 theorems, 0 sorry
+- 19 Route-B targets, 1595+ cases PASS
 
-## CORRESPONDENCE.md Status (run 149)
-- ALL 52 Lean files have entries (run 149 refresh)
+## CORRESPONDENCE.md Status
+- ALL 52 earlier Lean files have entries
 - T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md
 - T60 (ProbeRTTStateMachine) NOT YET in CORRESPONDENCE.md
 
 ## Open PRs (lean-squad label)
-- run 151 (PR pending): ProbeRTTStateMachine.lean (24 thms) + T63 research
+- run 152 (branch lean-squad-run152-25713287243-informal-spec-critique):
+  Task 2 — T63 informal spec + Task 7 — Critique update (ProbeRTTPhase + ProbeRTTStateMachine)
 
 ## Status Issue
 - #4 open — updated each run
@@ -132,8 +135,8 @@ Total: 1595+ cases, all PASS
 - Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
 
 ## Next Run Priorities
-1. T63: Stream Count Limit — write informal spec then FVSquad/StreamCountLimit.lean
-2. T58: Stream Limit Enforcement — write informal spec (Task 2)
+1. T63: write FVSquad/StreamCountLimit.lean (~8 thms, all omega) — EASIEST next
+2. T58: write informal spec for stream limit enforcement
 3. Add CORRESPONDENCE.md entries for T60 (ProbeRTTStateMachine) and T62 (ProbeRTTPhase)
-4. Pmtud Route-B tests (no Route-B yet)
+4. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
 5. Inductive termination theorem for Pmtud binary search
