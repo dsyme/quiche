@@ -1,16 +1,16 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 152 (workflow 25713287243, 2026-05-12)
+Run 153 (workflow 25730223462, 2026-05-12)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 152)
-- Lean files: 54
-- Total theorems: ~1256
+## Repository State (after run 153)
+- Lean files: 55
+- Total theorems: ~1272
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
@@ -18,22 +18,21 @@ Run 152 (workflow 25713287243, 2026-05-12)
 ## Targets
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
-- Phase: 2 (Informal spec — run 152)
-- Spec: formal-verification/specs/stream_count_limit_informal.md
-- Source: quiche/src/stream/mod.rs L529–L590
-- Priority: HIGH
-- Key finding: bare u64 subtraction in peer_streams_left_bidi() (line 578)
-  is unsafe if local_opened > peer_max (underflow wraps to huge value)
-- Open question OQ-T63-1: no explicit runtime guard against underflow
-- Next: Task 3 — write FVSquad/StreamCountLimit.lean (~8 thms, all omega)
-  update_mono, update_idem, update_comm, streams_left_no_underflow,
-  streams_left_after_update, open_respects_limit, count invariant
+- Phase: 5 (Done — run 153)
+- File: formal-verification/lean/FVSquad/StreamCountLimit.lean
+- Theorems: 16, sorry: 0
+- Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe if
+  local_opened > peer_max (underflow wraps to huge value); streamsLeftBidi/Uni_nonneg
+  theorems make precondition explicit
+- Source: quiche/src/stream/mod.rs (update_peer_max_streams_*, peer_streams_left_*)
+- CORRESPONDENCE.md: not yet updated
+- Route-B tests: not yet
 
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 5 (Done — run 151)
 - File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
 - Theorems: 27, sorry: 0
-- Critique: run 152 (key: waiting_exit_time_immutable, exhaustive case coverage)
+- Critique: run 153 (key: waiting_exit_time_immutable, exhaustive case coverage)
 - CORRESPONDENCE.md: not yet updated
 - Route-B tests: not yet
 
@@ -41,7 +40,7 @@ Run 152 (workflow 25713287243, 2026-05-12)
 - Phase: 5 (Done — run 150)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
 - Theorems: 26, sorry: 0
-- Critique: run 152 (key: inflightTarget_bdpFraction_eq_half, sub-unity drain)
+- Critique: run 153 (key: inflightTarget_bdpFraction_eq_half, sub-unity drain)
 - CORRESPONDENCE.md: not yet updated
 - Route-B tests: not yet
 
@@ -79,19 +78,22 @@ Run 152 (workflow 25713287243, 2026-05-12)
 
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
-## CRITIQUE.md Status (run 152)
-- Updated to cover ProbeRTTPhase (26 thms) and ProbeRTTStateMachine (27 thms)
-- Overall status: 54 files, ~1256 theorems, 0 sorry
+## CRITIQUE.md Status (run 153)
+- Updated to cover ProbeRTTPhase (26 thms), ProbeRTTStateMachine (27 thms), StreamCountLimit (16 thms)
+- Overall status: 55 files, ~1272 theorems, 0 sorry
 - 19 Route-B targets, 1595+ cases PASS
+- Key finding: latent u64 underflow risk in peer_streams_left_*()
 
 ## CORRESPONDENCE.md Status
 - ALL 52 earlier Lean files have entries
 - T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md
 - T60 (ProbeRTTStateMachine) NOT YET in CORRESPONDENCE.md
+- T63 (StreamCountLimit) NOT YET in CORRESPONDENCE.md
 
 ## Open PRs (lean-squad label)
-- run 152 (branch lean-squad-run152-25713287243-informal-spec-critique):
-  Task 2 — T63 informal spec + Task 7 — Critique update (ProbeRTTPhase + ProbeRTTStateMachine)
+- run 153 (branch lean-squad-run153-25730223462-stream-count-limit-critique):
+  Task 4 — T63 StreamCountLimit.lean (16 thms, 0 sorry)
+  Task 7 — Critique update (ProbeRTTStateMachine gap + StreamCountLimit section)
 
 ## Status Issue
 - #4 open — updated each run
@@ -133,10 +135,11 @@ Total: 1595+ cases, all PASS
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `cases ht` works for `ht : .waiting exitTime = .waiting t` injections
 - Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
+- Nat subtraction: saturating (a - b = 0 when a < b); use `omega` for invariant+bounds
 
 ## Next Run Priorities
-1. T63: write FVSquad/StreamCountLimit.lean (~8 thms, all omega) — EASIEST next
-2. T58: write informal spec for stream limit enforcement
-3. Add CORRESPONDENCE.md entries for T60 (ProbeRTTStateMachine) and T62 (ProbeRTTPhase)
+1. T58: write informal spec for stream limit enforcement (quiche/src/lib.rs get_or_create)
+2. CORRESPONDENCE.md entries for T60, T62, T63
+3. Route-B tests for StreamCountLimit (T63): Rust harness for update_peer_max_* + peer_streams_left_*
 4. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
 5. Inductive termination theorem for Pmtud binary search
