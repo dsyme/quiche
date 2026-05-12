@@ -1284,3 +1284,47 @@ below steady-state. Same integer-scaling approach as T57; fully decidable.
    spec (Task 2) then Task 3+5.
 3. **T60** (BBR2 ProbeRTT State Machine) — moderate complexity; write informal
    spec (Task 2) to continue BBR2 coverage.
+
+---
+
+## Run 151 Research: T60 ProbeRTT State Machine + T63 Stream Count Limits
+
+### T60 — BBR2 ProbeRTT State Machine ✅ (Phase 5, run 151)
+
+The `ProbeRTT` struct in `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs`
+implements a two-phase state machine controlled by `exit_time: Option<Instant>`:
+
+- **DRAINING** (`exit_time = None`): inflight has not yet reached the target.
+  Upon each congestion event, if `inflight ≤ target`, the timer is set to
+  `event_time + probe_rtt_duration` and we enter WAITING.
+- **WAITING** (`exit_time = Some(t)`): timer is running.  Each congestion
+  event checks whether `event_time > exit_time`; if so, we transition to
+  ProbeBW.  Quiescence with `now > exit_time` also exits immediately.
+- **Fast-path**: `on_exit_quiescence` from DRAINING exits immediately to
+  ProbeBW without waiting (OQ-T60-1: is this correct per the QUIC-BBR2 spec?).
+
+The state machine is purely functional in terms of the (exit_time, inflight,
+time) inputs; the model, cycle, and cwnd fields are omitted.  All 24 theorems
+proved by `omega`, `simp`, and `by_cases`.
+
+### T63 — QUIC Peer Stream-Count Limit Update Monotonicity (Phase 1)
+
+`StreamManager` in `quiche/src/stream/mod.rs` tracks peer stream count limits:
+- `peer_max_streams_bidi/uni`: updated monotonically via `cmp::max`.
+- `peer_streams_left_bidi/uni`: computed as `peer_max - local_opened` (bare
+  u64 subtraction — safe only if `local_opened ≤ peer_max` always holds).
+
+**Key finding**: the bare subtraction in `peer_streams_left_bidi()` (line 578)
+is a potential safety concern — if the protocol invariant `local_opened_streams
+≤ peer_max_streams` were ever violated, this would silently underflow to a huge
+u64 value and allow unbounded stream creation.  Formalising and proving this
+invariant would provide a strong safety guarantee.
+
+**Tractability**: HIGH.  The state is simple (two Nat fields per direction).
+`updatePeerMax` monotonicity is trivially `omega`.  The invariant proof
+requires modelling stream opening (increment `local_opened` only if `<
+peer_max`) and collection (does not change `local_opened`/`peer_max`).
+Estimated 15 theorems, ~100 Lean lines.
+
+**Priority**: HIGH — the underflow risk is security-relevant (could allow
+bypassing the peer's stream limit).

@@ -444,3 +444,70 @@ prove gain < 100 (below unity); prove ordering w.r.t. ProbeBW Up gains.
 
 **Next action**: Write `FVSquad/ProbeRTTPhase.lean` (Task 3+5 combined) after
 informal spec.
+**Status**: ✅ Phase 5 — DONE (run 150)
+- Lean file: `formal-verification/lean/FVSquad/ProbeRTTPhase.lean`
+- 26 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
+- CORRESPONDENCE.md: not yet updated
+
+---
+
+### Target 63: QUIC Peer Stream-Count Limit Update Monotonicity
+
+**Phase**: 1 — Research (run 151)
+**Location**: `quiche/src/stream/mod.rs` L529–L590
+**Priority**: ⭐⭐⭐ HIGH
+
+The stream manager maintains two pairs of limits:
+- `peer_max_streams_bidi / uni`: the peer's announced maximum stream count.
+  Updated via `update_peer_max_streams_bidi/uni` using `cmp::max` (monotone).
+- `local_opened_streams_bidi / uni`: how many streams we have opened so far.
+- `peer_streams_left_bidi/uni`: computed as `peer_max_streams - local_opened`
+  (bare u64 subtraction — panics/wraps if the invariant `local_opened ≤
+  peer_max_streams` is ever violated).
+
+**Key properties**:
+1. `update_peer_max_streams_*` is monotone: `new_limit ≥ old_limit` always.
+2. Monotonicity of the limit means `peer_streams_left` can only increase when
+   `update_peer_max_streams` is called (all else equal).
+3. Safety invariant: the bare subtraction in `peer_streams_left_bidi/uni` is
+   only safe if `local_opened_streams ≤ peer_max_streams` at all times.
+   This must be established as a protocol invariant.
+4. `collect` increments `local_max_streams_*_next` with `saturating_add(1)` —
+   no overflow possible.
+
+**Bug risk**: If the invariant `local_opened ≤ peer_max_streams` is violated,
+`peer_streams_left_bidi()` will underflow (u64 wraps to a huge number).  This
+would mislead the caller into thinking many streams are available.  Formalising
+this invariant and proving it is maintained would provide a safety guarantee.
+
+**Specification size**: ~15 theorems, ~100 Lean lines.
+
+**Proof tractability**: MEDIUM — Nat/u64 arithmetic; monotonicity provable by
+`omega`; the invariant maintenance requires modelling the full state transition
+which includes stream opening, limit update, and collection.
+
+**Approximations needed**:
+- `u64` modelled as `Nat` (no overflow concern for Nat subtraction).
+- Model only `peer_max_streams_*` and `local_opened_streams_*`; omit full
+  stream lifecycle (half-open, closed, etc.).
+- The opening invariant (`local_opened ≤ peer_max_streams`) is a precondition
+  that we verify is maintained by the modelled operations.
+
+**Approach**: Define a `StreamCountState` structure with Nat fields; define
+`updatePeerMax`, `open`, `close`/`collect` operations; prove monotonicity and
+the safety invariant.
+
+**Next action**: Write informal spec then `FVSquad/StreamCountLimit.lean`.
+
+---
+
+### Target 60: BBR2 ProbeRTT State Machine
+
+**Phase**: 1 — Research (run 142)
+**Next action**: Write informal spec then Lean spec.
+**Status**: ✅ Phase 5 — DONE (run 151)
+- Informal spec: `formal-verification/specs/probe_rtt_state_machine_informal.md`
+- Lean file: `formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean`
+- 24 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
+- CORRESPONDENCE.md: not yet updated
+
