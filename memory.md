@@ -1,16 +1,16 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 153 (workflow 25730223462, 2026-05-12)
+Run 154 (workflow 25753912592, 2026-05-12)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 153)
+## Repository State (after run 154)
 - Lean files: 55
-- Total theorems: ~1272
+- Total theorems: ~1280 (added 8 lifecycle theorems to ProbeRTTStateMachine)
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
@@ -22,26 +22,25 @@ Run 153 (workflow 25730223462, 2026-05-12)
 - File: formal-verification/lean/FVSquad/StreamCountLimit.lean
 - Theorems: 16, sorry: 0
 - Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe if
-  local_opened > peer_max (underflow wraps to huge value); streamsLeftBidi/Uni_nonneg
-  theorems make precondition explicit
+  local_opened > peer_max (underflow wraps to huge value)
 - Source: quiche/src/stream/mod.rs (update_peer_max_streams_*, peer_streams_left_*)
-- CORRESPONDENCE.md: not yet updated
+- CORRESPONDENCE.md: ✅ entry added run 154
 - Route-B tests: not yet
 
 ### T60: BBR2 ProbeRTT State Machine
-- Phase: 5 (Done — run 151)
+- Phase: 5 (Done — run 151; §6 lifecycle theorems added run 154)
 - File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
-- Theorems: 27, sorry: 0
-- Critique: run 153 (key: waiting_exit_time_immutable, exhaustive case coverage)
-- CORRESPONDENCE.md: not yet updated
+- Theorems: 35 (27 original + 8 lifecycle in §6), sorry: 0
+- Key theorems added run 154: draining_to_exit_two_steps (two-step lifecycle),
+  waiting_always_terminable, draining_terminable_via_quiescence, minimum_probertt_duration
+- CORRESPONDENCE.md: ✅ entry added run 154
 - Route-B tests: not yet
 
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
 - Phase: 5 (Done — run 150)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
-- Theorems: 26, sorry: 0
-- Critique: run 153 (key: inflightTarget_bdpFraction_eq_half, sub-unity drain)
-- CORRESPONDENCE.md: not yet updated
+- Theorems: 21, sorry: 0
+- CORRESPONDENCE.md: ✅ entry added run 154
 - Route-B tests: not yet
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
@@ -79,21 +78,19 @@ Run 153 (workflow 25730223462, 2026-05-12)
 ### Earlier targets (T1-T54): All phase 5 (Done)
 
 ## CRITIQUE.md Status (run 153)
-- Updated to cover ProbeRTTPhase (26 thms), ProbeRTTStateMachine (27 thms), StreamCountLimit (16 thms)
-- Overall status: 55 files, ~1272 theorems, 0 sorry
+- Updated to cover ProbeRTTPhase (21 thms), ProbeRTTStateMachine (27→35 thms), StreamCountLimit (16 thms)
+- Overall status: 55 files, ~1280 theorems, 0 sorry
 - 19 Route-B targets, 1595+ cases PASS
 - Key finding: latent u64 underflow risk in peer_streams_left_*()
 
-## CORRESPONDENCE.md Status
-- ALL 52 earlier Lean files have entries
-- T62 (ProbeRTTPhase) NOT YET in CORRESPONDENCE.md
-- T60 (ProbeRTTStateMachine) NOT YET in CORRESPONDENCE.md
-- T63 (StreamCountLimit) NOT YET in CORRESPONDENCE.md
+## CORRESPONDENCE.md Status (after run 154)
+- ALL 55 Lean files now have entries (T60, T62, T63 added run 154)
+- Run 154 PR: lean-squad-run154-25753912592-lifecycle-correspondence
 
 ## Open PRs (lean-squad label)
-- run 153 (branch lean-squad-run153-25730223462-stream-count-limit-critique):
-  Task 4 — T63 StreamCountLimit.lean (16 thms, 0 sorry)
-  Task 7 — Critique update (ProbeRTTStateMachine gap + StreamCountLimit section)
+- run 154 (branch lean-squad-run154-25753912592-lifecycle-correspondence):
+  Task 5 — ProbeRTTStateMachine §6 (+8 lifecycle theorems)
+  Task 6 — CORRESPONDENCE.md entries for T60, T62, T63
 
 ## Status Issue
 - #4 open — updated each run
@@ -139,7 +136,7 @@ Total: 1595+ cases, all PASS
 
 ## Next Run Priorities
 1. T58: write informal spec for stream limit enforcement (quiche/src/lib.rs get_or_create)
-2. CORRESPONDENCE.md entries for T60, T62, T63
-3. Route-B tests for StreamCountLimit (T63): Rust harness for update_peer_max_* + peer_streams_left_*
-4. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
-5. Inductive termination theorem for Pmtud binary search
+2. Route-B tests for StreamCountLimit (T63): Rust harness for update_peer_max_* + peer_streams_left_*
+3. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
+4. Inductive termination theorem for Pmtud binary search
+5. CRITIQUE.md update to include T60 §6 lifecycle theorems
