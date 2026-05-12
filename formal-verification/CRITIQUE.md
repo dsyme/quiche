@@ -4,23 +4,25 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-12 04:27 UTC
-- **Commit**: `6417e6efc33100aa1c5f82f896d0a5cf8d5c67fc`
-- **Run**: run 152 — Task 2 (T63 informal spec) + Task 7 (Critique: ProbeRTTPhase + ProbeRTTStateMachine).
-  Full suite: **54 Lean files, ~1256 theorems, 0 sorry**;
+- **Date**: 2026-05-12 11:03 UTC
+- **Commit**: `449ab077`
+- **Run**: run 153 — Task 4 (T63 StreamCountLimit, 16 thms, 0 sorry) + Task 7 (Critique update).
+  Full suite: **55 Lean files, ~1272 theorems, 0 sorry**;
   19 Route-B test targets (1595+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **54 Lean files with
-~1256 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+The formal verification suite for `quiche` now covers **55 Lean files with
+~1272 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
 **19 Route-B correspondence test targets (1595+ cases PASS)**. Run 150 adds
 `ProbeRTTPhase.lean` (T62, 26 thms) formalising BBR2 ProbeRTT phase gain
 constants. Run 151 adds `ProbeRTTStateMachine.lean` (T60, 27 thms) verifying
-the BBR2 ProbeRTT draining/waiting state machine transitions. Run 152 (this
-run) extends the critique to cover both new files and adds T63 informal spec.
+the BBR2 ProbeRTT draining/waiting state machine transitions. Run 153 (this
+run) adds `StreamCountLimit.lean` (T63, 16 thms) formalising RFC 9000 §4.6
+stream-count limit monotonicity and exposes a latent underflow risk in bare
+u64 subtraction at `peer_streams_left_*` call sites.
 
 The suite spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
@@ -1881,12 +1883,60 @@ No Route-B tests exist yet for ProbeRTTStateMachine.
 
 ---
 
-### Overall Status (run 152)
+### QUIC Peer Stream-Count Limit (`FVSquad/StreamCountLimit.lean`, run 153) — 16 theorems, 0 sorry
 
-- **54 Lean files, ~1256 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+**Source**: `quiche/src/stream/mod.rs` — `update_peer_max_streams_bidi`,
+`update_peer_max_streams_uni`, `peer_streams_left_bidi`, `peer_streams_left_uni`.
+
+RFC 9000 §4.6 requires that a peer's stream-count limit can only be raised,
+never lowered. This file verifies that property and several related invariants
+for both bidi and uni stream directions.
+
+**Key finding (latent underflow risk)**: The `peer_streams_left_*` methods in
+Rust perform bare u64 subtraction without a bounds guard. If the safety
+invariant `local_opened ≤ peer_max` were ever violated (e.g., due to a
+race or a missing enforcement check in `get_or_create`), the subtraction would
+wrap to ≈ 2^64, returning a spuriously large count of available streams.
+The `streamsLeftBidi_nonneg` and `streamsLeftUni_nonneg` theorems make this
+precondition explicit and prove that the result is non-negative *only* under
+the invariant — flagging the unsafe assumption at the call site.
+
+**Assessment**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `updateBidi_mono` | **high** | **high** | RFC 9000 §4.6 — limit never decreases |
+| `updateUni_mono` | **high** | **high** | Symmetric for uni |
+| `updateBidi_noop` | mid | medium | No-op when v ≤ current |
+| `updateUni_noop` | mid | medium | Symmetric |
+| `streamsLeftBidi_correct` | mid | medium | streams_left = peer_max − local_opened |
+| `streamsLeftUni_correct` | mid | medium | Symmetric |
+| `updateBidi_increases_left` | **high** | **high** | Update only adds headroom |
+| `updateUni_increases_left` | **high** | **high** | Symmetric |
+| `updateBidi_preserves_invariant` | **high** | **high** | Raising limit preserves invariant |
+| `updateUni_preserves_invariant` | **high** | **high** | Symmetric |
+| `updateBidi_uni_unchanged` | mid | medium | Bidi update does not touch uni fields |
+| `updateUni_bidi_unchanged` | mid | medium | Symmetric |
+| `streamsLeftBidi_nonneg` | **high** | **high** | Non-negative iff invariant holds — exposes underflow risk |
+| `streamsLeftUni_nonneg` | **high** | **high** | Symmetric |
+| `no_streams_left_means_at_limit_bidi` | **high** | **high** | Zero left → at the limit exactly |
+| `streamsLeftBidi_gap` | mid | medium | local_opened + left = peer_max (gap equation) |
+
+**Overall assessment**: High-value coverage for a safety-critical RFC property.
+The theorems directly encode RFC 9000 §4.6 monotonicity, and the nonneg/gap
+pair cleanly documents the underflow risk inherent in the bare u64 subtraction.
+No Route-B tests yet; would require a small Rust harness exercising the four
+functions against the Lean model outputs.
+
+---
+
+### Overall Status (run 153)
+
+- **55 Lean files, ~1272 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
 - Route-B: 19 targets, 1595+ cases PASS
 - Coverage spans: QUIC transport (connection negotiation, idle-timeout RFC 9000
-  §10.1.1, PMTUD binary search, STREAM frame type byte, transport error codes),
+  §10.1.1, PMTUD binary search, STREAM frame type byte, transport error codes,
+  **stream-count limit RFC 9000 §4.6**),
   congestion control (NewReno with multi-cycle AIMD convergence, Cubic, BBR2
   with startup/probing model, pacing, HyStart++, WindowedFilter max-filter,
   delivery-rate estimation, app-limited guard, BBR2 MaxBandwidthFilter +
@@ -1896,11 +1946,11 @@ No Route-B tests exist yet for ProbeRTTStateMachine.
   machines, RFC compliance, PMTUD binary-search bounds.
 - Run 150: ProbeRTTPhase.lean (26 thms, gain sub-unity + inflight-target bounds)
 - Run 151: ProbeRTTStateMachine.lean (27 thms, draining/waiting/exit transitions)
-- Run 152 (this run): Critique extended to cover both new BBR2 ProbeRTT files;
-  T63 informal spec (stream count limit) created.
+- Run 152: Critique extended to cover both new BBR2 ProbeRTT files; T63 informal spec
+- Run 153 (this run): StreamCountLimit.lean (T63, 16 thms, RFC 9000 §4.6 monotonicity)
 - **Next priorities**:
-  1. T63 (Stream Count Limit): write `FVSquad/StreamCountLimit.lean` (~8 thms, all omega)
-  2. T58 (Stream Limit Enforcement): informal spec
-  3. Route-B for ProbeRTTPhase and ProbeRTTStateMachine
+  1. T58 (Stream Limit Enforcement): informal spec → Lean file
+  2. Route-B for StreamCountLimit (T63), ProbeRTTPhase, ProbeRTTStateMachine
+  3. CORRESPONDENCE.md entries for T60, T62, T63
   4. Composed theorem: draining eventually reaches waiting given sustained sub-target inflight
   5. Inductive termination theorem for Pmtud binary search
