@@ -4,9 +4,12 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-11 05:10 UTC
-- **Commit**: `a0421a9218c86eebf11498af96cf222ca79a2c7c`
-- **Lean build**: `lake build` passed with Lean 4.29.1 — 52 files, **0 sorry** 🎉
+- **Date**: 2026-05-12 18:30 UTC
+- **Commit**: `9d0bc325` (run 153 merge + run 154 additions)
+- **Lean build**: `lake build` passed with Lean 4.29.1 — 55 files, **0 sorry** 🎉
+  (run 154: added T60, T62, T63 correspondence entries; +8 lifecycle theorems in ProbeRTTStateMachine)
+  (run 153: added StreamCountLimit T63 + Critique update)
+  (run 151: ProbeRTTStateMachine T60; run 150: ProbeRTTPhase T62) — 52 files, **0 sorry** 🎉
   (run 149: last-updated refresh; all 52 files verified)
   (run 148: added T61 StreamFrameType entry + IdleTimeout Route-B 38/38 PASS)
   (run 146: added T59 TransportErrorCode entry + Route-B 50/50 PASS)
@@ -3508,3 +3511,165 @@ parts of the function that are not modelled or claimed.
   rustc --edition 2021 stream_frame_type_test.rs && ./stream_frame_type_test
   # Output: 19 / 19 PASS
   ```
+
+---
+
+## T62: BBR2 ProbeRTT Phase Parameters — `FVSquad/ProbeRTTPhase.lean`
+
+### Last Updated
+- **Date**: 2026-05-12 18:30 UTC  
+- **Commit**: `9d0bc325`
+
+### Overview
+
+**Lean file**: `formal-verification/lean/FVSquad/ProbeRTTPhase.lean` (run 150, 21 theorems, 0 sorry)  
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs` (function `inflight_target`) and  
+`quiche/src/recovery/gcongestion/bbr2.rs` (constant defaults: `probe_rtt_inflight_target_bdp_fraction = 0.5`, `probe_rtt_duration = Duration::from_millis(200)`)
+
+ProbeRTT drains inflight to a fraction of the estimated BDP to obtain a clean RTT sample.
+The key design constant is `probe_rtt_inflight_target_bdp_fraction = 0.5`, which sets the
+inflight target at half the estimated BDP.
+
+### Lean definitions → Rust symbols
+
+| Lean name | Rust name | File + line | Correspondence level |
+|-----------|-----------|-------------|---------------------|
+| `bdp` | computed via `BBRv2NetworkModel::bdp(max_bw, fraction)` | `probe_rtt.rs#L74` | **abstraction** |
+| `inflightTarget` | `ProbeRTT::inflight_target()` | `probe_rtt.rs#L71–75` | **abstraction** |
+| `bdpFraction` constant (1/2) | `probe_rtt_inflight_target_bdp_fraction = 0.5` | `bbr2.rs#L305` | **exact** |
+| Phase parameter constants | `probe_rtt_duration = Duration::from_millis(200)` | `bbr2.rs#L309` | **exact** (ratio only) |
+
+### Divergences
+
+1. **Floating-point abstracted away**: The Lean model uses rational arithmetic (numerator/denominator `Nat` pairs) to represent the BDP fraction `0.5`. The Rust uses `f32`. The key property `fraction = 1/2` (sub-unity, ≤ 1) is preserved exactly in the model.
+2. **`Duration` omitted**: `probe_rtt_duration` is not modelled as a Lean type; only the numeric bound (≥ 0) is a modelling premise.
+3. **`BBRv2NetworkModel` omitted**: The `bdp(max_bw, fraction)` computation (bandwidth × RTT) is abstracted as a generic `Nat` product, preserving only the fraction property.
+4. **`inflight_lo`, `inflight_hi_with_headroom` omitted**: The `get_cwnd_limits` path is not modelled; only `inflight_target` is in scope.
+
+### Impact on proofs
+
+All 21 theorems depend on the BDP fraction being sub-unity (`inflightTarget_le_bdp`) and
+the inflight target being bounded (`inflightTarget_bdpFraction_eq_half`). Divergences above
+do not invalidate these: the fraction property is exactly preserved, and the omitted fields
+are not needed for the stated propositions.
+
+### Key findings
+
+- `inflightTarget_bdpFraction_eq_half`: The inflight target fraction equals exactly 1/2 (sub-unity drain is guaranteed by the constant).
+- `inflightTarget_le_bdp`: The inflight target is always ≤ the full BDP estimate.
+- Phase parameter bounds are all provable purely by inspection of the constants.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (run 150).
+- No Route-B tests yet. A future harness could compare `ProbeRTT::inflight_target` outputs against the Lean model for a representative set of BDP values.
+
+---
+
+## T60: BBR2 ProbeRTT State Machine — `FVSquad/ProbeRTTStateMachine.lean`
+
+### Last Updated
+- **Date**: 2026-05-12 18:30 UTC  
+- **Commit**: `9d0bc325`
+
+### Overview
+
+**Lean file**: `formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean` (run 151 + run 154 §6, 35 theorems, 0 sorry)  
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs` — functions `on_congestion_event` (lines 89–115) and `on_exit_quiescence` (lines 126–134)
+
+The ProbeRTT state machine has two internal states: draining (waiting for inflight to reach
+target) and waiting (timer running, exit when `event_time > exit_time`). The Lean model
+formalises both transitions and their compositions.
+
+### Lean definitions → Rust symbols
+
+| Lean name | Rust name | File + line | Correspondence level |
+|-----------|-----------|-------------|---------------------|
+| `ProbeRttState.draining` | `exit_time = None` | `probe_rtt.rs#L48` | **exact** |
+| `ProbeRttState.waiting t` | `exit_time = Some(t)` | `probe_rtt.rs#L48` | **exact** |
+| `ProbeRttResult.stay s` | `Mode::ProbeRTT(self)` | `probe_rtt.rs#L107,112` | **exact** |
+| `ProbeRttResult.exitToProbeBW` | `self.into_probe_bw(...)` | `probe_rtt.rs#L109` | **abstraction** |
+| `congestionStep` | `ProbeRTT::on_congestion_event` | `probe_rtt.rs#L89–115` | **abstraction** |
+| `quiescenceStep` | `ProbeRTT::on_exit_quiescence` | `probe_rtt.rs#L126–134` | **exact** |
+
+### Divergences
+
+1. **`into_probe_bw` omitted**: `exitToProbeBW` abstracts the `self.into_probe_bw()` call, which enters the next BBR2 mode. The next mode's initialisation is not modelled.
+2. **`model`, `cycle` fields omitted**: The `BBRv2NetworkModel` and `Cycle` structs are not modelled; only the `exit_time` state variable is captured.
+3. **Acked/Lost packets omitted**: `on_congestion_event` receives `acked_packets` and `lost_packets` slices; these are not used in the exit-time state machine path and are correctly omitted.
+4. **`cwnd` / `pacing` updates omitted**: Side-effects on congestion window and pacing rate inside the draining path are not modelled (the Lean model is a pure state machine over `exit_time` only).
+5. **Time type**: `Instant` (Rust) is modelled as `Nat` (Lean). Monotonicity and clock-order properties are preserved; absolute values are not.
+
+### Impact on proofs
+
+Divergences (1)–(4) are out-of-scope for the stated propositions: all 35 theorems reason about the `exit_time` state machine transitions only. The `Nat` time model (5) correctly captures the ordering predicates (`eventTime > exitTime`, etc.) that drive every transition. No proved theorem is invalidated by these omissions.
+
+### Key findings (added in run 154)
+
+- `draining_to_exit_two_steps`: The minimal two-step ProbeRTT lifecycle is formally captured — DRAINING → WAITING (when inflight ≤ target) → `exitToProbeBW` (when timer expires). This is the first composed lifecycle theorem.
+- `waiting_always_terminable`: From any WAITING state, there exist event parameters that cause `congestionStep` to exit.
+- `draining_terminable_via_quiescence`: `quiescenceStep` always exits immediately from DRAINING — the fast-path is formally confirmed.
+- `minimum_probertt_duration`: The exit condition `t1 > t0 + duration` implies a minimum elapsed time of `duration + 1` ticks between entering WAITING and exiting ProbeRTT.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (runs 151 and 154).
+- No Route-B tests yet. A future harness could exercise the state machine transitions against the Lean model for a grid of (inflight, target, time) inputs.
+
+---
+
+## T63: QUIC Peer Stream-Count Limit — `FVSquad/StreamCountLimit.lean`
+
+### Last Updated
+- **Date**: 2026-05-12 18:30 UTC  
+- **Commit**: `9d0bc325`
+
+### Overview
+
+**Lean file**: `formal-verification/lean/FVSquad/StreamCountLimit.lean` (run 153, 16 theorems, 0 sorry)  
+**Rust source**: `quiche/src/stream/mod.rs` — functions `update_peer_max_streams_bidi` (line 529), `update_peer_max_streams_uni` (line 534), `peer_streams_left_bidi` (line 577), `peer_streams_left_uni` (line 588)
+
+RFC 9000 §4.6 requires that a peer's stream-count limit can only be raised, never lowered.
+The Lean model formalises both the `max(current, v)` update logic and the `peer_max − local_opened`
+subtraction, making the underflow precondition explicit.
+
+### Lean definitions → Rust symbols
+
+| Lean name | Rust name | File + line | Correspondence level |
+|-----------|-----------|-------------|---------------------|
+| `StreamLimitState.peerMaxBidi` | `StreamMap::peer_max_streams_bidi: u64` | `stream/mod.rs#L131` | **abstraction** (Nat vs. u64) |
+| `StreamLimitState.peerMaxUni` | `StreamMap::peer_max_streams_uni: u64` | `stream/mod.rs#L134` | **abstraction** |
+| `StreamLimitState.localOpenedBidi` | `StreamMap::local_opened_streams_bidi: u64` | `stream/mod.rs#L157` | **abstraction** |
+| `StreamLimitState.localOpenedUni` | `StreamMap::local_opened_streams_uni: u64` | `stream/mod.rs#L160` | **abstraction** |
+| `updatePeerMaxBidi` | `StreamMap::update_peer_max_streams_bidi` | `stream/mod.rs#L529–531` | **exact** |
+| `updatePeerMaxUni` | `StreamMap::update_peer_max_streams_uni` | `stream/mod.rs#L534–536` | **exact** |
+| `streamsLeftBidi` | `StreamMap::peer_streams_left_bidi` | `stream/mod.rs#L577–579` | **exact** (Nat saturating subtraction matches u64 behaviour under invariant) |
+| `streamsLeftUni` | `StreamMap::peer_streams_left_uni` | `stream/mod.rs#L588–590` | **exact** (same caveat) |
+| `invariant` | implicit assumption at call sites | (no single Rust location) | **specification** |
+
+### Divergences
+
+1. **u64 overflow replaced by Nat**: All four fields are modelled as `Nat` (unbounded natural numbers). Overflow (in `u64`) cannot occur in the Lean model. The overflow scenario only matters for the subtraction, which is captured separately below.
+2. **Bare u64 subtraction**: In Rust, `peer_streams_left_*()` uses `a - b` (wrapping on underflow). In Lean, `Nat` subtraction is saturating (`a - b = 0` when `a < b`). The `streamsLeftBidi_nonneg` and `streamsLeftUni_nonneg` theorems show the result is non-negative *only under the invariant* — correctly exposing the Rust underflow risk when the invariant is violated.
+3. **Surrounding `StreamMap` struct omitted**: Only the four limit-relevant fields are modelled. Stream storage, flow control, and scheduling state are not included.
+
+### Impact on proofs
+
+The `Nat`-vs-`u64` divergence (1) does not affect the monotonicity and invariant-preservation
+theorems (§3–§5 of the Lean file), because those properties are true for both `Nat` and `u64` in
+the valid-input range. The bare-subtraction divergence (2) is the central finding: the Lean model
+makes the Rust underflow risk explicit via the invariant precondition in `streamsLeftBidi_nonneg`
+and `streamsLeftUni_nonneg`. These theorems do not claim the Rust code is safe without the
+invariant — they document that safety requires it.
+
+### Key findings
+
+- `updateBidi_mono` / `updateUni_mono`: RFC 9000 §4.6 monotonicity directly proved.
+- `streamsLeftBidi_nonneg` / `streamsLeftUni_nonneg`: Non-negativity holds iff the safety invariant holds — exposing the latent u64 underflow risk in `peer_streams_left_*()`.
+- `no_streams_left_means_at_limit_bidi`: When `streamsLeftBidi = 0`, `localOpenedBidi = peerMaxBidi` (at limit exactly).
+- `streamsLeftBidi_gap`: `localOpenedBidi + streamsLeftBidi = peerMaxBidi` under the invariant.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.1, 0 sorry (run 153).
+- No Route-B tests yet. A future harness could compare `update_peer_max_streams_*` and `peer_streams_left_*` outputs against Lean model for representative inputs.
