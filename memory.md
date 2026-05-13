@@ -1,61 +1,63 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 154 (workflow 25753912592, 2026-05-12)
+Run 155 (workflow 25778440446, 2026-05-13)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 154)
+## Repository State (after run 155)
 - Lean files: 55
-- Total theorems: ~1280 (added 8 lifecycle theorems to ProbeRTTStateMachine)
+- Total theorems: ~1288 (added 8 termination theorems to Pmtud)
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
 
 ## Targets
 
+### T64: PMTUD Binary Search Convergence (NEW run 155)
+- Phase: 5 (Done — run 155)
+- File: formal-verification/lean/FVSquad/Pmtud.lean (now 20 theorems, was 12)
+- Added §2 "Binary search convergence" with theorems 13–20:
+  - gap_decreases_on_failure, gap_decreases_on_success: probe outcomes reduce gap
+  - upper_bound_halved, lower_bound_halved: halving invariant
+  - binary_search_terminates: both outcomes reduce f - g
+  - convergence_stable: converged state is stable
+  - midpoint_strictly_between: uniqueness of midpoint
+  - gap_pos_of_not_converged: gap > 0 when not converged
+- CORRESPONDENCE.md: not yet updated for new theorems
+
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
 - Phase: 5 (Done — run 153)
 - File: formal-verification/lean/FVSquad/StreamCountLimit.lean
 - Theorems: 16, sorry: 0
-- Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe if
-  local_opened > peer_max (underflow wraps to huge value)
-- Source: quiche/src/stream/mod.rs (update_peer_max_streams_*, peer_streams_left_*)
+- Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe
 - CORRESPONDENCE.md: ✅ entry added run 154
-- Route-B tests: not yet
 
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 5 (Done — run 151; §6 lifecycle theorems added run 154)
 - File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
-- Theorems: 35 (27 original + 8 lifecycle in §6), sorry: 0
-- Key theorems added run 154: draining_to_exit_two_steps (two-step lifecycle),
-  waiting_always_terminable, draining_terminable_via_quiescence, minimum_probertt_duration
+- Theorems: 35 (27 original + 8 lifecycle), sorry: 0
 - CORRESPONDENCE.md: ✅ entry added run 154
-- Route-B tests: not yet
 
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
 - Phase: 5 (Done — run 150)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
 - Theorems: 21, sorry: 0
 - CORRESPONDENCE.md: ✅ entry added run 154
-- Route-B tests: not yet
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
 - Phase: 5 (Done — run 147)
 - File: formal-verification/lean/FVSquad/StreamFrameType.lean
 - Theorems: 12, sorry: 0
-- CORRESPONDENCE.md: ✅ entry (run 147)
 - Route-B tests: ✅ formal-verification/tests/stream_frame_type/ (19 PASS)
 
 ### T59: Transport Error Code Mapping
 - Phase: 5 (Done — run 145; Route-B run 146)
-- File: formal-verification/lean/FVSquad/TransportErrorCode.lean
 - Theorems: 37, sorry: 0
-- CORRESPONDENCE.md: ✅ entry (run 146)
-- Route-B tests: ✅ formal-verification/tests/transport_error_code/ (50 PASS)
+- Route-B tests: ✅ (50 PASS)
 
 ### T58: QUIC Stream Limit Enforcement
 - Phase: 1 (Research — run 142)
@@ -63,37 +65,26 @@ Run 154 (workflow 25753912592, 2026-05-12)
 - Priority: HIGH
 - Next: Task 2 (informal spec) then Task 3+5
 
-### T56: Loss Detection Packet Threshold
-- Phase: 5 (Done — run 142; Route-B run 144)
-- Theorems: 16, sorry: 0; Route-B 991 PASS
+### Earlier targets (T1-T57): All phase 5 (Done)
 
-### IdleTimeout (T46)
-- Phase: 5 (Done — run 128; Route-B run 148)
-- Theorems: 12, sorry: 0; Route-B 38 PASS
-
-### T57: BBR2 ProbeBW Phase Gains
-- Phase: 5 (Done — run 140; Route-B run 142)
-- Theorems: 12, sorry: 0; Route-B 10 PASS
-
-### Earlier targets (T1-T54): All phase 5 (Done)
+## CI Status (run 155)
+- lean-ci.yml: updated action versions to checkout@v4.2.2, cache@v4.2.3, upload-artifact@v4.6.2
+- lean-toolchain: updated v4.29.0 → v4.29.1
 
 ## CRITIQUE.md Status (run 153)
-- Updated to cover ProbeRTTPhase (21 thms), ProbeRTTStateMachine (27→35 thms), StreamCountLimit (16 thms)
+- Updated to cover ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit
 - Overall status: 55 files, ~1280 theorems, 0 sorry
-- 19 Route-B targets, 1595+ cases PASS
-- Key finding: latent u64 underflow risk in peer_streams_left_*()
 
 ## CORRESPONDENCE.md Status (after run 154)
-- ALL 55 Lean files now have entries (T60, T62, T63 added run 154)
-- Run 154 PR: lean-squad-run154-25753912592-lifecycle-correspondence
+- ALL 55 Lean files have entries
+- Run 155 adds 8 new theorems to Pmtud.lean → CORRESPONDENCE.md entry needs update
 
 ## Open PRs (lean-squad label)
-- run 154 (branch lean-squad-run154-25753912592-lifecycle-correspondence):
-  Task 5 — ProbeRTTStateMachine §6 (+8 lifecycle theorems)
-  Task 6 — CORRESPONDENCE.md entries for T60, T62, T63
-
-## Status Issue
-- #4 open — updated each run
+- run 150 (PR #126): ProbeRTTPhase + PRR Route-B tests
+- run 151 (PR #127): ProbeRTT SM + T63 research
+- run 153 (PR #129): StreamCountLimit + Critique
+- run 154 (PR #130): ProbeRTT lifecycle §6 + CORRESPONDENCE T60/T62/T63
+- run 155 (branch lean-squad-run155-25778440446-task5-ci): Pmtud §2 + CI updates
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -123,20 +114,15 @@ Total: 1595+ cases, all PASS
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
-- Best pattern for if-then-else proofs: `by_cases h : cond <;> simp [h] <;> omega`
-- `simp only [h1, ite_true]` may close goal completely — check before adding more
-- `push_neg` NOT available without Mathlib — use `omega` instead
-- `split at h` fails on hypothesis goals — use `by_cases` pattern instead
-- Use `simp only [defn]` followed by `by_cases` for conditional definitions
-- `Min.min a b` ≠ `Nat.min a b` for rewriting purposes — use unfolded ite
+- Best pattern: `by_cases h : cond <;> simp [h] <;> omega`
+- `simp only [h1, ite_true]` may close goal completely
+- `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
-- `cases ht` works for `ht : .waiting exitTime = .waiting t` injections
-- Nat division: omega cannot reason about it; use div_add_mod lemmas for bounds
-- Nat subtraction: saturating (a - b = 0 when a < b); use `omega` for invariant+bounds
+- Nat subtraction: saturating; use `omega` for invariant+bounds
 
 ## Next Run Priorities
-1. T58: write informal spec for stream limit enforcement (quiche/src/lib.rs get_or_create)
-2. Route-B tests for StreamCountLimit (T63): Rust harness for update_peer_max_* + peer_streams_left_*
+1. T58: write informal spec for stream limit enforcement
+2. Route-B tests for StreamCountLimit (T63)
 3. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
-4. Inductive termination theorem for Pmtud binary search
-5. CRITIQUE.md update to include T60 §6 lifecycle theorems
+4. Update CORRESPONDENCE.md for Pmtud §2 new theorems
+5. CRITIQUE.md update to include Pmtud convergence + run 155
