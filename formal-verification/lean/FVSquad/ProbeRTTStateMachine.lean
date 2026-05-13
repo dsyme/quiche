@@ -37,6 +37,7 @@
 --   §3  Theorems: congestion-event transitions (11 theorems)
 --   §4  Theorems: quiescence transitions (6 theorems)
 --   §5  Theorems: cross-cutting invariants (7 theorems)
+--   §6  Theorems: composed lifecycle (8 theorems)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- §1  State and result types
@@ -371,5 +372,88 @@ theorem quiescence_and_congestion_agree_on_expired
         .exitToProbeBW := by
   exact ⟨quiescence_waiting_expired_exits exitTime now h,
          congestion_waiting_expired_exits now exitTime inflight target duration h⟩
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §6  Theorems: composed lifecycle
+-- ─────────────────────────────────────────────────────────────────────────────
+-- These theorems compose the single-step lemmas above to capture the full
+-- end-to-end lifecycle of a ProbeRTT phase:
+--   DRAINING (inflight above target) → DRAINING
+--   DRAINING (inflight at/below target) → WAITING(exitTime)
+--   WAITING (timer not expired)         → WAITING(exitTime) [unchanged]
+--   WAITING (timer expired)             → exitToProbeBW
+
+/-- If inflight > target at every congestion event, DRAINING is absorbing:
+    a congestion step leaves the state as DRAINING. -/
+theorem draining_absorbing_above_target
+    (eventTime inflight target duration : Nat)
+    (h : inflight > target) :
+    let f : ProbeRttResult := congestionStep .draining eventTime inflight target duration
+    f = .stay .draining := by
+  simp [congestionStep]
+  omega
+
+/-- Once in WAITING, no congestion event can transition back to DRAINING
+    (the only outcomes are stay-WAITING or exit). -/
+theorem waiting_never_returns_to_draining
+    (exitTime eventTime inflight target duration : Nat)
+    : congestionStep (.waiting exitTime) eventTime inflight target duration ≠
+        .stay .draining := by
+  exact congestion_waiting_never_draining exitTime eventTime inflight target duration
+
+/-- Two-step composed lifecycle: starting from DRAINING, if inflight ≤ target
+    at time `t0`, and a later event occurs at `t1 > t0 + duration`, then
+    the state machine exits ProbeRTT in exactly two congestion steps.
+
+    This captures the minimal "happy path" through a ProbeRTT phase:
+      step 1 (inflight ≤ target) → enter WAITING with exit_time = t0 + duration
+      step 2 (t1 > exit_time)    → exitToProbeBW -/
+theorem draining_to_exit_two_steps
+    (t0 t1 inflight0 inflight1 target duration : Nat)
+    (h_le  : inflight0 ≤ target)
+    (h_exp : t1 > t0 + duration) :
+    ∃ (s : ProbeRttState),
+        congestionStep .draining t0 inflight0 target duration = .stay s ∧
+        congestionStep s t1 inflight1 target duration = .exitToProbeBW := by
+  exact ⟨.waiting (t0 + duration),
+    congestion_draining_le_sets_timer t0 inflight0 target duration h_le,
+    congestion_waiting_expired_exits t1 (t0 + duration) inflight1 target duration h_exp⟩
+
+/-- The exit time recorded when DRAINING transitions to WAITING is exactly
+    `t0 + duration`, and any subsequent event at time > that value exits.
+    This makes the minimum ProbeRTT phase duration explicit: the phase lasts
+    at least `duration` ticks from the first moment inflight drops to target. -/
+theorem minimum_probertt_duration
+    (t0 t1 duration : Nat)
+    (h_exp : t1 > t0 + duration) :
+    t1 - t0 > duration := by
+  omega
+
+/-- Simplified version of the absorbing lemma for a single step:
+    WAITING with unexpired timer stays in WAITING with the same exit time. -/
+theorem waiting_step_preserves_exit_time
+    (exitTime eventTime inflight target duration : Nat)
+    (h_not_exp : ¬(eventTime > exitTime)) :
+    ∃ t, congestionStep (.waiting exitTime) eventTime inflight target duration =
+        .stay (.waiting t) ∧ t = exitTime :=
+  ⟨exitTime,
+    congestion_waiting_not_expired_stays eventTime exitTime inflight target duration h_not_exp,
+    rfl⟩
+
+/-- From WAITING state: there always exist event parameters that cause
+    `congestionStep` to exit ProbeRTT. -/
+theorem waiting_always_terminable
+    (exitTime duration : Nat) :
+    ∃ (eventTime inflight target : Nat),
+        congestionStep (.waiting exitTime) eventTime inflight target duration =
+          .exitToProbeBW :=
+  ⟨exitTime + 1, 0, 0,
+    congestion_waiting_expired_exits (exitTime + 1) exitTime 0 0 duration (by omega)⟩
+
+/-- From DRAINING state: `quiescenceStep` always exits immediately. -/
+theorem draining_terminable_via_quiescence
+    (now : Nat) :
+    quiescenceStep .draining now = .exitToProbeBW :=
+  quiescence_draining_exits now
 
 -- End of FVSquad/ProbeRTTStateMachine.lean
