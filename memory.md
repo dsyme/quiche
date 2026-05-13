@@ -1,33 +1,34 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 155 (workflow 25778440446, 2026-05-13)
+Run 156 (workflow 25795539761, 2026-05-13)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 155)
+## Repository State (after run 156)
 - Lean files: 55
-- Total theorems: ~1288 (added 8 termination theorems to Pmtud)
+- Total theorems: ~1296 (added 8 convergence theorems to Pmtud)
 - Total sorry: 0
 - Route-B test targets: 19
 - Status issue: #4 (open)
 
 ## Targets
 
-### T64: PMTUD Binary Search Convergence (NEW run 155)
-- Phase: 5 (Done — run 155)
+### T64: PMTUD Binary Search Convergence (run 156)
+- Phase: 5 (Done — run 156)
 - File: formal-verification/lean/FVSquad/Pmtud.lean (now 20 theorems, was 12)
 - Added §2 "Binary search convergence" with theorems 13–20:
-  - gap_decreases_on_failure, gap_decreases_on_success: probe outcomes reduce gap
-  - upper_bound_halved, lower_bound_halved: halving invariant
-  - binary_search_terminates: both outcomes reduce f - g
-  - convergence_stable: converged state is stable
-  - midpoint_strictly_between: uniqueness of midpoint
-  - gap_pos_of_not_converged: gap > 0 when not converged
-- CORRESPONDENCE.md: not yet updated for new theorems
+  - gap_decreases_on_failure, gap_decreases_on_success: gap strictly decreases
+  - upper_bound_halved: failure gap ≤ ⌊(f−g)/2⌋
+  - lower_bound_halved: success gap ≤ ⌊(f−g)/2⌋ + 1
+  - binary_search_terminates: key termination property (both outcomes reduce gap)
+  - convergence_stable: at convergence, updateProbeSize = g and stays converged
+  - gap_pos_of_not_converged: not converged → gap > 1
+  - both_halved_bound: combined bound theorem
+- CORRESPONDENCE.md: ✅ updated run 156 (added §2 theorem table + impact analysis)
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
 - Phase: 5 (Done — run 153)
@@ -67,24 +68,28 @@ Run 155 (workflow 25778440446, 2026-05-13)
 
 ### Earlier targets (T1-T57): All phase 5 (Done)
 
-## CI Status (run 155)
-- lean-ci.yml: updated action versions to checkout@v4.2.2, cache@v4.2.3, upload-artifact@v4.6.2
-- lean-toolchain: updated v4.29.0 → v4.29.1
+## CI Status (run 156)
+- lean-ci.yml: exists, passing
+- lean-toolchain: v4.29.1
 
 ## CRITIQUE.md Status (run 153)
 - Updated to cover ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit
-- Overall status: 55 files, ~1280 theorems, 0 sorry
+- Overall status: 55 files, ~1272 theorems, 0 sorry
+- Needs update: Pmtud §2 (8 new theorems), StreamCountLimit finding
 
-## CORRESPONDENCE.md Status (after run 154)
+## CORRESPONDENCE.md Status (after run 156)
 - ALL 55 Lean files have entries
-- Run 155 adds 8 new theorems to Pmtud.lean → CORRESPONDENCE.md entry needs update
+- Pmtud entry updated: §2 theorem table + O(log n) termination analysis
+- ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit: entries from run 154
 
 ## Open PRs (lean-squad label)
 - run 150 (PR #126): ProbeRTTPhase + PRR Route-B tests
 - run 151 (PR #127): ProbeRTT SM + T63 research
 - run 153 (PR #129): StreamCountLimit + Critique
 - run 154 (PR #130): ProbeRTT lifecycle §6 + CORRESPONDENCE T60/T62/T63
-- run 155 (branch lean-squad-run155-25778440446-task5-ci): Pmtud §2 + CI updates
+- run 156 (branch lean-squad-run156-25795539761-pmtud-convergence-correspondence):
+  Task 5 — Pmtud §2 convergence theorems (8 new, 20 total, 0 sorry)
+  Task 6 — CORRESPONDENCE.md Pmtud entry updated
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -119,10 +124,11 @@ Total: 1595+ cases, all PASS
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
 - Nat subtraction: saturating; use `omega` for invariant+bounds
+- For Nat.div proofs: introduce Nat.div_add_mod witness + Nat.mod_lt, then omega
 
 ## Next Run Priorities
 1. T58: write informal spec for stream limit enforcement
 2. Route-B tests for StreamCountLimit (T63)
 3. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
-4. Update CORRESPONDENCE.md for Pmtud §2 new theorems
-5. CRITIQUE.md update to include Pmtud convergence + run 155
+4. CRITIQUE.md update to include Pmtud convergence + StreamCountLimit finding
+5. Investigate T32 (BBR2 pacing rate bounds)
