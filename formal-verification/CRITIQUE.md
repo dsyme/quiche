@@ -4,25 +4,25 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-11 05:00 UTC
-- **Commit**: `a0421a9218c86eebf11498af96cf222ca79a2c7c`
-- **Run**: run 149 — Task 6 (Correspondence review) + Task 7 (Critique: PRR, Pmtud).
-  Full suite: **52 Lean files, ~998 theorems, 0 sorry**;
-  18 Route-B test targets (1570+ PASS).
+- **Date**: 2026-05-12 11:03 UTC
+- **Commit**: `449ab077`
+- **Run**: run 153 — Task 4 (T63 StreamCountLimit, 16 thms, 0 sorry) + Task 7 (Critique update).
+  Full suite: **55 Lean files, ~1272 theorems, 0 sorry**;
+  19 Route-B test targets (1595+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **49 Lean files with
-~998 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**18 Route-B correspondence test targets (1570+ cases PASS)**. Run 142 adds
-`LossDetectionThreshold.lean` (T56, 16 thms) formalising RFC 9002 §6.1.1
-packet-threshold invariants. Run 145 adds `TransportErrorCode.lean` (T59,
-37 thms) proving wire/FFI encoding properties including non-injectivity of
-`toWire`. Run 147 adds `StreamFrameType.lean` (T61, 12 thms) verifying the
-STREAM type byte bit-flag construction. Run 148 (this run) adds IdleTimeout
-Route-B tests (38/38 PASS) and updates the critique.
+The formal verification suite for `quiche` now covers **55 Lean files with
+~1272 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+**19 Route-B correspondence test targets (1595+ cases PASS)**. Run 150 adds
+`ProbeRTTPhase.lean` (T62, 26 thms) formalising BBR2 ProbeRTT phase gain
+constants. Run 151 adds `ProbeRTTStateMachine.lean` (T60, 27 thms) verifying
+the BBR2 ProbeRTT draining/waiting state machine transitions. Run 153 (this
+run) adds `StreamCountLimit.lean` (T63, 16 thms) formalising RFC 9000 §4.6
+stream-count limit monotonicity and exposes a latent underflow risk in bare
+u64 subtraction at `peer_streams_left_*` call sites.
 
 The suite spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
@@ -1780,4 +1780,177 @@ Model fidelity confirmed.
   2. T58 (Stream Limit Enforcement): informal spec then Lean spec
   3. T60 (BBR2 ProbeRTT State Machine): informal spec
   4. Route-B for PRR or Pmtud (no Route-B yet for either)
+  5. Inductive termination theorem for Pmtud binary search
+
+---
+
+### BBR2 ProbeRTT Phase Parameters (`FVSquad/ProbeRTTPhase.lean`, run 150) — 26 theorems, 0 sorry
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs` — ProbeRTT
+gain constants and inflight-target computation.
+
+BBR2's ProbeRTT phase uses fractional gain values (`Gain = { num, den }`) to
+compute inflight targets as fractions of BDP. The Lean model covers gain
+ordering, sub-unity/at-most-unity predicates, inflight-target bounds, and
+`applyGain` monotonicity.
+
+**Assessment (mid/high-level, high bug-catching potential)**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `Gain.subUnity_implies_atMostUnity` | low | low | Predicate hierarchy helper |
+| `pacingGainDefault_atMostUnity` / `cwndGainDefault_atMostUnity` | mid | medium | Default gains ≤ 1 — no amplification |
+| `pacingGainCustom_subUnity` / `cwndGainCustom_subUnity` | mid | **high** | Custom gains are strictly < 1 (ensures drain) |
+| `inflightBdpFraction_subUnity` | mid | **high** | inflight target fraction < 1 (stays below BDP) |
+| `inflightTarget_le_bdp` | **high** | **high** | Core: for any ≤1 gain, inflight target ≤ BDP |
+| `inflightTarget_bdpFraction_le_bdp` | **high** | **high** | Specific instance: ProbeRTT target ≤ BDP |
+| `inflightTarget_bdpFraction_eq_half` | **high** | **high** | Target = ⌊BDP/2⌋ — exact RFC check |
+| `applyGain_le_of_atMostUnity` | **high** | **high** | `applyGain` never amplifies when gain ≤ 1 |
+| `applyGain_subUnity_lt` | **high** | **high** | Strict drain: `applyGain` strictly reduces when gain < 1 and v > 0 |
+| `applyGain_cwndCustom_le` / `applyGain_pacingCustom_le` | mid | **high** | Specific custom gains reduce v |
+| `cwndGainCustom_le_pacingGainCustom` | mid | medium | Gain ordering: cWnd gain ≤ pacing gain |
+| `inflightBdpFraction_eq_cwndGainCustom` | mid | medium | Constants are the same fraction |
+| `applyGain_mono_num` | mid | medium | Monotonicity in numerator |
+| `applyGain_cwnd_le_pacing` | mid | medium | cWnd target ≤ pacing target |
+| `pacingGainCustom_values` / `cwndGainCustom_values` | mid | medium | Literal constant checks (8/10, 5/10) |
+
+**Positive findings**: The sub-unity theorems directly prove the core BBR2
+ProbeRTT safety invariant — the phase is guaranteed to drain inflight below
+BDP. Any change to the gain constants (e.g., changing 0.8 to 1.0) would break
+`pacingGainCustom_subUnity` at CI. The `inflightTarget_bdpFraction_eq_half`
+theorem provides an exact numeric sanity check: ProbeRTT targets ⌊BDP/2⌋.
+
+**Gap**: The model does not cover the *timing* of ProbeRTT — how long to
+maintain the drained state. That is addressed by `ProbeRTTStateMachine.lean`.
+No Route-B tests exist yet for ProbeRTTPhase; the phase is tightly coupled to
+BBR2 state and harder to extract independently.
+
+---
+
+### BBR2 ProbeRTT State Machine (`FVSquad/ProbeRTTStateMachine.lean`, run 151) — 27 theorems, 0 sorry
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs` — ProbeRTT
+phase transition logic (draining → waiting → exit).
+
+The Lean model captures two concurrent event sources: `congestionStep`
+(called on each congestion event with current inflight and event time) and
+`quiescenceStep` (called when the app becomes quiescent). Both operate on the
+shared state `ProbeRttState = draining | waiting exitTime`.
+
+**Assessment (high-level, high bug-catching potential)**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `congestion_draining_le_sets_timer` | **high** | **high** | Draining → Waiting when inflight ≤ target |
+| `congestion_draining_gt_stays_draining` | **high** | **high** | Draining stays draining when inflight > target |
+| `congestion_waiting_expired_exits` | **high** | **high** | Waiting → Exit when timer expired |
+| `congestion_waiting_not_expired_stays` | **high** | **high** | Waiting stays waiting when timer not expired |
+| `congestion_waiting_never_draining` | mid | **high** | Once waiting, congestionStep never reverts to draining |
+| `congestion_draining_never_exits` | mid | **high** | Draining never exits (must wait first) |
+| `congestion_draining_timer_value` | **high** | **high** | Timer = eventTime + duration when entering waiting |
+| `waiting_exit_time_ge_event_time` | **high** | **high** | Causality: exit time ≥ event time when timer fires |
+| `congestion_new_exit_time_ge_eventTime` | **high** | **high** | New timer value is in the future |
+| `congestion_draining_result_means_gt` | mid | medium | Converse: draining result iff inflight > target |
+| `congestion_draining_dichotomy` | **high** | **high** | Exhaustive: exactly enters waiting or stays draining |
+| `quiescence_draining_exits` | **high** | **high** | Quiescence immediately exits draining |
+| `quiescence_waiting_expired_exits` | **high** | **high** | Quiescence exits waiting if timer expired |
+| `quiescence_waiting_not_expired_stays` | mid | medium | Quiescence keeps waiting if timer not expired |
+| `quiescence_waiting_never_draining` | mid | medium | Quiescence never reverts to draining |
+| `quiescence_waiting_exit_time_preserved_or_exits` | mid | medium | Exit time preserved unless exiting |
+| `quiescence_result_cases` | **high** | **high** | Exhaustive quiescence outcomes |
+| `draining_high_inflight_stays_draining_not_waiting` | **high** | **high** | High inflight: strictly stays draining across congestion |
+| `waiting_exit_time_immutable` | **high** | **high** | Exit time never changes once set — no timer reset |
+| `congestion_exit_iff_waiting_expired` | **high** | **high** | Biconditional: exits iff waiting AND timer expired |
+| `congestion_result_valid` | **high** | **high** | All outcomes are valid (exhaustive correctness check) |
+| `draining_first_event_le_target_enters_waiting` | **high** | **high** | First sub-target event triggers timer correctly |
+| `waiting_exits_after_duration` | **high** | **high** | Waiting exits exactly after probe_rtt_duration ms |
+| `quiescence_and_congestion_agree_on_expired` | **high** | **high** | Both paths agree when timer is expired |
+
+**Positive findings**: The `waiting_exit_time_immutable` theorem is an
+especially strong finding — it proves that the exit timer is set exactly once
+and never reset while in the waiting state. Any refactoring that accidentally
+re-arms the timer on each congestion event would break this at CI. The
+`congestion_draining_dichotomy` and `quiescence_result_cases` theorems provide
+exhaustive case coverage of every possible state transition, acting as a
+correctness oracle for the state machine.
+
+**Gap**: The Lean model does not yet cover the *caller contract* — that
+`congestionStep` is only called with inflight decreasing over time (i.e., that
+the actual BBR2 loop maintains draining pressure). A composed theorem proving
+that given continuous sub-target inflight, the state must eventually reach
+Waiting, would be the highest-value next addition.
+No Route-B tests exist yet for ProbeRTTStateMachine.
+
+---
+
+### QUIC Peer Stream-Count Limit (`FVSquad/StreamCountLimit.lean`, run 153) — 16 theorems, 0 sorry
+
+**Source**: `quiche/src/stream/mod.rs` — `update_peer_max_streams_bidi`,
+`update_peer_max_streams_uni`, `peer_streams_left_bidi`, `peer_streams_left_uni`.
+
+RFC 9000 §4.6 requires that a peer's stream-count limit can only be raised,
+never lowered. This file verifies that property and several related invariants
+for both bidi and uni stream directions.
+
+**Key finding (latent underflow risk)**: The `peer_streams_left_*` methods in
+Rust perform bare u64 subtraction without a bounds guard. If the safety
+invariant `local_opened ≤ peer_max` were ever violated (e.g., due to a
+race or a missing enforcement check in `get_or_create`), the subtraction would
+wrap to ≈ 2^64, returning a spuriously large count of available streams.
+The `streamsLeftBidi_nonneg` and `streamsLeftUni_nonneg` theorems make this
+precondition explicit and prove that the result is non-negative *only* under
+the invariant — flagging the unsafe assumption at the call site.
+
+**Assessment**:
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `updateBidi_mono` | **high** | **high** | RFC 9000 §4.6 — limit never decreases |
+| `updateUni_mono` | **high** | **high** | Symmetric for uni |
+| `updateBidi_noop` | mid | medium | No-op when v ≤ current |
+| `updateUni_noop` | mid | medium | Symmetric |
+| `streamsLeftBidi_correct` | mid | medium | streams_left = peer_max − local_opened |
+| `streamsLeftUni_correct` | mid | medium | Symmetric |
+| `updateBidi_increases_left` | **high** | **high** | Update only adds headroom |
+| `updateUni_increases_left` | **high** | **high** | Symmetric |
+| `updateBidi_preserves_invariant` | **high** | **high** | Raising limit preserves invariant |
+| `updateUni_preserves_invariant` | **high** | **high** | Symmetric |
+| `updateBidi_uni_unchanged` | mid | medium | Bidi update does not touch uni fields |
+| `updateUni_bidi_unchanged` | mid | medium | Symmetric |
+| `streamsLeftBidi_nonneg` | **high** | **high** | Non-negative iff invariant holds — exposes underflow risk |
+| `streamsLeftUni_nonneg` | **high** | **high** | Symmetric |
+| `no_streams_left_means_at_limit_bidi` | **high** | **high** | Zero left → at the limit exactly |
+| `streamsLeftBidi_gap` | mid | medium | local_opened + left = peer_max (gap equation) |
+
+**Overall assessment**: High-value coverage for a safety-critical RFC property.
+The theorems directly encode RFC 9000 §4.6 monotonicity, and the nonneg/gap
+pair cleanly documents the underflow risk inherent in the bare u64 subtraction.
+No Route-B tests yet; would require a small Rust harness exercising the four
+functions against the Lean model outputs.
+
+---
+
+### Overall Status (run 153)
+
+- **55 Lean files, ~1272 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 19 targets, 1595+ cases PASS
+- Coverage spans: QUIC transport (connection negotiation, idle-timeout RFC 9000
+  §10.1.1, PMTUD binary search, STREAM frame type byte, transport error codes,
+  **stream-count limit RFC 9000 §4.6**),
+  congestion control (NewReno with multi-cycle AIMD convergence, Cubic, BBR2
+  with startup/probing model, pacing, HyStart++, WindowedFilter max-filter,
+  delivery-rate estimation, app-limited guard, BBR2 MaxBandwidthFilter +
+  RoundTripCounter, BBR2 ProbeBW phase gains, loss-detection threshold, PRR
+  rate-control formula, **BBR2 ProbeRTT phase params + state machine**),
+  HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
+  machines, RFC compliance, PMTUD binary-search bounds.
+- Run 150: ProbeRTTPhase.lean (26 thms, gain sub-unity + inflight-target bounds)
+- Run 151: ProbeRTTStateMachine.lean (27 thms, draining/waiting/exit transitions)
+- Run 152: Critique extended to cover both new BBR2 ProbeRTT files; T63 informal spec
+- Run 153 (this run): StreamCountLimit.lean (T63, 16 thms, RFC 9000 §4.6 monotonicity)
+- **Next priorities**:
+  1. T58 (Stream Limit Enforcement): informal spec → Lean file
+  2. Route-B for StreamCountLimit (T63), ProbeRTTPhase, ProbeRTTStateMachine
+  3. CORRESPONDENCE.md entries for T60, T62, T63
+  4. Composed theorem: draining eventually reaches waiting given sustained sub-target inflight
   5. Inductive termination theorem for Pmtud binary search
