@@ -1,40 +1,41 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 156 (workflow 25795539761, 2026-05-13)
+Run 157 (workflow 25818377528, 2026-05-13)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan, leanprover/lean4:stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
+- lean-toolchain: leanprover/lean4:v4.29.1 (updated run 157, was v4.29.0)
 
-## Repository State (after run 156)
-- Lean files: 55
-- Total theorems: ~1296 (added 8 convergence theorems to Pmtud)
+## Repository State (after run 157)
+- Lean files: 57 (after merging open PRs 126, 151, 153, 154)
+- Total theorems: ~1296 (includes ProbeRTTPhase 21, ProbeRTTStateMachine 35, StreamCountLimit 16, Pmtud §2 8 new)
 - Total sorry: 0
-- Route-B test targets: 19
+- Route-B test targets: 20 (added StreamCountLimit run 157)
 - Status issue: #4 (open)
+
+## Open PRs (lean-squad label) — as of run 157
+All 4 prior open PRs (#126, #127, #129, #130) merged locally into run 157 branch.
+- run 157 (branch lean-squad-run157-25818377528-stream-count-limit-routeb-ci):
+  Task 8 — T63 Route-B tests (28/28 PASS)
+  Task 9 — lean-toolchain updated to v4.29.1
 
 ## Targets
 
 ### T64: PMTUD Binary Search Convergence (run 156)
 - Phase: 5 (Done — run 156)
-- File: formal-verification/lean/FVSquad/Pmtud.lean (now 20 theorems, was 12)
-- Added §2 "Binary search convergence" with theorems 13–20:
-  - gap_decreases_on_failure, gap_decreases_on_success: gap strictly decreases
-  - upper_bound_halved: failure gap ≤ ⌊(f−g)/2⌋
-  - lower_bound_halved: success gap ≤ ⌊(f−g)/2⌋ + 1
-  - binary_search_terminates: key termination property (both outcomes reduce gap)
-  - convergence_stable: at convergence, updateProbeSize = g and stays converged
-  - gap_pos_of_not_converged: not converged → gap > 1
-  - both_halved_bound: combined bound theorem
-- CORRESPONDENCE.md: ✅ updated run 156 (added §2 theorem table + impact analysis)
+- File: formal-verification/lean/FVSquad/Pmtud.lean (20 theorems)
+- Binary search convergence §2 (theorems 13–20): all proved, 0 sorry
+- CORRESPONDENCE.md: ✅ updated run 156
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
 - Phase: 5 (Done — run 153)
 - File: formal-verification/lean/FVSquad/StreamCountLimit.lean
 - Theorems: 16, sorry: 0
 - Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe
+- Route-B tests: ✅ formal-verification/tests/stream_count_limit/ (28 PASS, run 157)
 - CORRESPONDENCE.md: ✅ entry added run 154
 
 ### T60: BBR2 ProbeRTT State Machine
@@ -51,14 +52,13 @@ Run 156 (workflow 25795539761, 2026-05-13)
 
 ### T61: QUIC STREAM Frame Type Byte Encoding
 - Phase: 5 (Done — run 147)
-- File: formal-verification/lean/FVSquad/StreamFrameType.lean
 - Theorems: 12, sorry: 0
-- Route-B tests: ✅ formal-verification/tests/stream_frame_type/ (19 PASS)
+- Route-B tests: ✅ 19 PASS
 
 ### T59: Transport Error Code Mapping
 - Phase: 5 (Done — run 145; Route-B run 146)
 - Theorems: 37, sorry: 0
-- Route-B tests: ✅ (50 PASS)
+- Route-B tests: ✅ 50 PASS
 
 ### T58: QUIC Stream Limit Enforcement
 - Phase: 1 (Research — run 142)
@@ -68,28 +68,18 @@ Run 156 (workflow 25795539761, 2026-05-13)
 
 ### Earlier targets (T1-T57): All phase 5 (Done)
 
-## CI Status (run 156)
+## CI Status (run 157)
 - lean-ci.yml: exists, passing
-- lean-toolchain: v4.29.1
+- lean-toolchain: v4.29.1 (updated run 157)
+- lake build: 58 jobs, 0 sorry
 
 ## CRITIQUE.md Status (run 153)
 - Updated to cover ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit
-- Overall status: 55 files, ~1272 theorems, 0 sorry
-- Needs update: Pmtud §2 (8 new theorems), StreamCountLimit finding
+- Needs update: Pmtud §2 (8 new theorems), StreamCountLimit Route-B (28 cases)
 
-## CORRESPONDENCE.md Status (after run 156)
+## CORRESPONDENCE.md Status (run 154)
 - ALL 55 Lean files have entries
-- Pmtud entry updated: §2 theorem table + O(log n) termination analysis
-- ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit: entries from run 154
-
-## Open PRs (lean-squad label)
-- run 150 (PR #126): ProbeRTTPhase + PRR Route-B tests
-- run 151 (PR #127): ProbeRTT SM + T63 research
-- run 153 (PR #129): StreamCountLimit + Critique
-- run 154 (PR #130): ProbeRTT lifecycle §6 + CORRESPONDENCE T60/T62/T63
-- run 156 (branch lean-squad-run156-25795539761-pmtud-convergence-correspondence):
-  Task 5 — Pmtud §2 convergence theorems (8 new, 20 total, 0 sorry)
-  Task 6 — CORRESPONDENCE.md Pmtud entry updated
+- All ProbeRTT* and StreamCountLimit entries added
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -113,8 +103,9 @@ Run 156 (workflow 25795539761, 2026-05-13)
 | T61 (StreamFrameType) | tests/stream_frame_type/ | 19 | 147 |
 | IdleTimeout | tests/idle_timeout/ | 38 | 148 |
 | PRR | tests/prr/ | 25 | 150 |
+| T63 (StreamCountLimit) | tests/stream_count_limit/ | 28 | 157 |
 
-Total: 1595+ cases, all PASS
+Total: 1623+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -128,7 +119,6 @@ Total: 1595+ cases, all PASS
 
 ## Next Run Priorities
 1. T58: write informal spec for stream limit enforcement
-2. Route-B tests for StreamCountLimit (T63)
-3. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
-4. CRITIQUE.md update to include Pmtud convergence + StreamCountLimit finding
-5. Investigate T32 (BBR2 pacing rate bounds)
+2. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
+3. CRITIQUE.md update to include Pmtud convergence + StreamCountLimit Route-B result
+4. Investigate T32 (BBR2 pacing rate bounds)
