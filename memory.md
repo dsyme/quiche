@@ -1,85 +1,62 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 157 (workflow 25818377528, 2026-05-13)
+Run 158 (workflow 25841769885, 2026-05-14)
 
 ## FV Toolchain
-- Lean 4.29.1 (elan, leanprover/lean4:stable)
+- Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
-- lean-toolchain: leanprover/lean4:v4.29.1 (updated run 157, was v4.29.0)
 
-## Repository State (after run 157)
-- Lean files: 57 (after merging open PRs 126, 151, 153, 154)
-- Total theorems: ~1296 (includes ProbeRTTPhase 21, ProbeRTTStateMachine 35, StreamCountLimit 16, Pmtud §2 8 new)
+## Repository State (after run 158)
+- Lean files: 56 (added StreamCreditReturn.lean)
+- Total theorems: ~1316
 - Total sorry: 0
-- Route-B test targets: 20 (added StreamCountLimit run 157)
+- Route-B test targets: 21 (added probe_rtt_sm run 158)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 157
-All 4 prior open PRs (#126, #127, #129, #130) merged locally into run 157 branch.
-- run 157 (branch lean-squad-run157-25818377528-stream-count-limit-routeb-ci):
-  Task 8 — T63 Route-B tests (28/28 PASS)
-  Task 9 — lean-toolchain updated to v4.29.1
+## Open PRs (lean-squad label) — as of run 158
+- run158 (branch lean-squad-run158-25841769885-probertt-sm-routeb-stream-credit):
+  Task 5 — T58 StreamCreditReturn.lean (20 thms, 0 sorry)
+  Task 8 — T60 Route-B tests (23/23 PASS)
 
 ## Targets
+
+### T58: QUIC Stream Credit Return (run 158)
+- Phase: 5 (Done — run 158)
+- File: formal-verification/lean/FVSquad/StreamCreditReturn.lean
+- Theorems: 20, sorry: 0
+- Models collect() + update_max_streams_bidi/uni from stream/mod.rs
+- Key: returnBidiN_adds_n, returnN_then_commit, creditInvariant preservation
+- CORRESPONDENCE.md: ✅ entry added run 158
 
 ### T64: PMTUD Binary Search Convergence (run 156)
 - Phase: 5 (Done — run 156)
 - File: formal-verification/lean/FVSquad/Pmtud.lean (20 theorems)
-- Binary search convergence §2 (theorems 13–20): all proved, 0 sorry
 - CORRESPONDENCE.md: ✅ updated run 156
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
 - Phase: 5 (Done — run 153)
-- File: formal-verification/lean/FVSquad/StreamCountLimit.lean
-- Theorems: 16, sorry: 0
-- Key finding: bare u64 subtraction in peer_streams_left_*() is unsafe
+- File: formal-verification/lean/FVSquad/StreamCountLimit.lean (16 thms)
 - Route-B tests: ✅ formal-verification/tests/stream_count_limit/ (28 PASS, run 157)
-- CORRESPONDENCE.md: ✅ entry added run 154
 
 ### T60: BBR2 ProbeRTT State Machine
-- Phase: 5 (Done — run 151; §6 lifecycle theorems added run 154)
-- File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean
-- Theorems: 35 (27 original + 8 lifecycle), sorry: 0
-- CORRESPONDENCE.md: ✅ entry added run 154
+- Phase: 5 (Done — run 151; §6 lifecycle theorems run 154)
+- File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean (35 thms)
+- Route-B tests: ✅ formal-verification/tests/probe_rtt_sm/ (23/23 PASS, run 158)
+- CORRESPONDENCE.md: ✅ entry added run 154, Route-B updated run 158
 
 ### T62: BBR2 ProbeRTT Phase Parameter Constants
 - Phase: 5 (Done — run 150)
-- File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean
-- Theorems: 21, sorry: 0
+- File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean (21 thms)
 - CORRESPONDENCE.md: ✅ entry added run 154
 
-### T61: QUIC STREAM Frame Type Byte Encoding
-- Phase: 5 (Done — run 147)
-- Theorems: 12, sorry: 0
-- Route-B tests: ✅ 19 PASS
+### Earlier targets (T1-T57, T59, T61): All phase 5 (Done)
 
-### T59: Transport Error Code Mapping
-- Phase: 5 (Done — run 145; Route-B run 146)
-- Theorems: 37, sorry: 0
-- Route-B tests: ✅ 50 PASS
-
-### T58: QUIC Stream Limit Enforcement
-- Phase: 1 (Research — run 142)
-- Source: quiche/src/stream/mod.rs, quiche/src/lib.rs
-- Priority: HIGH
-- Next: Task 2 (informal spec) then Task 3+5
-
-### Earlier targets (T1-T57): All phase 5 (Done)
-
-## CI Status (run 157)
+## CI Status
 - lean-ci.yml: exists, passing
-- lean-toolchain: v4.29.1 (updated run 157)
-- lake build: 58 jobs, 0 sorry
-
-## CRITIQUE.md Status (run 153)
-- Updated to cover ProbeRTTPhase, ProbeRTTStateMachine, StreamCountLimit
-- Needs update: Pmtud §2 (8 new theorems), StreamCountLimit Route-B (28 cases)
-
-## CORRESPONDENCE.md Status (run 154)
-- ALL 55 Lean files have entries
-- All ProbeRTT* and StreamCountLimit entries added
+- lean-toolchain: v4.29.0
+- lake build: 59 jobs, 0 sorry (run 158)
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -104,8 +81,9 @@ All 4 prior open PRs (#126, #127, #129, #130) merged locally into run 157 branch
 | IdleTimeout | tests/idle_timeout/ | 38 | 148 |
 | PRR | tests/prr/ | 25 | 150 |
 | T63 (StreamCountLimit) | tests/stream_count_limit/ | 28 | 157 |
+| T60 (ProbeRTTStateMachine) | tests/probe_rtt_sm/ | 23 | 158 |
 
-Total: 1623+ cases, all PASS
+Total: 1646+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -116,9 +94,11 @@ Total: 1623+ cases, all PASS
 - UInt8 bit-ops work cleanly with `decide` for small types
 - Nat subtraction: saturating; use `omega` for invariant+bounds
 - For Nat.div proofs: introduce Nat.div_add_mod witness + Nat.mod_lt, then omega
+- `creditInvariant` proofs: use `obtain ⟨hb, hu⟩ := h` then direct omega
+- `simp [creditInvariant, ...]` sometimes leaves goals for `obtain` + direct Nat.le proofs
 
 ## Next Run Priorities
-1. T58: write informal spec for stream limit enforcement
-2. Route-B tests for ProbeRTTPhase/ProbeRTTStateMachine
-3. CRITIQUE.md update to include Pmtud convergence + StreamCountLimit Route-B result
-4. Investigate T32 (BBR2 pacing rate bounds)
+1. T32 (BBR2 pacing rate bounds): gcongestion, phase 1 research
+2. Route-B tests for ProbeRTTPhase (constant values: 10/10, 8/10, 5/10 gains)
+3. CRITIQUE.md update: T58 StreamCreditReturn + T60 Route-B
+4. New target research: stream_id parity/initiation invariants, ack_delay_exponent
