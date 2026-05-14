@@ -1,78 +1,73 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 159 (workflow 25856468108, 2026-05-14)
+Run 160 (workflow 25877523443, 2026-05-14)
 
 ## FV Toolchain
-- Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
+- Lean 4.29.1 (lake project pinned, lean-toolchain: v4.29.0)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 159)
-- Lean files: 57 (added SsThresh.lean)
-- Total theorems: ~1333
+## Repository State (after run 160)
+- Lean files: 58 (added AckDelayCodec.lean)
+- Total theorems: ~1351 (18 new)
 - Total sorry: 0
-- Route-B test targets: 22 (added bbr2_limits run 159)
+- Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 159
+## Open PRs (lean-squad label) — as of run 160
 - run158 (branch lean-squad-run158-25841769885-probertt-sm-routeb-stream-credit):
   Task 5 — T58 StreamCreditReturn.lean (20 thms, 0 sorry)
   Task 8 — T60 Route-B tests (23/23 PASS)
 - run159 (branch lean-squad-run159-25856468108-new-target-routeb):
   Task 5 — T65 SsThresh.lean (17 thms, 0 sorry)
   Task 8 — BBR2Limits Route-B tests (15 tests, 1000+ cases PASS)
+- run160 (branch lean-squad-run160-25877523443-bbr2pacing-informal):
+  Task 2 — T66 AckDelayCodec informal spec
+  Task 5 — T66 AckDelayCodec.lean (18 thms, 0 sorry)
 
 ## Targets
+
+### T66: ACK Delay Encode/Decode Codec (run 160)
+- Phase: 5 (Done — run 160)
+- File: formal-verification/lean/FVSquad/AckDelayCodec.lean
+- Informal spec: formal-verification/specs/ack_delay_codec_informal.md
+- Theorems: 18, sorry: 0
+- Models: encode/decode from lib.rs ~L4487-4497 and ~L8173-8182
+- Key: roundtrip_exact (multiples of 2^exp), roundtrip_gap_lt (floor semantics)
+- Open Qs: OQ-T66-1 (varint bound check), OQ-T66-2 (local vs peer exponent)
+- CORRESPONDENCE.md: not yet updated
 
 ### T65: SsThresh Write-Once Invariant (run 159)
 - Phase: 5 (Done — run 159)
 - File: formal-verification/lean/FVSquad/SsThresh.lean
 - Theorems: 17, sorry: 0
-- Models: SsThresh struct from recovery/congestion/mod.rs
-- Key invariant: startup_exit is write-once (set on first update only)
-- Key: exit_preserved_when_set, reason_css/loss_from_first_call
-- CORRESPONDENCE.md: ✅ entry added run 159
 
 ### T58: QUIC Stream Credit Return (run 158)
 - Phase: 5 (Done — run 158)
 - File: formal-verification/lean/FVSquad/StreamCreditReturn.lean
 - Theorems: 20, sorry: 0
-- CORRESPONDENCE.md: ✅ entry added run 158
 
 ### T64: PMTUD Binary Search Convergence (run 156)
 - Phase: 5 (Done — run 156)
 - File: formal-verification/lean/FVSquad/Pmtud.lean (20 theorems)
-- CORRESPONDENCE.md: ✅ updated run 156
 
 ### T63: QUIC Peer Stream-Count Limit Update Monotonicity
 - Phase: 5 (Done — run 153)
 - File: formal-verification/lean/FVSquad/StreamCountLimit.lean (16 thms)
-- Route-B tests: ✅ formal-verification/tests/stream_count_limit/ (28 PASS, run 157)
+- Route-B tests: ✅ formal-verification/tests/stream_count_limit/ (28 PASS)
 
 ### T60: BBR2 ProbeRTT State Machine
 - Phase: 5 (Done — run 151; §6 lifecycle theorems run 154)
 - File: formal-verification/lean/FVSquad/ProbeRTTStateMachine.lean (35 thms)
 - Route-B tests: ✅ formal-verification/tests/probe_rtt_sm/ (23/23 PASS, run 158)
-- CORRESPONDENCE.md: ✅ entry added run 154, Route-B updated run 158
 
-### T62: BBR2 ProbeRTT Phase Parameter Constants
-- Phase: 5 (Done — run 150)
-- File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean (21 thms)
-- CORRESPONDENCE.md: ✅ entry added run 154
-
-### T32 (partial): BBR2 Limits
-- Phase: 5 (Done — multiple runs)
-- File: formal-verification/lean/FVSquad/BBR2Limits.lean (16 thms)
-- Route-B tests: ✅ formal-verification/tests/bbr2_limits/ (15 tests, 1000+ cases PASS, run 159)
-- CORRESPONDENCE.md: ✅ updated run 159
-
-### Earlier targets (T1-T57, T59, T61): All phase 5 (Done)
+### Earlier targets (T1-T57, T59, T61, T62, T64): All phase 5 (Done)
 
 ## CI Status
 - lean-ci.yml: exists, passing
 - lean-toolchain: v4.29.0
-- lake build: 60 jobs, 0 sorry (run 159)
+- lake build: 61 jobs (run 160), 0 sorry
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -110,13 +105,15 @@ Total: 2660+ cases, all PASS
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
 - Nat subtraction: saturating; use `omega` for invariant+bounds
-- For Nat.div proofs: introduce Nat.div_add_mod witness + Nat.mod_lt, then omega
-- `creditInvariant` proofs: use `obtain ⟨hb, hu⟩ := h` then direct omega
-- `List.reverseRecOn` does NOT exist — use cons induction + `List.getLast_cons htl`
-- `List.getLast_cons htl` : `(a :: l).getLast _ = l.getLast h` (when `l ≠ []`)
+- For Nat.div proofs: use `Nat.div_mul_cancel` for exact round-trips
+- For gap proofs: use `Nat.mod_def` + `Nat.mul_comm` to connect d%n to d-n*(d/n)
+- `ring` does NOT work after `subst` on hypotheses with pow — use `omega`
+- `dvd_refl` is NOT available — use `Nat.dvd_refl`
+- `dvd_mul_left` is NOT available — use `Nat.dvd_mul_left`
+- validExponent as Prop with `decide` requires `abbrev` not `def`
 
 ## Next Run Priorities
-1. T32 (BBR2 pacing rate bounds): more gcongestion theorems (f32 → Rat approximation)
-2. Route-B tests for ProbeRTTPhase (gain constant values 0.8, 0.5 vs Rust f32)
-3. CRITIQUE.md update: T65 SsThresh + BBR2Limits Route-B
-4. New target: ack_delay_exponent encoding (transport_params.rs, ~20 lines)
+1. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
+2. T32 (BBR2 pacing rate): full informal spec (f32 → Rat approximation)
+3. CRITIQUE.md update: T65 SsThresh + BBR2Limits Route-B + T66
+4. CORRESPONDENCE.md update: add T66 AckDelayCodec entry
