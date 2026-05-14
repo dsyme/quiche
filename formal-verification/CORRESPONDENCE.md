@@ -4,11 +4,11 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-14 04:42 UTC
-- **Commit**: `47292ca7` (run 158: T58 StreamCreditReturn.lean added; T60 Route-B tests 23/23 PASS)
-- **Lean build**: `lake build` passed with Lean 4.29.0 — 56 files, **0 sorry** 🎉
-  (run 158: added StreamCreditReturn.lean, 20 theorems; T60 Route-B 23-case harness)
-  (run 153: added StreamCountLimit T63 + Critique update)
+- **Date**: 2026-05-14 11:14 UTC
+- **Commit**: `5a2e4dee` (run 159: SsThresh.lean added; BBR2Limits Route-B 15 tests PASS)
+- **Lean build**: `lake build` passed with Lean 4.29.0 — 57 files, **0 sorry** 🎉
+  (run 159: added SsThresh.lean T65, 17 theorems; BBR2Limits Route-B 15-case harness)
+  (run 158: added StreamCreditReturn.lean T58, 20 theorems; T60 Route-B 23-case harness)
   (run 151: ProbeRTTStateMachine T60; run 150: ProbeRTTPhase T62) — 52 files, **0 sorry** 🎉
   (run 149: last-updated refresh; all 52 files verified)
   (run 148: added T61 StreamFrameType entry + IdleTimeout Route-B 38/38 PASS)
@@ -1820,10 +1820,11 @@ allow the pacing rate to exceed configured caps or drop below minimum values.
 
 ### Validation evidence
 
-- **`lake build`**: passed with Lean 4.30.0-rc2 — 0 sorry (run 113).
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 159).
 - 5 `#eval` and `decide` checks confirm concrete clamping values.
-- Route-B correspondence tests not yet written for this target (state-
-  machine is purely functional, proofs subsume executable testing).
+- **Route-B tests**: `formal-verification/tests/bbr2_limits/` — 15 tests, 1000+ cases
+  (10×10×10 grid sweep + targeted edge cases), all PASS (run 159).
+  Command: `cd formal-verification/tests/bbr2_limits && cargo test`
 
 ---
 
@@ -3737,3 +3738,71 @@ maintained by the rest of the code.
 
 - `lake build` passed with Lean 4.29.0, 0 sorry (run 158).
 - No Route-B tests yet. A future harness could compare `collect` + `update_max_streams_*` outputs against the Lean model for representative sequences.
+
+---
+
+## `FVSquad/SsThresh.lean` (T65) ↔ `quiche/src/recovery/congestion/mod.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/SsThresh.lean`
+**Rust source**: `quiche/src/recovery/congestion/mod.rs` — `SsThresh` struct
+  (L39–L82): fields `ssthresh: usize`, `startup_exit: Option<StartupExit>`;
+  methods `get()`, `startup_exit()`, `update(ssthresh, in_css)`;
+  `impl Default for SsThresh`.
+**Phase**: 5 — Done (17 theorems, 0 sorry, run 159)
+
+### Purpose
+
+Models and verifies the **write-once invariant** of `SsThresh::startup_exit`:
+the `startup_exit` field records **why** slow-start first ended (loss or
+conservative slow-start rounds) and is set exactly once, on the first call
+to `update`.  Subsequent calls update `ssthresh` freely but must not
+overwrite the original exit reason.
+
+This invariant is security-relevant: if `startup_exit` were overwritten,
+the congestion controller could misattribute a loss exit to CSS (or vice
+versa), potentially leading to incorrect slow-start re-entry decisions.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `SsThreshState` | `SsThresh` | `congestion/mod.rs:L39–L48` | Abstraction | `startup_exit` abstracted to `Option ExitReason` |
+| `ExitReason` | `StartupExitReason` | `recovery/mod.rs:L810–L818` | Abstraction | Only the variant tag; `cwnd`/`bandwidth` snapshot omitted |
+| `SsThreshState.default` | `impl Default for SsThresh` | `mod.rs:L50–L57` | Exact | `ssthresh = usize::MAX`, `exit = None` |
+| `SsThreshState.update` | `SsThresh::update` | `mod.rs:L67–L81` | Exact | Write-once on `startupExit`, always sets `ssthresh` |
+| `USIZE_MAX` | `usize::MAX` | — | Exact | `2^64 - 1` (64-bit) |
+
+### Divergences
+
+1. **`StartupExit` struct abstracted to `ExitReason`**: The Rust `StartupExit`
+   records `{ssthresh, bandwidth, reason}`. The Lean model abstracts to the
+   `reason` field only, since the write-once invariant depends only on the
+   presence/absence of `Some(reason)` and the reason variant. The `cwnd`
+   snapshot and `bandwidth` field are not modelled.
+2. **`usize` as `Nat`**: `ssthresh` is modelled as `Nat` (unbounded). Real
+   Rust `usize` saturates at `usize::MAX`. The initial value `usize::MAX`
+   is modelled as the constant `2^64 - 1` but no arithmetic modulo `usize`
+   is performed — `update` only overwrites `ssthresh`.
+3. **Proof scope**: The `updateList` multi-update theorem proves that `ssthresh`
+   after n updates equals the last supplied value. This mirrors the Rust
+   tests in `congestion/mod.rs:L305–L355`.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `exit_preserved_when_set` | Once `Some`, never changes | High — write-once invariant |
+| `reason_css_from_first_call` | CSS exit only if `inCss=true` on first update | High — misattribution guard |
+| `reason_loss_from_first_call` | Loss exit only if `inCss=false` on first update | High — misattribution guard |
+| `double_update_exit_unchanged` | Two updates: exit from first, ssthresh from second | High — matches Rust test |
+| `exit_mono` | `isSome` is monotone across updates | Medium — structural safety |
+| `n_updates_ssthresh_is_last` | After n updates, ssthresh = last value | Medium — basic correctness |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 159).
+- 5 `#eval`/`decide` spot checks mirror the exact cases from the Rust unit tests
+  in `congestion/mod.rs:L305–L355` (`ssthresh_init`, `ssthresh_in_css`,
+  `ssthresh_in_slow_start`).
+- No Route-B tests: the function is a trivial enum-dispatch + field overwrite;
+  decidable spot checks at lines 234–255 cover all the cases in the Rust tests.
