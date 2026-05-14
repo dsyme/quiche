@@ -1,33 +1,43 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 158 (workflow 25841769885, 2026-05-14)
+Run 159 (workflow 25856468108, 2026-05-14)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 158)
-- Lean files: 56 (added StreamCreditReturn.lean)
-- Total theorems: ~1316
+## Repository State (after run 159)
+- Lean files: 57 (added SsThresh.lean)
+- Total theorems: ~1333
 - Total sorry: 0
-- Route-B test targets: 21 (added probe_rtt_sm run 158)
+- Route-B test targets: 22 (added bbr2_limits run 159)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 158
+## Open PRs (lean-squad label) — as of run 159
 - run158 (branch lean-squad-run158-25841769885-probertt-sm-routeb-stream-credit):
   Task 5 — T58 StreamCreditReturn.lean (20 thms, 0 sorry)
   Task 8 — T60 Route-B tests (23/23 PASS)
+- run159 (branch lean-squad-run159-25856468108-new-target-routeb):
+  Task 5 — T65 SsThresh.lean (17 thms, 0 sorry)
+  Task 8 — BBR2Limits Route-B tests (15 tests, 1000+ cases PASS)
 
 ## Targets
+
+### T65: SsThresh Write-Once Invariant (run 159)
+- Phase: 5 (Done — run 159)
+- File: formal-verification/lean/FVSquad/SsThresh.lean
+- Theorems: 17, sorry: 0
+- Models: SsThresh struct from recovery/congestion/mod.rs
+- Key invariant: startup_exit is write-once (set on first update only)
+- Key: exit_preserved_when_set, reason_css/loss_from_first_call
+- CORRESPONDENCE.md: ✅ entry added run 159
 
 ### T58: QUIC Stream Credit Return (run 158)
 - Phase: 5 (Done — run 158)
 - File: formal-verification/lean/FVSquad/StreamCreditReturn.lean
 - Theorems: 20, sorry: 0
-- Models collect() + update_max_streams_bidi/uni from stream/mod.rs
-- Key: returnBidiN_adds_n, returnN_then_commit, creditInvariant preservation
 - CORRESPONDENCE.md: ✅ entry added run 158
 
 ### T64: PMTUD Binary Search Convergence (run 156)
@@ -51,12 +61,18 @@ Run 158 (workflow 25841769885, 2026-05-14)
 - File: formal-verification/lean/FVSquad/ProbeRTTPhase.lean (21 thms)
 - CORRESPONDENCE.md: ✅ entry added run 154
 
+### T32 (partial): BBR2 Limits
+- Phase: 5 (Done — multiple runs)
+- File: formal-verification/lean/FVSquad/BBR2Limits.lean (16 thms)
+- Route-B tests: ✅ formal-verification/tests/bbr2_limits/ (15 tests, 1000+ cases PASS, run 159)
+- CORRESPONDENCE.md: ✅ updated run 159
+
 ### Earlier targets (T1-T57, T59, T61): All phase 5 (Done)
 
 ## CI Status
 - lean-ci.yml: exists, passing
 - lean-toolchain: v4.29.0
-- lake build: 59 jobs, 0 sorry (run 158)
+- lake build: 60 jobs, 0 sorry (run 159)
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -82,8 +98,9 @@ Run 158 (workflow 25841769885, 2026-05-14)
 | PRR | tests/prr/ | 25 | 150 |
 | T63 (StreamCountLimit) | tests/stream_count_limit/ | 28 | 157 |
 | T60 (ProbeRTTStateMachine) | tests/probe_rtt_sm/ | 23 | 158 |
+| T32/BBR2Limits | tests/bbr2_limits/ | 1000+ | 159 |
 
-Total: 1646+ cases, all PASS
+Total: 2660+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -95,10 +112,11 @@ Total: 1646+ cases, all PASS
 - Nat subtraction: saturating; use `omega` for invariant+bounds
 - For Nat.div proofs: introduce Nat.div_add_mod witness + Nat.mod_lt, then omega
 - `creditInvariant` proofs: use `obtain ⟨hb, hu⟩ := h` then direct omega
-- `simp [creditInvariant, ...]` sometimes leaves goals for `obtain` + direct Nat.le proofs
+- `List.reverseRecOn` does NOT exist — use cons induction + `List.getLast_cons htl`
+- `List.getLast_cons htl` : `(a :: l).getLast _ = l.getLast h` (when `l ≠ []`)
 
 ## Next Run Priorities
-1. T32 (BBR2 pacing rate bounds): gcongestion, phase 1 research
-2. Route-B tests for ProbeRTTPhase (constant values: 10/10, 8/10, 5/10 gains)
-3. CRITIQUE.md update: T58 StreamCreditReturn + T60 Route-B
-4. New target research: stream_id parity/initiation invariants, ack_delay_exponent
+1. T32 (BBR2 pacing rate bounds): more gcongestion theorems (f32 → Rat approximation)
+2. Route-B tests for ProbeRTTPhase (gain constant values 0.8, 0.5 vs Rust f32)
+3. CRITIQUE.md update: T65 SsThresh + BBR2Limits Route-B
+4. New target: ack_delay_exponent encoding (transport_params.rs, ~20 lines)
