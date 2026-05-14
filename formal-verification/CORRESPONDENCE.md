@@ -4,10 +4,10 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-12 18:30 UTC
-- **Commit**: `9d0bc325` (run 153 merge + run 154 additions)
-- **Lean build**: `lake build` passed with Lean 4.29.1 — 55 files, **0 sorry** 🎉
-  (run 154: added T60, T62, T63 correspondence entries; +8 lifecycle theorems in ProbeRTTStateMachine)
+- **Date**: 2026-05-14 04:42 UTC
+- **Commit**: `47292ca7` (run 158: T58 StreamCreditReturn.lean added; T60 Route-B tests 23/23 PASS)
+- **Lean build**: `lake build` passed with Lean 4.29.0 — 56 files, **0 sorry** 🎉
+  (run 158: added StreamCreditReturn.lean, 20 theorems; T60 Route-B 23-case harness)
   (run 153: added StreamCountLimit T63 + Critique update)
   (run 151: ProbeRTTStateMachine T60; run 150: ProbeRTTPhase T62) — 52 files, **0 sorry** 🎉
   (run 149: last-updated refresh; all 52 files verified)
@@ -3614,7 +3614,9 @@ Divergences (1)–(4) are out-of-scope for the stated propositions: all 35 theor
 ### Validation evidence
 
 - `lake build` passed with Lean 4.29.1, 0 sorry (runs 151 and 154).
-- No Route-B tests yet. A future harness could exercise the state machine transitions against the Lean model for a grid of (inflight, target, time) inputs.
+- ✅ Route-B tests: `formal-verification/tests/probe_rtt_sm/` — 23/23 PASS (run 158).
+  Harness: `rustc probe_rtt_sm_test.rs -o /tmp/probe_rtt_sm_test && /tmp/probe_rtt_sm_test`
+  Covers all branches of `congestionStep` and `quiescenceStep`, plus four composed lifecycle cases.
 
 ---
 
@@ -3673,3 +3675,65 @@ invariant — they document that safety requires it.
 
 - `lake build` passed with Lean 4.29.1, 0 sorry (run 153).
 - No Route-B tests yet. A future harness could compare `update_peer_max_streams_*` and `peer_streams_left_*` outputs against Lean model for representative inputs.
+
+---
+
+## `FVSquad/StreamCreditReturn.lean` — T58: QUIC Stream Credit Return
+
+**Lean file**: `formal-verification/lean/FVSquad/StreamCreditReturn.lean`
+**Rust source**: `quiche/src/stream/mod.rs`
+**Theorems**: 20, sorry: 0 (run 158, Lean 4.29.0)
+
+### Modelled definitions
+
+| Lean definition | Rust source | Location | Correspondence level |
+|-----------------|-------------|----------|---------------------|
+| `returnBidiCredit` | `StreamMap::collect` bidi branch | `stream/mod.rs#L596–598` | **exact** (Nat + 1 vs. u64 saturating_add(1) — see divergences) |
+| `returnUniCredit` | `StreamMap::collect` uni branch | `stream/mod.rs#L600–602` | **exact** (symmetric) |
+| `commitBidi` | `StreamMap::update_max_streams_bidi` | `stream/mod.rs#L539–541` | **exact** |
+| `commitUni` | `StreamMap::update_max_streams_uni` | `stream/mod.rs#L561–563` | **exact** |
+| `creditInvariant` | implicit invariant at all call sites | (no single Rust location) | **specification** |
+| `returnBidiCreditN` | n collect() calls | (compound) | **abstraction** |
+
+### Divergences
+
+1. **u64 saturation vs. Nat**: `saturating_add(1)` in Rust means the counter
+   stops at `u64::MAX`. In the Lean `Nat` model, addition is unbounded — no
+   saturation needed. This divergence only matters at `u64::MAX`, which in
+   practice is unreachable (a u64 stream count ≈ 1.8×10¹⁹ is unachievable).
+   All monotonicity and composition theorems hold identically for both.
+
+2. **Only credit-accounting fields modelled**: The `local_max_streams_bidi_next`,
+   `local_max_streams_bidi`, `local_max_streams_uni_next`, and `local_max_streams_uni`
+   fields are modelled. Other `StreamMap` fields (stream storage, peer limits,
+   flow control) are omitted. This is the same decomposition strategy as T63.
+
+3. **`collect`'s `is_bidi` routing**: The Lean model assumes the correct
+   credit-return function (bidi vs. uni) is called; it does not model the
+   `is_bidi(stream_id)` dispatch. That dispatch is a direct parity check on
+   the stream ID and is considered correct by inspection.
+
+### Impact on proofs
+
+Divergence (1) does not affect any proved theorem: all properties hold for
+both bounded and unbounded arithmetic in the reachable state space. Divergence
+(2) means the proofs scope only to the credit-accounting sub-system; RFC 9000
+§4.6 compliance of the broader StreamMap requires that the invariant is
+maintained by the rest of the code.
+
+### Key findings
+
+- `returnBidiN_adds_n` / `returnN_then_commit`: After `n` peer-stream
+  collections and a commit, `bidiCurrent = initial_bidiNext + n`. This
+  directly encodes the RFC 9000 §4.6 "give back credit" requirement.
+- `creditInvariant` preservation: all four operations preserve the invariant
+  `next ≥ current`, ensuring MAX_STREAMS frames never advertise a smaller
+  window (RFC §4.6 monotonicity for the local limit).
+- `commit_then_collect_grows_next`: after a commit, any further collect makes
+  the pending limit strictly larger than the just-committed value, ensuring
+  the next MAX_STREAMS frame will advertise a higher limit.
+
+### Validation evidence
+
+- `lake build` passed with Lean 4.29.0, 0 sorry (run 158).
+- No Route-B tests yet. A future harness could compare `collect` + `update_max_streams_*` outputs against the Lean model for representative sequences.
