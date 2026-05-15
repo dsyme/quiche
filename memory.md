@@ -1,42 +1,48 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 162 (workflow 25914432715, 2026-05-15)
+Run 163 (workflow 25933740409, 2026-05-15)
 
 ## FV Toolchain
-- Lean 4.29.1 (lake project pinned, lean-toolchain: v4.29.0)
+- Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 162)
-- Lean files: 60 (added BBR2ProbeUpSlope.lean)
-- Total theorems: ~1375 (17 new from T68)
+## Repository State (after run 163)
+- Lean files: 61 (added QuicVersionPolicy.lean T69)
+- Total theorems: ~1388 (13 new from T69)
 - Total sorry: 0
 - Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 162
-- run162 (branch lean-squad-run162-25914432715-bbr2probeupslope):
-  Task 5 — T68 BBR2ProbeUpSlope.lean (17 thms, 0 sorry)
-  Task 9 — CI audit (no changes needed, CI healthy)
+## Open PRs (lean-squad label) — as of run 163
+- run163 (branch lean-squad-run163-25933740409-quic-version-correspondence):
+  Task 5 — T69 QuicVersionPolicy.lean (13 thms, 0 sorry)
+  Task 6 — CORRESPONDENCE.md updates for T67, T68, T69
 
 ## Targets
+
+### T69: QUIC Version Policy (run 163)
+- Phase: 5 (Done — run 163)
+- File: formal-verification/lean/FVSquad/QuicVersionPolicy.lean
+- Theorems: 13, sorry: 0
+- Models: is_reserved_version + version_is_supported from lib.rs ~L479/615/434/1887
+- Key: disjointness invariant reserved ∩ supported = ∅
+  + V1 not reserved (greasing safety)
+  + canonical greasing values (0x0a0a0a0a, 0x2a2a2a2a, 0xfafafafa) are reserved
+- CORRESPONDENCE.md: updated (run 163)
 
 ### T68: BBR2 Probe-Up Inflight-Hi Slope (run 162)
 - Phase: 5 (Done — run 162)
 - File: formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean
 - Theorems: 17, sorry: 0
-- Models: raise_inflight_high_slope + probe_inflight_high_upward accumulator
-  from probe_bw.rs ~L582-631
-- Key: probe_up_rounds capped at MAX_ROUNDS=30 (growth ≤ 2^30);
-  probe_up_bytes floored at DEFAULT_MSS=1300;
-  accumulator remainder = acked mod probe_up_bytes
-- CORRESPONDENCE.md: not yet updated
+- CORRESPONDENCE.md: updated (run 163)
 
-### T67: BBR2 Inflight Lower Bound Guard (run 161)
-- Phase: 5 (Done — run 161)
+### T67: BBR2 Inflight Lower Bound Guard (run 161/162)
+- Phase: 5 (Done — run 162)
 - File: formal-verification/lean/FVSquad/BBR2InflightLo.lean
 - Theorems: 15, sorry: 0
+- CORRESPONDENCE.md: updated (run 163)
 
 ### T66: ACK Delay Encode/Decode Codec (run 160)
 - Phase: 5 (Done — run 160)
@@ -58,7 +64,7 @@ Run 162 (workflow 25914432715, 2026-05-15)
 ## CI Status
 - lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
-- lake build: 63 jobs (run 162), 0 sorry
+- lake build: 64 jobs (run 163), 0 sorry
 - Cache: keyed on lake-manifest.json hash (correct)
 - Triggers: PR + push to main/master on formal-verification/lean/**
 
@@ -97,27 +103,22 @@ Total: 2660+ cases, all PASS
 - `simp only [h1, ite_true]` may close goal completely
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
+- UInt32 bit-ops: use `cases h : isSupportedVersion v` + subst + decide for disjointness
+- After subst on UInt32 literal: use `exact absurd hr (by decide)` not `simp`
+- `simp [CONST] at hs` where CONST is UInt32 may leave `v = literal` not auto-subst
+- Use `simp only [..., beq_iff_eq] at hs` then `subst hs` for UInt32 equality
+- `Bool.and_eq_false_iff_not_and` does NOT exist; use `cases h : boolExpr with`
 - Nat subtraction: saturating; use `omega` for invariant+bounds
 - For Nat.div proofs: use `Nat.div_mul_cancel` for exact round-trips
-- For gap proofs: use `Nat.mod_def` + `Nat.mul_comm` to connect d%n to d-n*(d/n)
 - `ring` does NOT work after `subst` on hypotheses with pow — use `omega`
 - `dvd_refl` is NOT available — use `Nat.dvd_refl`
-- `dvd_mul_left` is NOT available — use `Nat.dvd_mul_left`
-- `validExponent as Prop with `decide` requires `abbrev` not `def`
-- Sentinel guards: `by_cases h : s.lo = SENTINEL; simp [h]; ...` pattern
-- `Nat.min_le_right c s.lo : min c s.lo ≤ s.lo` (NOT `s.lo ≤ min c s.lo`)
-- Min commutativity: use `Nat.min_left_comm` (or `simp [Nat.min_comm, Nat.min_left_comm]`)
-- `Nat.ne_of_lt` for h : a < b → a ≠ b
-- `push_neg` NOT available without Mathlib — use `by_contra h0; have := by omega` pattern
-- `Nat.div_eq_zero_iff : m/n = 0 ↔ n = 0 ∨ m < n` (no argument needed)
 - `norm_num` NOT available without Mathlib — use `decide` for concrete arithmetic
-- For `Nat.min_eq_left/right` in proofs: use `unfold nextRounds; exact Nat.min_eq_right (by omega)` not `simp [..., Nat.min_eq_right (by omega)]` (by omega inside simp doesn't have outer hypotheses)
+- `push_neg` NOT available without Mathlib — use `by_contra h0; have := by omega` pattern
 - `Nat.mod_def : d % m = d - m * (d / m)` — use for % goals where omega fails
-- `Nat.mul_comm _ _` to convert `a/b * b` to `b * (a/b)` for omega
 
 ## Next Run Priorities
 1. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
-2. Route-B tests for T68 (BBR2ProbeUpSlope) — verify against probe_bw.rs
-3. CRITIQUE.md update: T67 + T68 additions
-4. CORRESPONDENCE.md update: add T67 and T68 entries
-5. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec
+2. Route-B tests for T67 (BBR2InflightLo) — verify against network_model.rs
+3. Route-B tests for T68 (BBR2ProbeUpSlope) — verify against probe_bw.rs
+4. CRITIQUE.md update: T67 + T68 + T69 additions
+5. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec + lean file
