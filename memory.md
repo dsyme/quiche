@@ -1,36 +1,42 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 161 (workflow 25900534260, 2026-05-15)
+Run 162 (workflow 25914432715, 2026-05-15)
 
 ## FV Toolchain
 - Lean 4.29.1 (lake project pinned, lean-toolchain: v4.29.0)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 161)
-- Lean files: 59 (added BBR2InflightLo.lean)
-- Total theorems: ~1358 (15 new)
+## Repository State (after run 162)
+- Lean files: 60 (added BBR2ProbeUpSlope.lean)
+- Total theorems: ~1375 (17 new from T68)
 - Total sorry: 0
 - Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 161
-- run161 (branch lean-squad-run161-25900534260-bbr2inflightlo-report):
-  Task 5 — T67 BBR2InflightLo.lean (15 thms, 0 sorry)
-  Task 10 — REPORT.md update (59 files, 1358 thms, 0 sorry)
+## Open PRs (lean-squad label) — as of run 162
+- run162 (branch lean-squad-run162-25914432715-bbr2probeupslope):
+  Task 5 — T68 BBR2ProbeUpSlope.lean (17 thms, 0 sorry)
+  Task 9 — CI audit (no changes needed, CI healthy)
 
 ## Targets
+
+### T68: BBR2 Probe-Up Inflight-Hi Slope (run 162)
+- Phase: 5 (Done — run 162)
+- File: formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean
+- Theorems: 17, sorry: 0
+- Models: raise_inflight_high_slope + probe_inflight_high_upward accumulator
+  from probe_bw.rs ~L582-631
+- Key: probe_up_rounds capped at MAX_ROUNDS=30 (growth ≤ 2^30);
+  probe_up_bytes floored at DEFAULT_MSS=1300;
+  accumulator remainder = acked mod probe_up_bytes
+- CORRESPONDENCE.md: not yet updated
 
 ### T67: BBR2 Inflight Lower Bound Guard (run 161)
 - Phase: 5 (Done — run 161)
 - File: formal-verification/lean/FVSquad/BBR2InflightLo.lean
 - Theorems: 15, sorry: 0
-- Models: clear_inflight_lo / cap_inflight_lo from network_model.rs ~L750-758
-- Key: sentinel SENTINEL=2^64-1 guards cap; cap_after_clear_noop, cap_never_raises,
-  double_cap_eq_min, cap_commutative, cap_idempotent
-- SafeCap precondition: cap values < SENTINEL to avoid degenerate sentinel-cap edge case
-- CORRESPONDENCE.md: not yet updated
 
 ### T66: ACK Delay Encode/Decode Codec (run 160)
 - Phase: 5 (Done — run 160)
@@ -50,9 +56,11 @@ Run 161 (workflow 25900534260, 2026-05-15)
 ### Earlier targets (T1-T57, T59-T64): All phase 5 (Done)
 
 ## CI Status
-- lean-ci.yml: exists, passing
+- lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
-- lake build: 62 jobs (run 161), 0 sorry
+- lake build: 63 jobs (run 162), 0 sorry
+- Cache: keyed on lake-manifest.json hash (correct)
+- Triggers: PR + push to main/master on formal-verification/lean/**
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -100,9 +108,16 @@ Total: 2660+ cases, all PASS
 - `Nat.min_le_right c s.lo : min c s.lo ≤ s.lo` (NOT `s.lo ≤ min c s.lo`)
 - Min commutativity: use `Nat.min_left_comm` (or `simp [Nat.min_comm, Nat.min_left_comm]`)
 - `Nat.ne_of_lt` for h : a < b → a ≠ b
+- `push_neg` NOT available without Mathlib — use `by_contra h0; have := by omega` pattern
+- `Nat.div_eq_zero_iff : m/n = 0 ↔ n = 0 ∨ m < n` (no argument needed)
+- `norm_num` NOT available without Mathlib — use `decide` for concrete arithmetic
+- For `Nat.min_eq_left/right` in proofs: use `unfold nextRounds; exact Nat.min_eq_right (by omega)` not `simp [..., Nat.min_eq_right (by omega)]` (by omega inside simp doesn't have outer hypotheses)
+- `Nat.mod_def : d % m = d - m * (d / m)` — use for % goals where omega fails
+- `Nat.mul_comm _ _` to convert `a/b * b` to `b * (a/b)` for omega
 
 ## Next Run Priorities
 1. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
-2. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec
-3. CRITIQUE.md update: T67 BBR2InflightLo + recent additions
-4. CORRESPONDENCE.md update: add T67 and T66 entries
+2. Route-B tests for T68 (BBR2ProbeUpSlope) — verify against probe_bw.rs
+3. CRITIQUE.md update: T67 + T68 additions
+4. CORRESPONDENCE.md update: add T67 and T68 entries
+5. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec
