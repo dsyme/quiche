@@ -29,6 +29,7 @@ import FVSquad.H3Frame
 import FVSquad.AckRanges
 import FVSquad.BytesInFlight
 import FVSquad.PathState
+import FVSquad.BBR2InflightLo
 import FVSquad.BBR2Limits
 import FVSquad.H3Settings
 import FVSquad.H3ParseSettings
