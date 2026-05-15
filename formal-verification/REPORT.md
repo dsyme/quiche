@@ -2,45 +2,47 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: 🔄 ACTIVE — 949 named theorems, **11 `sorry`** (across 10 files),
-50 Lean files (Lean 4.29.0+, no Mathlib).
+**Status**: ✅ ACTIVE — **1,358 named theorems**, **0 `sorry`**, 59 Lean files
+(Lean 4.29.0, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-05-09 10:00 UTC
-- **Commit**: `eb8c4c14`
+- **Date**: 2026-05-15 04:50 UTC
+- **Commit**: `8be2b9bb`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **949 named theorems**
-across **50 Lean 4 files** covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **1,358 named theorems**
+across **59 Lean 4 files** covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `NewRenoAIMD`,
 `CUBIC`, `PRR`, `Bandwidth`, `Pacer`, `BBR2Limits`, `BBR2NetworkFilters`,
-`BBR2StartupExit`, `DeliveryRate`, `AppLimitedGuard`, `HyStart`, `WindowedFilter`) to
-stream management (`RecvBuf`, `SendBuf`, `CidMgmt`, `StreamStateMachine`) and
-wire encoding (`StreamId`, `PacketNumLen`, `AckRanges`, `FrameAckEliciting`),
-plus HTTP/3 layer coverage (`H3Frame`, `H3Settings`, `H3ParseSettings`,
-`QPACKStaticTable`, `QPACKInteger`), and loss detection
-(`LossDetectionThreshold`, `ProbeBWPhase`).
+`BBR2StartupExit`, `BBR2InflightLo`, `DeliveryRate`, `AppLimitedGuard`,
+`HyStart`, `WindowedFilter`) to stream management (`RecvBuf`, `SendBuf`,
+`CidMgmt`, `StreamStateMachine`, `StreamCreditReturn`, `StreamCountLimit`) and
+wire encoding (`StreamId`, `PacketNumLen`, `AckRanges`, `FrameAckEliciting`,
+`AckDelayCodec`), plus HTTP/3 layer coverage (`H3Frame`, `H3Settings`,
+`H3ParseSettings`, `QPACKStaticTable`, `QPACKInteger`), loss detection
+(`LossDetectionThreshold`, `ProbeBWPhase`), path management (`PathState`,
+`IdleTimeout`, `Pmtud`), and BBR2 state machine phases (`ProbeRTTStateMachine`,
+`ProbeRTTPhase`, `SsThresh`).
 Highlights include: formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
 violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); full QPACK/HPACK
 integer codec round-trip by strong induction (`QPACKInteger`); RFC 9000 §2.1
-stream-ID classification laws (`StreamId`); and the full long-header buffer
-round-trip (`PacketHeader`). **Run 105 closed the last `sorry`**, achieving 0
-sorry — maintained through run 137; subsequent runs (138–143) added 3 new files
-with 1 sorry each (BBR2StartupExit, ProbeBWPhase, LossDetectionThreshold) as
-part of active proof development. Fourteen targets have Route-B executable
-correspondence tests (1463+ cases), all passing.
+stream-ID classification laws (`StreamId`); the full long-header buffer
+round-trip (`PacketHeader`); and the BBR2 `inflight_lo` sentinel-guard invariant
+(`BBR2InflightLo`). **All 1,358 theorems are fully proved with 0 sorry.**
+Twenty-two targets have Route-B executable correspondence tests (2,660+ cases),
+all passing.
 
 ---
 
 ## Proof Architecture
 
-The 50 files form four logical layers:
+The 59 files form four logical layers (file counts and theorem totals as of run 161):
 
 ```mermaid
 graph TD
@@ -308,11 +310,20 @@ graph LR
 | `DeliveryRate.lean` | 13 | ✅ | `sample_conservative` |
 | `AppLimitedGuard.lean` | 14 | ✅ | `bubble_check_bounded` |
 | `NewRenoAIMD.lean` | 17 | ✅ | `aimd_convergence` |
-| `BBR2NetworkFilters.lean` | 20 | 🔄 (1 sorry) | `update_get_ge_sample` (run 137) |
-| `BBR2StartupExit.lean` | 15 | 🔄 (1 sorry) | `startup_exit_at_bw_plateau` (run 139) |
-| `ProbeBWPhase.lean` | 12 | 🔄 (1 sorry) | `probe_bw_phase_gains` (run 140) |
-| `LossDetectionThreshold.lean` | 16 | 🔄 (1 sorry) | `pktThreshInv_initial` (run 142) |
-| **Total** | **949** | **11 sorry (10 files)** | **50 files** |
+| `BBR2NetworkFilters.lean` | 20 | ✅ | `update_get_ge_sample` |
+| `BBR2StartupExit.lean` | 15 | ✅ | `startup_exit_at_bw_plateau` |
+| `ProbeBWPhase.lean` | 12 | ✅ | `probe_bw_phase_gains` |
+| `LossDetectionThreshold.lean` | 16 | ✅ | `pktThreshInv_initial` |
+| `SsThresh.lean` | 17 | ✅ | `ssthresh_write_once` |
+| `StreamCreditReturn.lean` | 20 | ✅ | `credit_return_monotone` |
+| `StreamCountLimit.lean` | 16 | ✅ | `peer_max_monotone` |
+| `AckDelayCodec.lean` | 18 | ✅ | `roundtrip_exact` |
+| `ProbeRTTStateMachine.lean` | 35 | ✅ | `probeRTT_enter_resets_inflight` |
+| `ProbeRTTPhase.lean` | 26 | ✅ | `probeRTT_gain_lt_100` |
+| `TransportErrorCode.lean` | 15 | ✅ | `error_code_unique` |
+| `StreamFrameType.lean` | 12 | ✅ | `stream_type_bits_disjoint` |
+| `BBR2InflightLo.lean` | 15 | ✅ | `cap_after_clear_noop` |
+| **Total** | **1,358** | **0 sorry** | **59 files** |
 
 ### Route-B Correspondence Tests
 
@@ -334,8 +345,15 @@ graph LR
 
 | T57 (ProbeBWPhase) | `tests/probe_bw_phase/` | 10 | ✅ 10/10 PASS |
 | T56 (LossDetectionThreshold) | `tests/loss_detection_threshold/` | 991 | ✅ 991/991 PASS |
+| T59 (TransportErrorCode) | `tests/transport_error_code/` | 50 | ✅ 50/50 PASS |
+| T61 (StreamFrameType) | `tests/stream_frame_type/` | 19 | ✅ 19/19 PASS |
+| IdleTimeout | `tests/idle_timeout/` | 38 | ✅ 38/38 PASS |
+| PRR | `tests/prr/` | 25 | ✅ 25/25 PASS |
+| T63 (StreamCountLimit) | `tests/stream_count_limit/` | 28 | ✅ 28/28 PASS |
+| T60 (ProbeRTTStateMachine) | `tests/probe_rtt_sm/` | 23 | ✅ 23/23 PASS |
+| T32/BBR2Limits | `tests/bbr2_limits/` | 1000+ | ✅ 1000+/1000+ PASS |
 
-**Total Route-B cases**: 1463/1463 PASS across 14 targets.
+**Total Route-B cases**: 2,660+/2,660+ PASS across 22 targets.
 
 > Note: T56 includes a complete exhaustive sweep of all (current, spurious) pairs in
 > [0..30]×[0..30], formally confirming that `max(c, min(s, MAX)) = max(c, clampToMax(s))`
@@ -489,6 +507,10 @@ timeline
         AppLimitedGuard T52 (14 thms — run 135), NewRenoAIMD T53 (17 thms — run 136), Route-B WindowedFilter 24/24 (run 136), BBR2NetworkFilters T54 (19 thms — run 137), REPORT update (run 137) : 50 new theorems; total 906 theorems, 47 files, 0 sorry
     section Runs 138–144
         BBR2StartupExit T55 (15 thms — run 139), ProbeBWPhase T57 (12 thms — run 140), Route-B ProbeBWPhase 10/10 (run 142), LossDetectionThreshold T56 (16 thms — run 142), CORRESPONDENCE 4 entries (run 143), Route-B LossDetectionThreshold 991/991 (run 144), REPORT update (run 144) : 43 new theorems; total 949 theorems, 50 files, 11 sorry (active development)
+    section Runs 145–160
+        TransportErrorCode T59 (15 thms), StreamFrameType T61 (12 thms), IdleTimeout Route-B 38/38, PRR Route-B 25/25, SsThresh T65 (17 thms), StreamCreditReturn T58 (20 thms), StreamCountLimit T63 (16 thms), ProbeRTTStateMachine T60 (35 thms), ProbeRTTPhase (26 thms), Pmtud (20 thms), AckDelayCodec T66 (18 thms), BBR2Limits Route-B 1000+ : 0 sorry milestone re-established; total 1343 theorems, 58 files
+    section Run 161
+        BBR2InflightLo T67 (15 thms — sentinel-guard invariants for inflight_lo), REPORT update : 15 new theorems; total 1358 theorems, 59 files, 0 sorry
 ```
 
 ---
@@ -500,10 +522,10 @@ timeline
 - **CI**: `.github/workflows/lean-ci.yml` — runs `lake build` on every PR
   that touches `formal-verification/lean/**`
 - **Build system**: Lake (lakefile.toml with zero external packages)
-- **Route-B tests**: 14 targets, 1463 cases, all passing
+- **Route-B tests**: 22 targets, 2,660+ cases, all passing
 
 ---
 
 > Generated by 🔬 Lean Squad automated formal verification.
 > See [status issue #4](https://github.com/dsyme/quiche/issues/4) and
-> [workflow run 25598205203](https://github.com/dsyme/quiche/actions/runs/25598205203).
+> [workflow run 25900534260](https://github.com/dsyme/quiche/actions/runs/25900534260).
