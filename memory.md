@@ -1,24 +1,26 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 164 (workflow 25952591048, 2026-05-16)
+Run 165 (workflow 25959142089, 2026-05-16)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
-- Lean 4.29.1 (installed by elan for run 164)
+- Lean 4.29.1 (installed by elan for run 165)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 164)
+## Repository State (after run 165)
 - Lean files: 61 (unchanged)
-- Total theorems: ~1395 (+7 from T27)
+- Total theorems: ~1405 (+10 from T26 W_est extension)
 - Total sorry: 0
 - Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 164
-- run164 (branch lean-squad-run164-25952591048-cid-retire-if-needed):
-  Task 4/5 — T27 CidMgmt retire_if_needed (7 new thms, 0 sorry)
+## Open PRs (lean-squad label) — as of run 165
+- run164 (branch lean-squad-run164-25952591048-cid-retire-if-needed): T27 CidMgmt (MERGED into master before run165)
+- run165 (branch lean-squad-run165-25959142089-cubic-west-bbr2pacing):
+  Task 2 — T32 BBR2 pacing rate informal spec (specs/bbr2_pacing_rate_informal.md)
+  Task 5 — T26 CUBIC W_est Reno-friendly theorems (10 new thms in Cubic.lean)
 
 ## Targets
 
@@ -130,9 +132,28 @@ Total: 2660+ cases, all PASS
 - `List.length_filter_le` available for bounds on filter length
 
 ## Next Run Priorities
-1. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
-2. Route-B tests for T67 (BBR2InflightLo) — verify against network_model.rs
-3. Route-B tests for T68 (BBR2ProbeUpSlope) — verify against probe_bw.rs
-4. CRITIQUE.md update: T67 + T68 + T69 + T27 additions
-5. TARGETS.md: update T34 to phase 5 (QPACKStaticTable already done)
-6. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec + lean file
+1. T32 (BBR2 pacing rate): write FVSquad/BBR2PacingRate.lean — informal spec done run165, ~60-80 lines, all omega
+2. T26 (CUBIC W_est): informal spec still needed for TARGETS.md/specs/ — add specs/cubic_west_informal.md
+3. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
+4. Route-B tests for T67 (BBR2InflightLo) — verify against network_model.rs
+5. CRITIQUE.md update: T67 + T68 + T69 + T27 + T26 additions
+6. TARGETS.md: update T34 to phase 5 (QPACKStaticTable already done); add T26 entry
+
+## T26: CUBIC W_est Reno-friendly transition (run 165)
+- Phase: 5 (Done — run 165, extension of Cubic.lean §6)
+- File: formal-verification/lean/FVSquad/Cubic.lean (extended with §6)
+- New theorems: 10 (wEstInc_nonneg, wEstInc_monotone_acked, wEstInc_antitone_cwnd,
+  wEstIncAimd_le_max, aimdRegion_cwnd_ge_west, aimdRegion_cwnd_ge_old,
+  wEstInc_monotone_alpha, wEstIncAimd_concrete_ack17, wEstIncMax_concrete,
+  wEstIncAimd_lt_max_concrete)
+- Cubic.lean now: 36 theorems, 0 sorry
+- Note: no separate informal spec file written (TARGETS.md needs updating)
+
+## T32: BBR2 pacing rate bounds (run 165)
+- Phase: 2 (Informal spec written — run 165)
+- File (spec): formal-verification/specs/bbr2_pacing_rate_informal.md
+- Key properties: STARTUP monotonicity (max pattern), first-ACK initialisation,
+  full-bw-reached sets to target_rate, early exit cases
+- 3 open questions: OQ-T32-1 (bandwidth overflow), OQ-T32-2 (zero min_rtt),
+  OQ-T32-3 (MSS scaling interaction)
+- Next: write FVSquad/BBR2PacingRate.lean (~60-80 lines, all omega)
