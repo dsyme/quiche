@@ -1,48 +1,57 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 163 (workflow 25933740409, 2026-05-15)
+Run 164 (workflow 25952591048, 2026-05-16)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
+- Lean 4.29.1 (installed by elan for run 164)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 163)
-- Lean files: 61 (added QuicVersionPolicy.lean T69)
-- Total theorems: ~1388 (13 new from T69)
+## Repository State (after run 164)
+- Lean files: 61 (unchanged)
+- Total theorems: ~1395 (+7 from T27)
 - Total sorry: 0
 - Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 163
-- run163 (branch lean-squad-run163-25933740409-quic-version-correspondence):
-  Task 5 — T69 QuicVersionPolicy.lean (13 thms, 0 sorry)
-  Task 6 — CORRESPONDENCE.md updates for T67, T68, T69
+## Open PRs (lean-squad label) — as of run 164
+- run164 (branch lean-squad-run164-25952591048-cid-retire-if-needed):
+  Task 4/5 — T27 CidMgmt retire_if_needed (7 new thms, 0 sorry)
 
 ## Targets
+
+### T27: CidMgmt retire_if_needed (run 164)
+- Phase: 5 (Done — run 164)
+- File: formal-verification/lean/FVSquad/CidMgmt.lean (extended §10)
+- New theorems: 7 (lowestSeq_mem, lowestSeq_le_all, filter_neq_length_lt,
+  newScidRetire_count_le_limit, newScidRetire_nextSeq_inc,
+  newScidRetire_new_seq_in_active, newScidRetire_lowest_removed)
+- Key: RFC 9000 §5.1.1 — after retire-if-needed, count ≤ limit
+- Precondition: count ≤ limit before call (fires at exactly-limit)
+- Approximation: retire_prior_to bookkeeping not modelled
+
+### T34: QPACK Static Table Lookup (discovered done in run 164)
+- Phase: 5 (Already Done — exact run unknown, was in memory as phase 1)
+- File: formal-verification/lean/FVSquad/QPACKStaticTable.lean
+- Theorems: 12, sorry: 0
+- TARGETS.md: shows phase 1 (needs update)
 
 ### T69: QUIC Version Policy (run 163)
 - Phase: 5 (Done — run 163)
 - File: formal-verification/lean/FVSquad/QuicVersionPolicy.lean
 - Theorems: 13, sorry: 0
-- Models: is_reserved_version + version_is_supported from lib.rs ~L479/615/434/1887
-- Key: disjointness invariant reserved ∩ supported = ∅
-  + V1 not reserved (greasing safety)
-  + canonical greasing values (0x0a0a0a0a, 0x2a2a2a2a, 0xfafafafa) are reserved
-- CORRESPONDENCE.md: updated (run 163)
 
 ### T68: BBR2 Probe-Up Inflight-Hi Slope (run 162)
 - Phase: 5 (Done — run 162)
 - File: formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean
 - Theorems: 17, sorry: 0
-- CORRESPONDENCE.md: updated (run 163)
 
 ### T67: BBR2 Inflight Lower Bound Guard (run 161/162)
 - Phase: 5 (Done — run 162)
 - File: formal-verification/lean/FVSquad/BBR2InflightLo.lean
 - Theorems: 15, sorry: 0
-- CORRESPONDENCE.md: updated (run 163)
 
 ### T66: ACK Delay Encode/Decode Codec (run 160)
 - Phase: 5 (Done — run 160)
@@ -64,7 +73,7 @@ Run 163 (workflow 25933740409, 2026-05-15)
 ## CI Status
 - lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
-- lake build: 64 jobs (run 163), 0 sorry
+- lake build: 64 jobs (run 164), 0 sorry
 - Cache: keyed on lake-manifest.json hash (correct)
 - Triggers: PR + push to main/master on formal-verification/lean/**
 
@@ -103,7 +112,7 @@ Total: 2660+ cases, all PASS
 - `simp only [h1, ite_true]` may close goal completely
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
-- UInt32 bit-ops: use `cases h : isSupportedVersion v` + subst + decide for disjointness
+- UInt32 bit-ops: use `cases h : isSupportedVersion v` + subst + decide
 - After subst on UInt32 literal: use `exact absurd hr (by decide)` not `simp`
 - `simp [CONST] at hs` where CONST is UInt32 may leave `v = literal` not auto-subst
 - Use `simp only [..., beq_iff_eq] at hs` then `subst hs` for UInt32 equality
@@ -113,12 +122,17 @@ Total: 2660+ cases, all PASS
 - `ring` does NOT work after `subst` on hypotheses with pow — use `omega`
 - `dvd_refl` is NOT available — use `Nat.dvd_refl`
 - `norm_num` NOT available without Mathlib — use `decide` for concrete arithmetic
-- `push_neg` NOT available without Mathlib — use `by_contra h0; have := by omega` pattern
+- `push_neg` NOT available without Mathlib — use `by_contra h0; have := by omega`
+- `not_lt` NOT available — use omega directly or `by_cases` on the comparison
 - `Nat.mod_def : d % m = d - m * (d / m)` — use for % goals where omega fails
+- For `lowestSeq (y::ys) ∈ y::ys` IH membership: use `simp [List.mem_cons] at hmem` then `exact Or.inr hmem`
+- `List.filter_cons_of_pos hbne` rewrites `filter (a :: rest) = a :: filter rest` when `p a = true`
+- `List.length_filter_le` available for bounds on filter length
 
 ## Next Run Priorities
 1. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
 2. Route-B tests for T67 (BBR2InflightLo) — verify against network_model.rs
 3. Route-B tests for T68 (BBR2ProbeUpSlope) — verify against probe_bw.rs
-4. CRITIQUE.md update: T67 + T68 + T69 additions
-5. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec + lean file
+4. CRITIQUE.md update: T67 + T68 + T69 + T27 additions
+5. TARGETS.md: update T34 to phase 5 (QPACKStaticTable already done)
+6. T32 (BBR2 pacing rate with f32 → scaled-int): write informal spec + lean file
