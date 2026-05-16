@@ -23,7 +23,7 @@
 --   • Byte contents of CIDs are not modelled; only sequence numbers matter.
 --   • VecDeque<ConnectionIdEntry> → List Nat.
 --   • reset_token, path_id, zero_length_scid, retire_prior_to not modelled.
---   • The `retire_if_needed` path is not modelled (only the simple case).
+--   • The `retire_if_needed` path is now modelled in §10 (T27).
 --   • Error returns are modelled as precondition guards.
 
 /-- Abstract model of the CID sequence manager. -/
@@ -301,6 +301,175 @@ theorem applyNewScid_length (k : Nat) (s : CidState) :
   | succ k ih =>
     simp only [applyNewScid, ih, CidState.newScid,
                List.length_append, List.length_singleton]; omega
+
+-- =============================================================================
+-- §10  retire_if_needed path (T27)  RFC 9000 §5.1.1
+-- =============================================================================
+--
+-- When `new_scid` is called with `retire_if_needed = true` and the active CID
+-- count equals `limit`, the Rust code retires the lowest-sequence CID before
+-- inserting the new one.  This keeps `|activeSeqs| ≤ limit` under this path.
+--
+-- Model: `lowestSeq xs` returns the minimum element of `xs`; `newScidRetire`
+-- encapsulates retire-lowest + add-new as a single atomic step.
+--
+-- Approximation: `retire_prior_to` bookkeeping is not modelled; we only track
+-- the count invariant (|activeSeqs| ≤ limit) which is the RFC 9000 §5.1.1
+-- property.
+
+/-- Minimum of a non-empty list of naturals. -/
+def lowestSeq : List Nat → Nat
+  | []      => 0
+  | [x]     => x
+  | x :: xs => Nat.min x (lowestSeq xs)
+
+/-- `newScidRetire s` models the retire-if-needed path of `new_scid`:
+    If `|activeSeqs| ≥ limit`, retire the lowest seq first, then add new one.
+    Otherwise behaves identically to `newScid`. -/
+def CidState.newScidRetire (s : CidState) : CidState :=
+  if s.activeSeqs.length < s.limit then
+    -- Normal path: just add the new CID.
+    s.newScid
+  else
+    -- retire_if_needed path: drop lowest seq, then add new one.
+    let trimmed := { s with
+      activeSeqs := s.activeSeqs.filter
+        (fun seq => seq != lowestSeq s.activeSeqs) }
+    trimmed.newScid
+
+-- ─── Lemmas about lowestSeq ──────────────────────────────────────────────────
+
+/-- The lowest seq is a member of any non-empty list. -/
+theorem lowestSeq_mem (xs : List Nat) (h : xs ≠ []) :
+    lowestSeq xs ∈ xs := by
+  induction xs with
+  | nil => exact absurd rfl h
+  | cons x rest ih =>
+    cases rest with
+    | nil => simp [lowestSeq]
+    | cons y ys =>
+      simp only [lowestSeq, Nat.min_def]
+      by_cases hle : x ≤ lowestSeq (y :: ys)
+      · simp only [hle, ite_true, List.mem_cons, true_or]
+      · simp only [hle, ite_false, List.mem_cons]
+        have hmem := ih (by simp)
+        simp [List.mem_cons] at hmem
+        exact Or.inr hmem
+
+/-- Every element of the list is at least `lowestSeq`. -/
+theorem lowestSeq_le_all (xs : List Nat) (n : Nat) (hn : n ∈ xs) :
+    lowestSeq xs ≤ n := by
+  induction xs with
+  | nil => simp at hn
+  | cons x rest ih =>
+    simp [List.mem_cons] at hn
+    cases hn with
+    | inl hx =>
+      subst hx
+      cases rest with
+      | nil => simp [lowestSeq]
+      | cons y ys => simp [lowestSeq]; exact Nat.min_le_left _ _
+    | inr hmem =>
+      cases rest with
+      | nil => simp at hmem
+      | cons y ys =>
+        simp [lowestSeq]
+        exact Nat.le_trans (Nat.min_le_right _ _) (ih hmem)
+
+-- ─── Key properties of newScidRetire ─────────────────────────────────────────
+
+-- Helper: filtering out a member strictly reduces the list length.
+private theorem filter_neq_length_lt (xs : List Nat) (v : Nat) (hmem : v ∈ xs) :
+    (xs.filter (fun x => x != v)).length < xs.length := by
+  induction xs with
+  | nil => simp at hmem
+  | cons a rest ih =>
+    simp [List.mem_cons] at hmem
+    cases hmem with
+    | inl ha =>
+      subst ha
+      simp [List.filter, bne_self_eq_false]
+      exact Nat.lt_succ_of_le (List.length_filter_le _ _)
+    | inr hmem2 =>
+      have ihlt := ih hmem2
+      by_cases hav : a = v
+      · subst hav
+        simp [List.filter, bne_self_eq_false]
+        exact Nat.lt_succ_of_le (List.length_filter_le _ _)
+      · have hbne : (a != v) = true := by simp [bne_iff_ne, hav]
+        have hfilt : List.filter (fun x => x != v) (a :: rest) =
+            a :: List.filter (fun x => x != v) rest :=
+          List.filter_cons_of_pos hbne
+        rw [hfilt, List.length_cons, List.length_cons]
+        omega
+
+/-- After retire-if-needed, active count ≤ limit (the RFC 9000 §5.1.1
+    property).  Precondition: the count is ≤ limit before the call. -/
+theorem newScidRetire_count_le_limit (s : CidState)
+    (hinv : CidInv s)
+    (hbound : s.activeSeqs.length ≤ s.limit) :
+    (s.newScidRetire).activeSeqs.length ≤ s.limit := by
+  unfold CidState.newScidRetire
+  by_cases h : s.activeSeqs.length < s.limit
+  · simp [h, CidState.newScid, List.length_append]; omega
+  · -- exactly at limit: remove one, add one → stays at limit
+    have _heq : s.activeSeqs.length = s.limit := by omega
+    simp only [h, ite_false, CidState.newScid, List.length_append,
+               List.length_singleton]
+    have hmem : lowestSeq s.activeSeqs ∈ s.activeSeqs :=
+      lowestSeq_mem _ hinv.i4_nonempty
+    have hfilt := filter_neq_length_lt s.activeSeqs (lowestSeq s.activeSeqs) hmem
+    omega
+
+/-- The `newScidRetire` always increments `nextSeq` by exactly 1. -/
+theorem newScidRetire_nextSeq_inc (s : CidState) :
+    (s.newScidRetire).nextSeq = s.nextSeq + 1 := by
+  unfold CidState.newScidRetire CidState.newScid
+  by_cases h : s.activeSeqs.length < s.limit <;> simp [h]
+
+/-- The new seq is in the active list after retire-if-needed. -/
+theorem newScidRetire_new_seq_in_active (s : CidState) :
+    s.nextSeq ∈ (s.newScidRetire).activeSeqs := by
+  unfold CidState.newScidRetire CidState.newScid
+  by_cases h : s.activeSeqs.length < s.limit
+  · simp [h, List.mem_append]
+  · simp only [h, ite_false, List.mem_append, List.mem_singleton]
+    exact Or.inr trivial
+
+/-- The lowest (retired) seq is removed from the active list after
+    retire-if-needed (when the retire path is taken and the retired seq
+    differs from the newly issued seq). -/
+theorem newScidRetire_lowest_removed (s : CidState)
+    (h : ¬(s.activeSeqs.length < s.limit))
+    (hne : lowestSeq s.activeSeqs ≠ s.nextSeq) :
+    lowestSeq s.activeSeqs ∉ (s.newScidRetire).activeSeqs := by
+  unfold CidState.newScidRetire CidState.newScid
+  simp only [h, ite_false, List.mem_append, List.mem_filter, List.mem_singleton]
+  intro hmem
+  cases hmem with
+  | inl hfilt =>
+    simp [ne_eq] at hfilt
+  | inr heq => exact hne heq
+
+-- ─── Test vectors for retire_if_needed ───────────────────────────────────────
+
+-- Scenario: limit=2, activeSeqs=[0,1] (at limit), retire-if-needed called.
+private def tv_at_limit : CidState :=
+  { nextSeq := 2, activeSeqs := [0, 1], limit := 2 }
+
+-- After retire-if-needed: lowest (0) retired, seq 2 added → [1, 2], count ≤ 2.
+example : tv_at_limit.newScidRetire.activeSeqs.length ≤ 2 := by native_decide
+example : 0 ∉ tv_at_limit.newScidRetire.activeSeqs := by native_decide
+example : 2 ∈ tv_at_limit.newScidRetire.activeSeqs  := by native_decide
+example : 1 ∈ tv_at_limit.newScidRetire.activeSeqs  := by native_decide
+
+-- Scenario: below limit → normal path, all seqs preserved.
+private def tv_below_limit : CidState :=
+  { nextSeq := 2, activeSeqs := [0, 1], limit := 4 }
+
+example : tv_below_limit.newScidRetire.activeSeqs.length = 3 := by native_decide
+example : 0 ∈ tv_below_limit.newScidRetire.activeSeqs := by native_decide
+example : 2 ∈ tv_below_limit.newScidRetire.activeSeqs := by native_decide
 
 -- =============================================================================
 -- §10  Test vectors
