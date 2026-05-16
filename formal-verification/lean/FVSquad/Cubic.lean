@@ -249,3 +249,111 @@ theorem cubicK_zero_when_cwnd_ge_wmax (wMax cwnd : Nat)
 theorem ssthresh_concrete_1448  : ssthreshCubic 1448  = 1013  := by native_decide
 theorem ssthresh_concrete_14480 : ssthreshCubic 14480 = 10136 := by native_decide
 theorem wMaxFastConv_concrete_1448 : wMaxFastConv 1448 = 1230 := by native_decide
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §6  W_est — Reno-friendly AIMD growth (RFC 8312bis §4.3)
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- W_est tracks the TCP-Reno equivalent window to detect the AIMD-friendly
+-- region.  From cubic.rs (Eq. 4):
+--
+--   W_est += alpha_aimd * (acked_bytes / cwnd) * mss
+--
+-- alpha_aimd starts at ALPHA_AIMD = 9/17 and is set to 1.0 once
+-- W_est ≥ W_max.
+--
+-- This section models the increment in exact integer arithmetic (Nat.div)
+-- and proves the key ordering and monotonicity properties.
+--
+-- Approximations:
+--   - f64 is replaced by exact rational arithmetic (numerator/denominator).
+--   - Nat.div is floor division; all results are ≥ 0.
+--   - mss is factored out: theorems hold per-mss-unit (mss = 1).
+
+-- W_est increment with parametric alpha = alphaN / alphaD
+-- Corresponds to: alphaN * acked / (alphaD * cwnd)  (mss=1)
+def wEstInc (alphaN alphaD acked cwnd : Nat) : Nat :=
+  alphaN * acked / (alphaD * cwnd)
+
+-- Increment at alpha = ALPHA_AIMD = 9/17 (normal STARTUP/CA phase)
+def wEstIncAimd (acked cwnd : Nat) : Nat :=
+  wEstInc alphaNum alphaDen acked cwnd
+
+-- Increment at alpha = 1 (saturated phase: W_est ≥ W_max)
+-- Corresponds to: acked / cwnd  (full TCP growth)
+def wEstIncMax (acked cwnd : Nat) : Nat :=
+  acked / cwnd
+
+-- The increment is always ≥ 0 (Nat, trivially non-negative).
+theorem wEstInc_nonneg (aN aD acked cwnd : Nat) :
+    0 ≤ wEstInc aN aD acked cwnd :=
+  Nat.zero_le _
+
+-- The increment is monotone in acked: more bytes ACKed → larger increment.
+theorem wEstInc_monotone_acked
+    (aN aD a1 a2 cwnd : Nat) (h : a1 ≤ a2) :
+    wEstInc aN aD a1 cwnd ≤ wEstInc aN aD a2 cwnd := by
+  unfold wEstInc
+  apply Nat.div_le_div_right
+  apply Nat.mul_le_mul_left
+  exact h
+
+-- The increment is antitone in cwnd: larger window → smaller increment.
+theorem wEstInc_antitone_cwnd
+    (aN aD acked c1 c2 : Nat) (h : c1 ≤ c2) (h1 : 0 < c1) (haD : 0 < aD) :
+    wEstInc aN aD acked c2 ≤ wEstInc aN aD acked c1 := by
+  unfold wEstInc
+  apply Nat.div_le_div_left
+  · exact Nat.mul_le_mul_left aD h
+  · exact Nat.mul_pos haD h1
+
+-- The AIMD increment is ≤ the saturated (alpha=1) increment.
+-- Proof: 9*acked ≤ 17*acked, then cancel the common factor 17.
+theorem wEstIncAimd_le_max (acked cwnd : Nat) :
+    wEstIncAimd acked cwnd ≤ wEstIncMax acked cwnd := by
+  unfold wEstIncAimd wEstIncMax wEstInc alphaNum alphaDen
+  -- Goal: 9 * acked / (17 * cwnd) ≤ acked / cwnd
+  -- Step 1: 9*acked/(17*cwnd) ≤ 17*acked/(17*cwnd) by div_le_div_right
+  -- Step 2: 17*acked/(17*cwnd) = acked/cwnd by cancelling 17
+  calc 9 * acked / (17 * cwnd)
+      ≤ 17 * acked / (17 * cwnd) := Nat.div_le_div_right (by omega)
+    _ = acked / cwnd             := Nat.mul_div_mul_left acked cwnd (by omega)
+
+-- In the AIMD-friendly region W_cubic(t) < W_est, CUBIC uses
+--   new_cwnd = max(cwnd, W_est)
+-- guaranteeing new_cwnd ≥ W_est.
+theorem aimdRegion_cwnd_ge_west (cwnd west : Nat) :
+    west ≤ max cwnd west :=
+  Nat.le_max_right cwnd west
+
+-- The max update also ensures new_cwnd ≥ old_cwnd (no regression).
+theorem aimdRegion_cwnd_ge_old (cwnd west : Nat) :
+    cwnd ≤ max cwnd west :=
+  Nat.le_max_left cwnd west
+
+-- After W_est crosses W_max, alpha_aimd is set to 1.0.
+-- The subsequent increment is the full TCP-friendly amount.
+-- Concretely: wEstIncMax ≥ wEstIncAimd (proved above).
+
+-- A larger initial alpha means a larger increment (parametric monotonicity).
+-- If alphaN1 ≤ alphaN2 and alphaD is the same, then inc(alphaN1) ≤ inc(alphaN2).
+theorem wEstInc_monotone_alpha
+    (aN1 aN2 aD acked cwnd : Nat)
+    (ha : aN1 ≤ aN2) :
+    wEstInc aN1 aD acked cwnd ≤ wEstInc aN2 aD acked cwnd := by
+  unfold wEstInc
+  apply Nat.div_le_div_right
+  calc aN1 * acked ≤ aN2 * acked := Nat.mul_le_mul_right acked ha
+
+-- Concrete tests: verify AIMD increment values match the cubic.rs formula.
+-- wEstIncAimd 17 1 = 9  (9 * 17 / (17 * 1) = 153 / 17 = 9)
+theorem wEstIncAimd_concrete_ack17 :
+    wEstIncAimd 17 1 = 9 := by native_decide
+
+-- wEstIncMax 17 1 = 17  (17 / 1 = 17)
+theorem wEstIncMax_concrete :
+    wEstIncMax 17 1 = 17 := by native_decide
+
+-- ALPHA_AIMD increment is strictly less than max for acked = 17, cwnd = 1
+theorem wEstIncAimd_lt_max_concrete :
+    wEstIncAimd 17 1 < wEstIncMax 17 1 := by native_decide
