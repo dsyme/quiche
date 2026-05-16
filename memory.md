@@ -1,83 +1,94 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 165 (workflow 25959142089, 2026-05-16)
+Run 166 (workflow 25968539329, 2026-05-16)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
-- Lean 4.29.1 (installed by elan for run 165)
+- Lean 4.29.1 (installed by elan for recent runs)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 165)
-- Lean files: 61 (unchanged)
-- Total theorems: ~1405 (+10 from T26 W_est extension)
+## Repository State (after run 166)
+- Lean files: 61 (unchanged — docs-only run)
+- Total theorems: ~1405
 - Total sorry: 0
 - Route-B test targets: 22
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 165
-- run164 (branch lean-squad-run164-25952591048-cid-retire-if-needed): T27 CidMgmt (MERGED into master before run165)
-- run165 (branch lean-squad-run165-25959142089-cubic-west-bbr2pacing):
-  Task 2 — T32 BBR2 pacing rate informal spec (specs/bbr2_pacing_rate_informal.md)
-  Task 5 — T26 CUBIC W_est Reno-friendly theorems (10 new thms in Cubic.lean)
+## Open PRs (lean-squad label) — as of run 166
+- run166 (branch lean-squad-run166-25968539329-critique-correspondence-022e0f46):
+  Task 7 — CRITIQUE.md catchup (T58/T65/T66/T67/T68/T69/T27/T26 sections)
+  Task 6 — CORRESPONDENCE.md catchup (T66/T27/T26 new sections)
 
 ## Targets
 
-### T27: CidMgmt retire_if_needed (run 164)
-- Phase: 5 (Done — run 164)
-- File: formal-verification/lean/FVSquad/CidMgmt.lean (extended §10)
-- New theorems: 7 (lowestSeq_mem, lowestSeq_le_all, filter_neq_length_lt,
-  newScidRetire_count_le_limit, newScidRetire_nextSeq_inc,
-  newScidRetire_new_seq_in_active, newScidRetire_lowest_removed)
-- Key: RFC 9000 §5.1.1 — after retire-if-needed, count ≤ limit
-- Precondition: count ≤ limit before call (fires at exactly-limit)
-- Approximation: retire_prior_to bookkeeping not modelled
+### T32: BBR2 pacing rate bounds
+- Phase: 2 (Informal spec written — run 165)
+- File (spec): formal-verification/specs/bbr2_pacing_rate_informal.md
+- Next: write FVSquad/BBR2PacingRate.lean (~60-80 lines, all omega)
+- 3 open questions: OQ-T32-1 (bandwidth overflow), OQ-T32-2 (zero min_rtt), OQ-T32-3 (MSS scaling)
 
-### T34: QPACK Static Table Lookup (discovered done in run 164)
-- Phase: 5 (Already Done — exact run unknown, was in memory as phase 1)
-- File: formal-verification/lean/FVSquad/QPACKStaticTable.lean
-- Theorems: 12, sorry: 0
-- TARGETS.md: shows phase 1 (needs update)
+### T26: CUBIC W_est Reno-friendly transition
+- Phase: 5 (Done — run 165, extension of Cubic.lean §6)
+- File: formal-verification/lean/FVSquad/Cubic.lean (§6, 10 new thms, total 36)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 166 ✅
+- Remaining gap: transition condition W_cubic < W_est not yet modelled
 
-### T69: QUIC Version Policy (run 163)
+### T27: CidMgmt retire_if_needed
+- Phase: 5 (Done — run 164, §10 of CidMgmt.lean, 7 new thms, total 27)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 166 ✅
+- Remaining gap: retire_prior_to bookkeeping not modelled
+
+### T69: QUIC Version Policy
 - Phase: 5 (Done — run 163)
-- File: formal-verification/lean/FVSquad/QuicVersionPolicy.lean
-- Theorems: 13, sorry: 0
+- File: formal-verification/lean/FVSquad/QuicVersionPolicy.lean (13 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 163 ✅
 
-### T68: BBR2 Probe-Up Inflight-Hi Slope (run 162)
+### T68: BBR2 Probe-Up Inflight-Hi Slope
 - Phase: 5 (Done — run 162)
-- File: formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean
-- Theorems: 17, sorry: 0
+- File: formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean (17 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 163 ✅
 
-### T67: BBR2 Inflight Lower Bound Guard (run 161/162)
-- Phase: 5 (Done — run 162)
-- File: formal-verification/lean/FVSquad/BBR2InflightLo.lean
-- Theorems: 15, sorry: 0
+### T67: BBR2 Inflight Lower Bound Guard
+- Phase: 5 (Done — run 161/162)
+- File: formal-verification/lean/FVSquad/BBR2InflightLo.lean (15 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 163 ✅
 
-### T66: ACK Delay Encode/Decode Codec (run 160)
+### T66: ACK Delay Encode/Decode Codec
 - Phase: 5 (Done — run 160)
-- File: formal-verification/lean/FVSquad/AckDelayCodec.lean
-- Theorems: 18, sorry: 0
+- File: formal-verification/lean/FVSquad/AckDelayCodec.lean (16 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 166 ✅
 
-### T65: SsThresh Write-Once Invariant (run 159)
+### T65: SsThresh Write-Once Invariant
 - Phase: 5 (Done — run 159)
-- File: formal-verification/lean/FVSquad/SsThresh.lean
-- Theorems: 17, sorry: 0
+- File: formal-verification/lean/FVSquad/SsThresh.lean (14 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 163 ✅
 
-### T58: QUIC Stream Credit Return (run 158)
+### T58: QUIC Stream Credit Return
 - Phase: 5 (Done — run 158)
-- File: formal-verification/lean/FVSquad/StreamCreditReturn.lean
-- Theorems: 20, sorry: 0
+- File: formal-verification/lean/FVSquad/StreamCreditReturn.lean (20 thms, 0 sorry)
+- CRITIQUE.md entry: run 166 ✅
+- CORRESPONDENCE.md entry: run 163 ✅
+
+### T34: QPACK Static Table Lookup
+- Phase: 5 (Already Done — exact run unknown)
+- File: formal-verification/lean/FVSquad/QPACKStaticTable.lean (12 thms, 0 sorry)
 
 ### Earlier targets (T1-T57, T59-T64): All phase 5 (Done)
 
 ## CI Status
 - lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
-- lake build: 64 jobs (run 164), 0 sorry
+- lake build: 61 files (run 165), 0 sorry
 - Cache: keyed on lake-manifest.json hash (correct)
-- Triggers: PR + push to main/master on formal-verification/lean/**
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -133,27 +144,7 @@ Total: 2660+ cases, all PASS
 
 ## Next Run Priorities
 1. T32 (BBR2 pacing rate): write FVSquad/BBR2PacingRate.lean — informal spec done run165, ~60-80 lines, all omega
-2. T26 (CUBIC W_est): informal spec still needed for TARGETS.md/specs/ — add specs/cubic_west_informal.md
-3. Route-B tests for T66 (AckDelayCodec) — verify encode/decode match lib.rs
-4. Route-B tests for T67 (BBR2InflightLo) — verify against network_model.rs
-5. CRITIQUE.md update: T67 + T68 + T69 + T27 + T26 additions
-6. TARGETS.md: update T34 to phase 5 (QPACKStaticTable already done); add T26 entry
-
-## T26: CUBIC W_est Reno-friendly transition (run 165)
-- Phase: 5 (Done — run 165, extension of Cubic.lean §6)
-- File: formal-verification/lean/FVSquad/Cubic.lean (extended with §6)
-- New theorems: 10 (wEstInc_nonneg, wEstInc_monotone_acked, wEstInc_antitone_cwnd,
-  wEstIncAimd_le_max, aimdRegion_cwnd_ge_west, aimdRegion_cwnd_ge_old,
-  wEstInc_monotone_alpha, wEstIncAimd_concrete_ack17, wEstIncMax_concrete,
-  wEstIncAimd_lt_max_concrete)
-- Cubic.lean now: 36 theorems, 0 sorry
-- Note: no separate informal spec file written (TARGETS.md needs updating)
-
-## T32: BBR2 pacing rate bounds (run 165)
-- Phase: 2 (Informal spec written — run 165)
-- File (spec): formal-verification/specs/bbr2_pacing_rate_informal.md
-- Key properties: STARTUP monotonicity (max pattern), first-ACK initialisation,
-  full-bw-reached sets to target_rate, early exit cases
-- 3 open questions: OQ-T32-1 (bandwidth overflow), OQ-T32-2 (zero min_rtt),
-  OQ-T32-3 (MSS scaling interaction)
-- Next: write FVSquad/BBR2PacingRate.lean (~60-80 lines, all omega)
+2. Route-B for T66 (AckDelayCodec): fixture comparison encode/decode vs Rust
+3. Composed theorem: StreamCreditReturn + StreamCountLimit → RFC 9000 §4.6 end-to-end
+4. Route-B for T27 (CidMgmt retire_if_needed)
+5. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
