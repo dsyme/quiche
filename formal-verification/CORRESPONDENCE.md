@@ -4,9 +4,11 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-14 11:14 UTC
-- **Commit**: `5a2e4dee` (run 159: SsThresh.lean added; BBR2Limits Route-B 15 tests PASS)
-- **Lean build**: `lake build` passed with Lean 4.29.0 — 57 files, **0 sorry** 🎉
+- **Date**: 2026-05-15 18:30 UTC
+- **Commit**: `4c019a8c` (run 163: added T67 BBR2InflightLo, T68 BBR2ProbeUpSlope, T69 QuicVersionPolicy)
+- **Lean build**: `lake build` passed with Lean 4.29.0 — 61 files, **0 sorry** 🎉
+  (run 163: added QuicVersionPolicy.lean T69, 13 theorems; CORRESPONDENCE.md T67/T68/T69 entries)
+  (run 162: added BBR2InflightLo.lean T67 15 thms; BBR2ProbeUpSlope.lean T68 17 thms)
   (run 159: added SsThresh.lean T65, 17 theorems; BBR2Limits Route-B 15-case harness)
   (run 158: added StreamCreditReturn.lean T58, 20 theorems; T60 Route-B 23-case harness)
   (run 151: ProbeRTTStateMachine T60; run 150: ProbeRTTPhase T62) — 52 files, **0 sorry** 🎉
@@ -3806,3 +3808,177 @@ versa), potentially leading to incorrect slow-start re-entry decisions.
   `ssthresh_in_slow_start`).
 - No Route-B tests: the function is a trivial enum-dispatch + field overwrite;
   decidable spot checks at lines 234–255 cover all the cases in the Rust tests.
+
+---
+
+## `FVSquad/BBR2InflightLo.lean` (T67) ↔ `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/BBR2InflightLo.lean`
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2/network_model.rs`
+  — `clear_inflight_lo` (~L750) and `cap_inflight_lo` (~L754)
+**Phase**: 5 — Done (15 theorems, 0 sorry, run 162)
+
+### Purpose
+
+Models and verifies the **sentinel-guarded lower-bound** invariant for
+`inflight_lo` in BBR2.  `usize::MAX` acts as a sentinel meaning "no lower
+bound active"; `cap_inflight_lo` is a no-op when the sentinel is set, and
+applies `min(cap, lo)` otherwise.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `SENTINEL` | `usize::MAX` | — | Exact | `2^64 - 1` modelled as `Nat` |
+| `InflightLo.clear` | `clear_inflight_lo` | `network_model.rs:~L750` | Exact | Sets `inflight_lo = usize::MAX` |
+| `InflightLo.cap` | `cap_inflight_lo` | `network_model.rs:~L754` | Exact | Guard + `min(cap, lo)` |
+| `InflightLo.init` | field initialisation | — | Abstraction | Convenience constructor |
+| `InflightLo.active` | `inflight_lo != usize::MAX` | — | Exact | Sentinel-absent predicate |
+| `SafeCap` | implicit (byte count ≪ usize::MAX) | — | Abstraction | Proof scope guard |
+
+### Divergences
+
+1. **`usize` as `Nat`**: `inflight_lo` is `usize` in Rust; modelled as
+   unbounded `Nat`. Overflow is not possible since `inflight_lo` is a byte
+   count far below `usize::MAX`.
+2. **`SafeCap` guard**: some theorems require `v < SENTINEL`. This holds for
+   all realistic byte counts and is not an operational restriction — it just
+   avoids sentinel-related corner cases that don't arise in practice.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `cap_after_clear_noop` | cap has no effect when sentinel is active | High — guard correctness |
+| `cap_decreasing` | active cap reduces lo monotonically | Medium — no accidental increase |
+| `cap_never_raises` | cap never increases lo | High — bound remains tight |
+| `cap_idempotent` | applying same cap twice = once | Medium — structural safety |
+| `double_cap_eq_min` | two caps = min of both caps | Medium — order independence |
+| `cap_commutative` | cap(a, cap(b, s)) = cap(b, cap(a, s)) | Medium — commutativity |
+| `clear_makes_inactive` | clear sets sentinel, so not active | High — state reset |
+| `init_makes_active` | init with SafeCap value is active | High — activation correctness |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 162).
+- No Route-B tests yet: the two-function guard pattern is fully captured
+  by the `decide`-checked spot tests in the Lean file (e.g. `cap_after_clear_noop`,
+  `clear_sets_sentinel`). Route-B tests planned for a future run.
+
+---
+
+## `FVSquad/BBR2ProbeUpSlope.lean` (T68) ↔ `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/BBR2ProbeUpSlope.lean`
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs`
+  — `raise_inflight_high_slope` (~L582–L600) and `probe_inflight_high_upward`
+    accumulator (~L612–L631)
+**Phase**: 5 — Done (17 theorems, 0 sorry, run 162)
+
+### Purpose
+
+Models and verifies the **exponential back-off** of `probe_up_bytes` during
+BBR2 PROBE_UP and the **accumulator step** that advances `inflight_hi`.
+
+`raise_inflight_high_slope` halves the per-round credit with each round
+(growth = `1 << probe_up_rounds`), caps at 2^30, and floors at DEFAULT_MSS
+(1300 bytes).  The accumulator step advances `inflight_hi` by one DEFAULT_MSS
+for each full `probe_up_bytes` accumulated, keeping the remainder.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `MAX_ROUNDS` | `30` literal | `probe_bw.rs:~L584` | Exact | Cap on `probe_up_rounds` |
+| `DEFAULT_MSS` | `DEFAULT_MSS = 1300` | `probe_bw.rs` | Exact | Floor on `probe_up_bytes` |
+| `growth r` | `1 << probe_up_rounds` | `probe_bw.rs:~L582` | Exact | `2^r` |
+| `probeUpBytes cwnd r` | `max(cwnd / growth, DEFAULT_MSS)` | `probe_bw.rs:~L583-L584` | Exact | Floor + divide |
+| `nextRounds r` | `min(probe_up_rounds + 1, 30)` | `probe_bw.rs:~L585` | Exact | Capped increment |
+| `accumulatorStep s bytes_acked` | `probe_inflight_high_upward` body | `probe_bw.rs:~L612-L631` | Abstraction | Guard `if let Some(probe_up_bytes)` elided |
+| `ProbeUpState` | fields of `BbrState` | `probe_bw.rs` | Abstraction | Only three fields modelled |
+
+### Divergences
+
+1. **`usize` as `Nat`**: All byte counts modelled as unbounded `Nat`.
+2. **Guard elided**: The Rust `if let Some(probe_up_bytes) = ...` guard is
+   absent in the Lean model; we prove properties of the unconditional update.
+3. **Floating-point fields**: `pacing_gain` and other `f64` fields are out of
+   scope; only integer-arithmetic fields are modelled.
+4. **`2^probe_up_rounds` not `1 << probe_up_rounds`**: semantically identical
+   for Nat; Lean uses power-of-two function.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `rounds_bounded` | `nextRounds r ≤ MAX_ROUNDS` | High — prevents exponential overflow |
+| `rounds_saturates` | once at MAX_ROUNDS, stays there | High — saturation correctness |
+| `bytes_floor` | `probeUpBytes ≥ DEFAULT_MSS` | High — prevents divide-by-zero-like floor |
+| `bytes_le_cwnd_when_large` | when cwnd large, bytes ≤ cwnd | Medium — no over-credit |
+| `growth_max` | growth capped at `2^MAX_ROUNDS` | High — bounds exponential growth |
+| `acked_after_mod` | remainder = acked mod probe_up_bytes | High — accumulator arithmetic |
+| `acked_after_lt_bytes` | remainder < probe_up_bytes | High — invariant preserved |
+| `inflight_hi_stable_below_threshold` | no advance when insufficient acked | High — no spurious increase |
+| `inflight_hi_increases_at_threshold` | advance by DEFAULT_MSS when enough | High — forward progress |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 162).
+- No Route-B tests yet: Route-B tests for probe_bw accumulator planned for
+  a future run (see memory priorities).
+
+---
+
+## `FVSquad/QuicVersionPolicy.lean` (T69) ↔ `quiche/src/lib.rs`
+
+**Lean file**: `formal-verification/lean/FVSquad/QuicVersionPolicy.lean`
+**Rust source**: `quiche/src/lib.rs`
+  — `is_reserved_version` (~L615–L618), `version_is_supported` (~L1887–L1889),
+    `RESERVED_VERSION_MASK = 0xfafafafa` (~L479),
+    `PROTOCOL_VERSION_V1 = 0x0000_0001` (~L434)
+**Phase**: 5 — Done (13 theorems, 0 sorry, run 163)
+
+### Purpose
+
+Models and verifies the **QUIC version policy** (RFC 9000 §15): greasing
+("reserved") versions are identified by a bitmask check, and the currently
+supported version is V1 only.  The central safety property is **disjointness**:
+no version can simultaneously pass both predicates.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|-----------|-----------|-------------|-------|-------|
+| `RESERVED_VERSION_MASK` | `RESERVED_VERSION_MASK` | `lib.rs:~L479` | Exact | `0xfafafafa` as `UInt32` |
+| `PROTOCOL_VERSION_V1` | `PROTOCOL_VERSION_V1` | `lib.rs:~L434` | Exact | `0x00000001` |
+| `isReservedVersion` | `is_reserved_version` | `lib.rs:~L615-618` | Exact | Bitwise AND submask check |
+| `isSupportedVersion` | `version_is_supported` | `lib.rs:~L1887-1889` | Exact | Equality with V1 only |
+
+### Divergences
+
+1. **`u32` as `UInt32`**: Lean `UInt32` wraps at `2^32`, matching Rust `u32`.
+   The bitwise AND operation is semantically identical.
+2. **Version negotiation not modelled**: Multi-version negotiation packets
+   and version list filtering are out of scope.
+3. **Future versions**: If additional versions are added to `version_is_supported`,
+   the disjointness proof must be updated to cover them.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---------|----------|----------------------|
+| `v1_is_supported` | V1 passes `isSupportedVersion` | Medium — basic check |
+| `v1_not_reserved` | V1 does NOT pass `isReservedVersion` | High — greasing safety |
+| `reserved_disjoint_supported` | No version can be both reserved and supported | High — central safety invariant |
+| `reserved_and_supported_false` | Bool form of disjointness | High — guard correctness |
+| `grease_0a_reserved` / `grease_2a_reserved` / `grease_fa_reserved` | Canonical greasing values are reserved | Medium — RFC compliance |
+| `v1_passes_version_guard` | V1 does not trigger `UnknownVersion` error | High — connection setup |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 163).
+- 7 `#eval` spot checks verify the concrete Boolean values for V1, zero,
+  and canonical greasing values against the expected RFC 9000 §15 outcomes.
+- No Route-B tests: the predicates are simple boolean functions on `u32`;
+  the decidable spot checks and the `decide`-proved concrete theorems cover
+  all representative cases.
