@@ -4,25 +4,25 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-12 11:03 UTC
-- **Commit**: `449ab077`
-- **Run**: run 153 — Task 4 (T63 StreamCountLimit, 16 thms, 0 sorry) + Task 7 (Critique update).
-  Full suite: **55 Lean files, ~1272 theorems, 0 sorry**;
-  19 Route-B test targets (1595+ PASS).
+- **Date**: 2026-05-16 17:40 UTC
+- **Commit**: `022e0f46`
+- **Run**: run 166 — Task 7 (Critique update) + Task 6 (Correspondence update).
+  Full suite: **61 Lean files, ~1405 theorems, 0 sorry**;
+  22 Route-B test targets (2660+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **55 Lean files with
-~1272 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**19 Route-B correspondence test targets (1595+ cases PASS)**. Run 150 adds
-`ProbeRTTPhase.lean` (T62, 26 thms) formalising BBR2 ProbeRTT phase gain
-constants. Run 151 adds `ProbeRTTStateMachine.lean` (T60, 27 thms) verifying
-the BBR2 ProbeRTT draining/waiting state machine transitions. Run 153 (this
-run) adds `StreamCountLimit.lean` (T63, 16 thms) formalising RFC 9000 §4.6
-stream-count limit monotonicity and exposes a latent underflow risk in bare
-u64 subtraction at `peer_streams_left_*` call sites.
+The formal verification suite for `quiche` now covers **61 Lean files with
+~1405 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+**22 Route-B correspondence test targets (2660+ cases PASS)**. Runs 154–165
+added T58 (`StreamCreditReturn`, 20 thms), T65 (`SsThresh`, 14 thms),
+T66 (`AckDelayCodec`, 18 thms), T67 (`BBR2InflightLo`, 15 thms), T68
+(`BBR2ProbeUpSlope`, 17 thms), T69 (`QuicVersionPolicy`, 13 thms), T27
+(`CidMgmt` §retire_if_needed, 7 new thms, total 27), and T26 (CUBIC W_est
+Reno-friendly extension, 10 new thms, Cubic.lean total 36). This run (166)
+updates the Critique and Correspondence documents to cover all these additions.
 
 The suite spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
@@ -31,8 +31,6 @@ HTTP/3 codec, QPACK, stream/frame state machines, transport error codes,
 idle-timeout negotiation, PMTUD binary search, and RFC compliance.
 Every theorem has been mechanically verified by `lake build`.
 
-
-## Proved Theorems
 
 ## Proved Theorems
 
@@ -1034,16 +1032,20 @@ that many times, a potential DoS vector. Route-B tests: 25/25 PASS.
 
 ### Moderate priority
 
-8. **CUBIC: Reno-friendly transition** — W_cubic vs W_est comparison
-   (RFC 8312bis §5.8) is unmodelled. This determines CUBIC's fairness to
-   coexisting Reno flows.
+8. **CUBIC: Reno-friendly transition** — ~~W_cubic vs W_est comparison
+   unmodelled~~ **DONE run 165** — `FVSquad/Cubic.lean` §6 adds 10 W_est
+   theorems (T26). Remaining gap: the transition condition `W_cubic < W_est`
+   that switches to the Reno-friendly region is not yet modelled.
 
-9. **CidMgmt: retire_if_needed** — The auto-retire path for excess SCIDs
-   is not modelled. Prove it maintains `activeCids ≤ active_connection_id_limit`
-   (RFC 9000 §5.1.1).
+9. **CidMgmt: retire_if_needed** — ~~Not modelled~~ **DONE run 164** —
+   `FVSquad/CidMgmt.lean` §10 adds 7 retire_if_needed theorems (T27).
+   Remaining gap: `retire_prior_to` bookkeeping not modelled.
 
-10. **NewReno: AIMD composition** — Repeated ACK+loss cycles are not proved
-    to converge. A multi-event induction would confirm AIMD steady-state.
+10. **T32 (BBR2 pacing rate)** — Informal spec done (run 165,
+    `specs/bbr2_pacing_rate_informal.md`). `FVSquad/BBR2PacingRate.lean` not
+    yet written. Key properties: STARTUP monotonicity (max pattern),
+    first-ACK initialisation, full-bw-reached sets to target_rate, early exit
+    cases. ~60–80 Lean lines, all omega. **High priority next run.**
 
 11. **QPACK decode_int prefix-mask (T40)** — HPACK/QPACK integer decoding
     (RFC 7541 §5.1): mask formula `2^n - 1`, single-byte vs multi-byte
@@ -1930,27 +1932,318 @@ functions against the Lean model outputs.
 
 ---
 
-### Overall Status (run 153)
+### `FVSquad/StreamCreditReturn.lean` — T58: QUIC Stream Credit Return — 20 theorems (run 158)
 
-- **55 Lean files, ~1272 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
-- Route-B: 19 targets, 1595+ cases PASS
+**Source**: `quiche/src/stream/mod.rs` — `local_max_streams_bidi_next`, `local_max_streams_bidi`,
+`collect` (credit-return), and commit (MAX_STREAMS send) paths. RFC 9000 §4.6.
+
+This file formalises the **two-phase stream credit-return** mechanism: when a
+peer-created stream completes (`collect`), the local pending limit is
+incremented; when a MAX_STREAMS frame is sent (`commit`), the pending limit
+is promoted to the advertised limit. The invariant `pending ≥ advertised`
+is preserved through all operations, preventing RFC 9000 §4.6 violations.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `returnBidi_increments_next` | mid | high | collect increments pending limit |
+| `returnBidi_preserves_uni` | low | low | bidi collect does not affect uni fields |
+| `returnBidi_preserves_current` | mid | high | collect never lowers advertised limit |
+| `returnBidi_next_increases` | mid | high | pending never decreases after collect |
+| `commitBidi_equalises` | **high** | **high** | commit sets advertised = pending |
+| `commitBidi_idempotent` | mid | medium | double commit is identity |
+| `commitBidi_preserves_uni` | low | low | bidi commit does not affect uni |
+| `commitBidi_monotone` | **high** | **high** | commit only raises advertised limit |
+| `returnBidi_preserves_invariant` | **high** | **high** | collect preserves `pending ≥ advertised` |
+| `returnUni_preserves_invariant` | **high** | **high** | symmetric for uni |
+| `commitBidi_preserves_invariant` | **high** | **high** | commit preserves invariant |
+| `commitUni_preserves_invariant` | **high** | **high** | symmetric for uni |
+| `returnBidiN_adds_n` | mid | medium | N collects adds exactly N to pending |
+| `returnN_then_commit` | **high** | **high** | N collects then commit: advertised += N |
+| `returnThenCommit_increases_current` | **high** | **high** | collect+commit always raises advertised |
+| `returnBidi_returnUni_commute` | mid | medium | bidi and uni collect commute |
+| `commit_then_collect_grows_next` | mid | medium | post-commit collect still increments pending |
+| `returnUni_increments_next` | mid | high | uni collect symmetric to bidi |
+| `returnUni_preserves_bidi` | low | low | uni collect does not affect bidi |
+| `commitUni_equalises` | **high** | **high** | uni commit sets advertised = pending |
+
+**Positive findings**: `returnN_then_commit` and `returnThenCommit_increases_current`
+together give end-to-end correctness: collecting N streams and then committing
+monotonically raises the MAX_STREAMS window by exactly N, ensuring liveness.
+**Gap**: the invariant `localOpened ≤ peerMax` is separately maintained in
+`StreamCountLimit.lean` (T63); a composed theorem linking credit-return to
+count-limit would close the full RFC 9000 §4.6 proof chain.
+No Route-B tests yet.
+
+---
+
+### `FVSquad/SsThresh.lean` — T65: SsThresh Write-Once Invariant — 14 theorems (run 159)
+
+**Source**: `quiche/src/recovery/congestion/mod.rs` — `SsThresh` struct (`L39–L48`),
+`SsThresh::update` (`L67–L81`), `impl Default for SsThresh` (`L50–L57`).
+
+This file verifies the **write-once invariant** of `SsThresh::startup_exit`:
+once set (to `Css` or `Loss`), the exit reason never changes. Alongside this,
+`ssthresh` is always updated on every call, but `startupExit` is frozen after
+first write. Vital for congestion control correctness: a race or double-trigger
+that altered the exit reason would silently mis-classify the slow-start exit.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `default_ssthresh` | low | low | Initial ssthresh = usize::MAX |
+| `default_exit_none` | low | low | Initial exit = None |
+| `update_ssthresh` | mid | medium | update always sets ssthresh |
+| `update_sets_exit_on_first` | **high** | **high** | First update sets exit from None |
+| `exit_preserved_when_set` | **high** | **high** | Once set, exit never changes — write-once |
+| `exit_mono` | **high** | **high** | exit transitions only from None to Some |
+| `exit_set_after_any_update` | **high** | **high** | After one update, exit is always Some |
+| `reason_css_from_first_call` | **high** | **high** | Css reason preserved across subsequent updates |
+| `reason_loss_from_first_call` | **high** | **high** | Loss reason preserved across subsequent updates |
+| `exit_reason_preserved` | **high** | **high** | Any reason preserved in list of updates |
+| `double_update_ssthresh` | mid | medium | second update overwrites ssthresh |
+| `double_update_exit_unchanged` | **high** | **high** | second update cannot change exit |
+| `updateList_snoc` | mid | medium | update list is sequential application |
+| `n_updates_ssthresh_is_last` | mid | medium | after N updates, ssthresh = Nth value |
+
+**Positive finding**: `exit_preserved_when_set` is a strong, directly
+safety-relevant property: any refactoring of `SsThresh::update` that
+mistakenly allowed a second write to `startup_exit` would break this theorem at CI.
+**Gap**: the relationship between `SsThresh` and actual cwnd/ssthresh used in
+congestion decision logic (`NewReno::congestion_event`) is not yet composed.
+
+---
+
+### `FVSquad/AckDelayCodec.lean` — T66: ACK Delay Encode/Decode Codec — 16 theorems + examples (run 160)
+
+**Source**: `quiche/src/lib.rs` (~L4487–4497 encoder, ~L8173–8182 decoder);
+`quiche/src/transport_params.rs` (`ack_delay_exponent` 0–20 range).
+RFC 9000 §13.2.5.
+
+Models the integer encode (`delay / 2^exp`) and decode (`encoded * 2^exp`)
+and proves the codec is a lossy round-trip: exact for multiples of `2^exp`,
+floor otherwise, with rounding error < 1 LSB. Monotonicity in both directions
+and anti-tonicity of encode in the exponent are also verified.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `roundtrip_exact` | **high** | **high** | Exact for aligned values — core codec correctness |
+| `roundtrip_le` | **high** | **high** | Decoded ≤ original — no phantom delay inflation |
+| `roundtrip_gap_lt` | **high** | **high** | Rounding error < 1 LSB — precision bound |
+| `encode_mono` | **high** | **high** | Monotone encoder — no ordering inversion |
+| `decode_mono` | **high** | **high** | Monotone decoder |
+| `encode_antitone_exp` | mid | medium | Larger exponent → coarser resolution |
+| `encode_exp_zero` / `decode_exp_zero` | low | low | Identity at exp=0 |
+| `roundtrip_exp_zero` | mid | medium | Perfect round-trip at exp=0 |
+| `encode_zero` / `decode_zero` | low | low | Zero is fixed point |
+| `encode_bound` | **high** | **high** | Wire size guarantee: d ≤ bound * 2^exp → enc ≤ bound |
+| `roundtrip_idempotent` | **high** | **high** | decode-then-encode is identity |
+| `default_exponent_valid` / `max_exponent_valid` | low | low | RFC compliance spot checks |
+
+**Assessment**: High-value for a deceptively simple codec — the `roundtrip_le`
+and `roundtrip_gap_lt` together prove the precision contract that any RFC 9000
+implementation must maintain: decoded ACK delay is never larger than original
+and is within one exponent-unit of it. `encode_bound` provides the wire-size
+guarantee that prevents varint overflow for realistically-sized delays.
+**Gap**: overflow on decode (u64 `checked_mul`) is not modelled — Lean uses
+unbounded Nat. For `exp ≤ 20` and realistic delays this is safe, but a dedicated
+overflow-bound lemma would close this gap.
+
+---
+
+### `FVSquad/BBR2InflightLo.lean` — T67: BBR2 Inflight Lower Bound Guard — 15 theorems (run 161/162)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/network_model.rs` — `InflightLo`
+struct, `cap` and `clear` methods. BBR2 RFC 9002 §6.3.
+
+Verifies the **inflight_lo guard** invariant: `cap` can only lower the
+stored value (never raise it), `clear` resets to the inactive sentinel,
+and consecutive caps compute the running minimum correctly.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `clear_sets_sentinel` | low | low | clear → inactive sentinel |
+| `cap_after_clear_noop` | mid | medium | cap on inactive is identity |
+| `cap_decreasing` | **high** | **high** | active cap: result ≤ old value |
+| `cap_le_cap_arg` | **high** | **high** | active cap: result ≤ argument |
+| `cap_le_old` | **high** | **high** | active cap: result ≤ stored value |
+| `cap_never_raises` | **high** | **high** | unconditional: result ≤ stored value |
+| `cap_idempotent` | **high** | **high** | double cap at same arg is identity |
+| `double_cap_eq_min` | **high** | **high** | sequential caps = running minimum |
+| `cap_commutative` | **high** | **high** | order of caps doesn't matter |
+| `init_then_cap_le_init` | **high** | **high** | cap after init never exceeds init value |
+| `init_then_cap_le_cap` | **high** | **high** | cap after init never exceeds cap argument |
+| `cap_at_self_noop` | mid | medium | cap at current value is identity |
+| `cap_zero_active` | **high** | **high** | cap to 0 → result is 0 |
+| `clear_makes_inactive` | low | low | clear → `active = false` |
+| `init_makes_active` | mid | medium | init (non-sentinel) → `active = true` |
+
+**Positive finding**: `double_cap_eq_min` and `cap_commutative` together
+formalise the "running minimum" semantics — any refactoring that accidentally
+raised the lower bound (e.g., using `max` instead of `min`) would break these
+theorems immediately.
+**Gap**: how `inflight_lo` interacts with the larger BBR2 cwnd update loop
+is not yet composed.
+
+---
+
+### `FVSquad/BBR2ProbeUpSlope.lean` — T68: BBR2 Probe-Up Inflight-Hi Slope — 17 theorems (run 162)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs` — `probe_up_rounds`,
+`probe_up_bytes`, `probe_up_inflight_hi_slowly` method. BBR2 IETF draft §4.3.3.
+
+Verifies the **probe-up accumulator** semantics: `probe_up_rounds` saturates at
+`MAX_ROUNDS = 8`, `probe_up_bytes` grows exponentially (by `cwnd / 2^rounds`)
+but never below `DEFAULT_MSS`, and the inflight-hi advance fires exactly at
+the accumulator threshold — no spurious advances, guaranteed forward progress.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `rounds_bounded` | **high** | **high** | probe_up_rounds ≤ MAX_ROUNDS — prevents exponential overflow |
+| `rounds_saturates` | **high** | **high** | saturates at MAX_ROUNDS |
+| `rounds_strictly_increases` | **high** | **high** | strictly increases below MAX_ROUNDS |
+| `bytes_floor` | **high** | **high** | probeUpBytes ≥ DEFAULT_MSS — no divide-by-zero-like floor |
+| `bytes_le_cwnd_when_large` | **high** | **high** | bytes ≤ cwnd when cwnd large |
+| `growth_positive` | mid | medium | growth ≥ 1 |
+| `growth_max` | **high** | **high** | growth ≤ 2^MAX_ROUNDS — bounds exponential |
+| `bytes_le_cwnd_div_growth` | mid | medium | bytes = cwnd / growth |
+| `slope_zero_bytes_eq_cwnd` | mid | medium | at rounds=0, bytes = cwnd |
+| `slope_zero_rounds_one` | low | low | nextRounds 0 = 1 |
+| `slope_cwnd_zero_floor` | mid | medium | cwnd=0 → bytes = DEFAULT_MSS |
+| `acked_after_mod` | **high** | **high** | accumulator = acked mod probe_up_bytes |
+| `acked_after_lt_bytes` | **high** | **high** | accumulator < probe_up_bytes — invariant preserved |
+| `inflight_hi_after_ge` | mid | medium | inflight_hi never decreases after update |
+| `inflight_hi_stable_below_threshold` | **high** | **high** | no advance when acked < threshold |
+| `inflight_hi_increases_at_threshold` | **high** | **high** | advances by DEFAULT_MSS at threshold |
+| `acked_after_remainder` | **high** | **high** | combined: accumulator is correct modulo |
+
+**Positive finding**: `rounds_bounded` directly prevents a latent
+overflow: without the saturation cap, `probe_up_bytes = cwnd / 2^rounds`
+would underflow to 0 for large `rounds`, causing a division-by-zero-like
+silent failure. The theorem makes the saturation requirement explicit and CI-enforced.
+**Gap**: interaction with `inflight_hi` clamping to the estimated BDP is not
+modelled; the compose theorem `probe_up_terminates_in_finite_rounds` remains open.
+
+---
+
+### `FVSquad/QuicVersionPolicy.lean` — T69: QUIC Version Policy — 13 theorems (run 163)
+
+**Source**: `quiche/src/lib.rs` — `is_reserved_version` (`~L615–618`),
+`version_is_supported` (`~L1887–1889`), `RESERVED_VERSION_MASK = 0xfafafafa`,
+`PROTOCOL_VERSION_V1 = 0x00000001`. RFC 9000 §15.
+
+Verifies that **no QUIC version can simultaneously be reserved ("grease")
+and supported**: the disjointness theorem `reserved_disjoint_supported`
+is the central safety invariant. Seven concrete spot checks confirm V1
+behaviour and canonical greasing values.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `v1_is_supported` | low | medium | V1 passes isSupportedVersion |
+| `v1_not_reserved` | **high** | **high** | V1 does NOT pass isReservedVersion |
+| `reserved_disjoint_supported` | **high** | **high** | No version can be both — safety invariant |
+| `reserved_and_supported_false` | **high** | **high** | Bool form of disjointness |
+| `grease_0a_reserved` / `grease_2a_reserved` / `grease_fa_reserved` | mid | medium | Canonical greasing values are reserved |
+| `v1_passes_version_guard` | **high** | **high** | V1 does not trigger UnknownVersion error |
+| concrete spot-check theorems | low | medium | V1 / zero / greasing via decide |
+
+**Positive finding**: `reserved_disjoint_supported` directly guards against the
+class of bug where a newly-added supported version accidentally shares a
+bitmask pattern with the greasing mask — which would break QUIC version
+negotiation for any peer using that greasing value.
+**Gap**: multi-version negotiation (version list filtering) is not modelled.
+
+---
+
+### `FVSquad/CidMgmt.lean` §10 — T27: CID `retire_if_needed` — 7 new theorems (run 164; Cubic.lean total: 27)
+
+**Source**: `quiche/src/cid.rs` — `ConnectionIdentifiers::new_scid` retire-if-needed
+path. RFC 9000 §5.1.1.
+
+Extends the existing CidMgmt model with `newScidRetire`: when the active CID
+count reaches the limit, the lowest-sequence CID is retired before appending
+the new one. Key RFC property: post-condition count ≤ limit.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `lowestSeq_mem` | mid | medium | minimum is in the list |
+| `lowestSeq_le_all` | **high** | **high** | minimum ≤ every member |
+| `filter_neq_length_lt` | mid | medium | filtering out one member shortens list |
+| `newScidRetire_count_le_limit` | **high** | **high** | RFC 9000 §5.1.1 — count ≤ limit after retire |
+| `newScidRetire_nextSeq_inc` | **high** | **high** | nextSeq increments |
+| `newScidRetire_new_seq_in_active` | **high** | **high** | new sequence is in post-state active list |
+| `newScidRetire_lowest_removed` | **high** | **high** | retired (lowest) sequence is absent |
+
+**Positive finding**: `newScidRetire_count_le_limit` makes RFC 9000 §5.1.1
+explicit and machine-checked: after any retire-if-needed step, the active CID
+count is guaranteed to be at most the limit. Any refactoring that omitted the
+retire step when at-capacity would fail this theorem at CI.
+**Gap**: `retire_prior_to` bookkeeping and CID byte content not modelled.
+
+---
+
+### `FVSquad/Cubic.lean` §6 — T26: CUBIC W_est Reno-friendly Extension — 10 new theorems (run 165; Cubic.lean total: 36)
+
+**Source**: `quiche/src/recovery/congestion/cubic.rs` — `w_est` Reno-friendly
+AIMD update path (~L250–280), `ALPHA_AIMD`, `BETA_CUBIC`. RFC 8312bis §5.8.
+
+Extends the earlier Cubic model with the W_est AIMD increment functions
+(`wEstInc`, `wEstIncAimd`, `wEstIncMax`) and proves that: the increment is
+non-negative and monotone in acked and alpha, anti-monotone in cwnd; the AIMD
+increment is always ≤ the maximum increment; in the AIMD region, cwnd grows
+at least as much as W_est; and concrete examples match the expected integer
+arithmetic (using `native_decide`).
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `wEstInc_nonneg` | low | medium | increment ≥ 0 |
+| `wEstInc_monotone_acked` | **high** | **high** | more acked → more W_est growth |
+| `wEstInc_antitone_cwnd` | **high** | **high** | larger cwnd → smaller increment (AIMD property) |
+| `wEstIncAimd_le_max` | **high** | **high** | alpha < 1 → AIMD increment < full increment |
+| `aimdRegion_cwnd_ge_west` | **high** | **high** | AIMD region: cwnd grows at least W_est |
+| `aimdRegion_cwnd_ge_old` | **high** | **high** | no window regression in AIMD region |
+| `wEstInc_monotone_alpha` | **high** | **high** | larger alpha → more aggressive growth |
+| `wEstIncAimd_concrete_ack17` | low | medium | concrete example: ack=17, cwnd=1 → 9 |
+| `wEstIncMax_concrete` | low | medium | concrete example: ack=17, cwnd=1 → 17 |
+| `wEstIncAimd_lt_max_concrete` | low | medium | AIMD < max on concrete example |
+
+**Positive finding**: `wEstIncAimd_le_max` formalises the key CUBIC RFC
+invariant that the Reno-friendly AIMD increment is strictly bounded below the
+unconstrained maximum — any implementation that accidentally used `alpha = 1`
+in the Reno-friendly region would violate this theorem.
+**Gap**: the transition condition `W_cubic < W_est` that switches to the
+Reno-friendly region is not yet modelled; a composed theorem covering both
+branches of the CUBIC update would complete T26.
+
+---
+
+### Overall Status (run 166)
+
+- **61 Lean files, ~1405 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 22 targets, 2660+ cases PASS
 - Coverage spans: QUIC transport (connection negotiation, idle-timeout RFC 9000
   §10.1.1, PMTUD binary search, STREAM frame type byte, transport error codes,
-  **stream-count limit RFC 9000 §4.6**),
-  congestion control (NewReno with multi-cycle AIMD convergence, Cubic, BBR2
-  with startup/probing model, pacing, HyStart++, WindowedFilter max-filter,
-  delivery-rate estimation, app-limited guard, BBR2 MaxBandwidthFilter +
-  RoundTripCounter, BBR2 ProbeBW phase gains, loss-detection threshold, PRR
-  rate-control formula, **BBR2 ProbeRTT phase params + state machine**),
+  stream-count limit RFC 9000 §4.6, **stream credit-return RFC 9000 §4.6**,
+  **QUIC version greasing RFC 9000 §15**,
+  **CID retire-if-needed RFC 9000 §5.1.1**, **ACK delay codec RFC 9000 §13.2.5**),
+  congestion control (NewReno with multi-cycle AIMD convergence, Cubic with
+  **W_est Reno-friendly extension**, BBR2 with startup/probing model, pacing,
+  HyStart++, WindowedFilter max-filter, delivery-rate estimation, app-limited
+  guard, BBR2 MaxBandwidthFilter + RoundTripCounter, BBR2 ProbeBW phase gains,
+  loss-detection threshold, PRR rate-control formula, BBR2 ProbeRTT phase params
+  + state machine, **BBR2 inflight_lo guard**, **BBR2 probe-up slope**,
+  **SsThresh write-once invariant**),
   HTTP/3 codec, QPACK (static table + integer codec), stream/frame state
   machines, RFC compliance, PMTUD binary-search bounds.
-- Run 150: ProbeRTTPhase.lean (26 thms, gain sub-unity + inflight-target bounds)
-- Run 151: ProbeRTTStateMachine.lean (27 thms, draining/waiting/exit transitions)
-- Run 152: Critique extended to cover both new BBR2 ProbeRTT files; T63 informal spec
-- Run 153 (this run): StreamCountLimit.lean (T63, 16 thms, RFC 9000 §4.6 monotonicity)
+- Run 158: StreamCreditReturn.lean (T58, 20 thms), Route-B for T60 (23/23)
+- Run 159: SsThresh.lean (T65, 14 thms), Route-B for BBR2Limits (1000+ cases)
+- Run 160: AckDelayCodec.lean (T66, 16 thms)
+- Run 161/162: BBR2InflightLo.lean (T67, 15 thms), BBR2ProbeUpSlope.lean (T68, 17 thms)
+- Run 163: QuicVersionPolicy.lean (T69, 13 thms)
+- Run 164: CidMgmt.lean §10 extension (T27, 7 new thms, total 27)
+- Run 165: Cubic.lean §6 W_est extension (T26, 10 new thms, total 36); T32 informal spec
+- Run 166 (this run): CRITIQUE.md + CORRESPONDENCE.md updated to cover runs 154–165
 - **Next priorities**:
-  1. T58 (Stream Limit Enforcement): informal spec → Lean file
-  2. Route-B for StreamCountLimit (T63), ProbeRTTPhase, ProbeRTTStateMachine
-  3. CORRESPONDENCE.md entries for T60, T62, T63
-  4. Composed theorem: draining eventually reaches waiting given sustained sub-target inflight
-  5. Inductive termination theorem for Pmtud binary search
+  1. T32 (BBR2 pacing rate): write FVSquad/BBR2PacingRate.lean (~60–80 lines, all omega)
+  2. Route-B for T66 (AckDelayCodec): encode/decode vs Rust fixture comparison
+  3. Route-B for T65 (SsThresh): write-once check against recovery/congestion
+  4. Composed theorem: StreamCreditReturn + StreamCountLimit → full RFC 9000 §4.6 chain
+  5. Route-B for T27 (CidMgmt retire_if_needed): count check vs cid.rs
