@@ -2158,6 +2158,110 @@ negotiation for any peer using that greasing value.
 **Source**: `quiche/src/cid.rs` — `ConnectionIdentifiers::new_scid` retire-if-needed
 path. RFC 9000 §5.1.1.
 
+
+### `FVSquad/QuicVersionPolicy.lean` — T69: QUIC Version Policy — 13 theorems (run 163)
+
+**Source**: `quiche/src/lib.rs` — `is_reserved_version` (`~L615–618`),
+`version_is_supported` (`~L1887–1889`), `RESERVED_VERSION_MASK = 0xfafafafa`,
+`PROTOCOL_VERSION_V1 = 0x00000001`. RFC 9000 §15.
+
+Verifies that **no QUIC version can simultaneously be reserved ("grease")
+and supported**: the disjointness theorem `reserved_disjoint_supported`
+is the central safety invariant. Seven concrete spot checks confirm V1
+behaviour and canonical greasing values.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `v1_is_supported` | low | medium | V1 passes isSupportedVersion |
+| `v1_not_reserved` | **high** | **high** | V1 does NOT pass isReservedVersion |
+| `reserved_disjoint_supported` | **high** | **high** | No version can be both — safety invariant |
+| `reserved_and_supported_false` | **high** | **high** | Bool form of disjointness |
+| `grease_0a_reserved` / `grease_2a_reserved` / `grease_fa_reserved` | mid | medium | Canonical greasing values are reserved |
+| `v1_passes_version_guard` | **high** | **high** | V1 does not trigger UnknownVersion error |
+| concrete spot-check theorems | low | medium | V1 / zero / greasing via decide |
+
+**Positive finding**: `reserved_disjoint_supported` directly guards against the
+class of bug where a newly-added supported version accidentally shares a
+bitmask pattern with the greasing mask — which would break QUIC version
+negotiation for any peer using that greasing value.
+**Gap**: multi-version negotiation (version list filtering) is not modelled.
+
+---
+
+### `FVSquad/CidMgmt.lean` §10 — T27: CID `retire_if_needed` — 7 new theorems (run 164; Cubic.lean total: 27)
+
+**Source**: `quiche/src/cid.rs` — `ConnectionIdentifiers::new_scid` retire-if-needed
+path. RFC 9000 §5.1.1.
+
+
+Verifies the **probe-up accumulator** semantics: `probe_up_rounds` saturates at
+`MAX_ROUNDS = 8`, `probe_up_bytes` grows exponentially (by `cwnd / 2^rounds`)
+but never below `DEFAULT_MSS`, and the inflight-hi advance fires exactly at
+the accumulator threshold — no spurious advances, guaranteed forward progress.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `rounds_bounded` | **high** | **high** | probe_up_rounds ≤ MAX_ROUNDS — prevents exponential overflow |
+| `rounds_saturates` | **high** | **high** | saturates at MAX_ROUNDS |
+| `rounds_strictly_increases` | **high** | **high** | strictly increases below MAX_ROUNDS |
+| `bytes_floor` | **high** | **high** | probeUpBytes ≥ DEFAULT_MSS — no divide-by-zero-like floor |
+| `bytes_le_cwnd_when_large` | **high** | **high** | bytes ≤ cwnd when cwnd large |
+| `growth_positive` | mid | medium | growth ≥ 1 |
+| `growth_max` | **high** | **high** | growth ≤ 2^MAX_ROUNDS — bounds exponential |
+| `bytes_le_cwnd_div_growth` | mid | medium | bytes = cwnd / growth |
+| `slope_zero_bytes_eq_cwnd` | mid | medium | at rounds=0, bytes = cwnd |
+| `slope_zero_rounds_one` | low | low | nextRounds 0 = 1 |
+| `slope_cwnd_zero_floor` | mid | medium | cwnd=0 → bytes = DEFAULT_MSS |
+| `acked_after_mod` | **high** | **high** | accumulator = acked mod probe_up_bytes |
+| `acked_after_lt_bytes` | **high** | **high** | accumulator < probe_up_bytes — invariant preserved |
+| `inflight_hi_after_ge` | mid | medium | inflight_hi never decreases after update |
+| `inflight_hi_stable_below_threshold` | **high** | **high** | no advance when acked < threshold |
+| `inflight_hi_increases_at_threshold` | **high** | **high** | advances by DEFAULT_MSS at threshold |
+| `acked_after_remainder` | **high** | **high** | combined: accumulator is correct modulo |
+
+**Positive finding**: `rounds_bounded` directly prevents a latent
+overflow: without the saturation cap, `probe_up_bytes = cwnd / 2^rounds`
+would underflow to 0 for large `rounds`, causing a division-by-zero-like
+silent failure. The theorem makes the saturation requirement explicit and CI-enforced.
+**Gap**: interaction with `inflight_hi` clamping to the estimated BDP is not
+modelled; the compose theorem `probe_up_terminates_in_finite_rounds` remains open.
+
+---
+
+### `FVSquad/QuicVersionPolicy.lean` — T69: QUIC Version Policy — 13 theorems (run 163)
+
+**Source**: `quiche/src/lib.rs` — `is_reserved_version` (`~L615–618`),
+`version_is_supported` (`~L1887–1889`), `RESERVED_VERSION_MASK = 0xfafafafa`,
+`PROTOCOL_VERSION_V1 = 0x00000001`. RFC 9000 §15.
+
+Verifies that **no QUIC version can simultaneously be reserved ("grease")
+and supported**: the disjointness theorem `reserved_disjoint_supported`
+is the central safety invariant. Seven concrete spot checks confirm V1
+behaviour and canonical greasing values.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `v1_is_supported` | low | medium | V1 passes isSupportedVersion |
+| `v1_not_reserved` | **high** | **high** | V1 does NOT pass isReservedVersion |
+| `reserved_disjoint_supported` | **high** | **high** | No version can be both — safety invariant |
+| `reserved_and_supported_false` | **high** | **high** | Bool form of disjointness |
+| `grease_0a_reserved` / `grease_2a_reserved` / `grease_fa_reserved` | mid | medium | Canonical greasing values are reserved |
+| `v1_passes_version_guard` | **high** | **high** | V1 does not trigger UnknownVersion error |
+| concrete spot-check theorems | low | medium | V1 / zero / greasing via decide |
+
+**Positive finding**: `reserved_disjoint_supported` directly guards against the
+class of bug where a newly-added supported version accidentally shares a
+bitmask pattern with the greasing mask — which would break QUIC version
+negotiation for any peer using that greasing value.
+**Gap**: multi-version negotiation (version list filtering) is not modelled.
+
+---
+
+### `FVSquad/CidMgmt.lean` §10 — T27: CID `retire_if_needed` — 7 new theorems (run 164; Cubic.lean total: 27)
+
+**Source**: `quiche/src/cid.rs` — `ConnectionIdentifiers::new_scid` retire-if-needed
+path. RFC 9000 §5.1.1.
+
 Extends the existing CidMgmt model with `newScidRetire`: when the active CID
 count reaches the limit, the lowest-sequence CID is retired before appending
 the new one. Key RFC property: post-condition count ≤ limit.
@@ -2216,6 +2320,101 @@ branches of the CUBIC update would complete T26.
 ---
 
 ### Overall Status (run 166)
+### Overall Status (run 168)
+
+- **63 Lean files, ~1431 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 23 targets, 2691+ cases PASS
+- Run 167: BBR2PacingRate.lean (T32, 14 thms, 0 sorry), Route-B for AckDelayCodec (31/31)
+- Run 168 (this run): RFC9000Sec46.lean — composed cross-file theorem bridging
+  StreamCreditReturn (T58) and StreamCountLimit (T63) for RFC 9000 §4.6 end-to-end.
+  CRITIQUE.md updated.
+- Coverage now includes: **RFC 9000 §4.6 end-to-end stream-credit chain** (new),
+  **BBR2 pacing rate bounds** (T32), all prior coverage.
+- **Next priorities**:
+  1. Route-B for T27 (CidMgmt retire_if_needed): count check vs cid.rs
+  2. Route-B for T65 (SsThresh): write-once check vs recovery/congestion
+  3. Route-B for T32 (BBR2PacingRate): monotone path vs Rust fixture
+  4. Cubic T26 W_est transition condition (W_cubic < W_est branch)
+  5. CORRESPONDENCE.md and REPORT.md update to cover runs 167–168
+
+---
+
+### `FVSquad/BBR2PacingRate.lean` — T32: BBR2 Pacing Rate Bounds — 14 theorems (run 167)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `BBR2::set_pacing_rate` and
+`calculate_pacing_rate` family. RFC 9002 §7.7.
+
+Models the pacing rate calculation:
+- Startup phase: `rate = startup_gain × estimated_bw`
+- Full BW phase: `rate = pacing_gain × estimated_bw`
+- Bottleneck drain: capped at measured delivery rate
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `startup_monotone` | **high** | **high** | Startup pacing rate is non-decreasing in bw |
+| `startup_ge_target` | **high** | **high** | Startup rate ≥ target — no starvation in startup |
+| `full_bw_sets_target` | **high** | **high** | After startup: rate = gain × bw |
+| `target_monotone_in_bw` | **high** | **high** | Higher bw → higher rate |
+| `target_monotone_in_gain` | **high** | **high** | Higher gain → higher rate |
+| `zero_bw_unchanged` | mid | medium | Zero-bandwidth state is a fixed point |
+| Case B cap bounds | mid | medium | Rate is capped to delivery rate on drain |
+
+**Positive finding**: `startup_monotone` formalises the key BBR2 liveness
+property — pacing rate can never decrease during startup, ensuring the
+connection cannot stall in startup phase.
+**Gap**: the drain phase and probe phases are not yet modelled; the cap
+interaction with `measured_delivery_rate` is approximated.
+
+---
+
+### `FVSquad/RFC9000Sec46.lean` — Composed §4.6: Stream-Credit Chain — 12 theorems (run 168)
+
+**Source**: Cross-file composition of T58 (`StreamCreditReturn.lean`) and
+T63 (`StreamCountLimit.lean`). RFC 9000 §4.6.
+
+This file bridges the two separate models into a single end-to-end §4.6
+proof chain:
+- **T58 model**: local two-phase credit staging (`bidiNext` / `bidiCurrent`)
+- **T63 model**: peer's stream-count limit (`peerMaxBidi`) updated via `max`
+
+The `SystemState` struct holds both sub-states. `rfc9000_step(sys, n)` models
+the full §4.6 cycle: collect N streams → commit → peer receives MAX_STREAMS.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `collectN_bidiNext` | mid | medium | N collects increase bidiNext by exactly N |
+| `step_bidiCurrent` | mid | medium | After commit, bidiCurrent = original bidiNext + N |
+| `collectN_preserves_invariant` | **high** | **high** | Credit invariant maintained through N collects |
+| `commit_preserves_invariant` | **high** | **high** | Commit preserves credit invariant |
+| `step_local_current_increases` | **high** | **high** | End-to-end: bidiCurrent increases by N |
+| `step_preserves_credit_invariant` | **high** | **high** | Full step preserves credit invariant |
+| `step_peer_opened_unchanged` | mid | medium | Step does not change peer's open count |
+| `step_peer_max_equals_committed` | **high** | **high** | Peer's limit = max(old, new committed value) |
+| `rfc9000_peer_max_monotone` | **high** | **high** | Peer's limit never decreases — RFC §4.6 safety |
+| `rfc9000_peer_gains_n_slots` | **high** | **high** | Under tight coherence: peer gains ≥ N slots |
+| `rfc9000_streams_left_gain` | **high** | **high** | Under tight coherence: streamsLeft increases ≥ N |
+| `rfc9000_zero_collects_nonneg` | mid | medium | Zero collects: streamsLeft non-decreasing |
+
+**Positive finding**: `rfc9000_peer_max_monotone` is the headline RFC 9000 §4.6
+safety theorem proved end-to-end across two Lean modules: the peer's
+`peerMaxBidi` can never decrease as a result of our collect+commit cycle. Any
+bug that skipped the `max` in `update_peer_max_streams_bidi` (e.g., using plain
+assignment instead of `max`) would cause this theorem to fail. Similarly, any
+bug in the collect staging (using subtraction instead of addition) would break
+`rfc9000_peer_gains_n_slots`.
+
+**Composition value**: This is the first cross-file composed theorem in the
+suite, demonstrating that separately-proved sub-module properties can be
+combined into protocol-level safety guarantees. The composed model explicitly
+captures the coherence condition (peer has applied last MAX_STREAMS) as a
+precondition, making the assumption transparent.
+
+**Gap**: the "tight coherence" precondition (`bidiNext ≥ peerMaxBidi`) in
+`rfc9000_peer_gains_n_slots` is stronger than just `coherent`; a full proof
+would additionally show that quiche's scheduling logic maintains this condition
+between collect and send.
+
+---
 
 - **61 Lean files, ~1405 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
 - Route-B: 22 targets, 2660+ cases PASS
