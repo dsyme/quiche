@@ -2159,6 +2159,41 @@ negotiation for any peer using that greasing value.
 path. RFC 9000 §5.1.1.
 
 
+### `FVSquad/QuicVersionPolicy.lean` — T69: QUIC Version Policy — 13 theorems (run 163)
+
+**Source**: `quiche/src/lib.rs` — `is_reserved_version` (`~L615–618`),
+`version_is_supported` (`~L1887–1889`), `RESERVED_VERSION_MASK = 0xfafafafa`,
+`PROTOCOL_VERSION_V1 = 0x00000001`. RFC 9000 §15.
+
+Verifies that **no QUIC version can simultaneously be reserved ("grease")
+and supported**: the disjointness theorem `reserved_disjoint_supported`
+is the central safety invariant. Seven concrete spot checks confirm V1
+behaviour and canonical greasing values.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `v1_is_supported` | low | medium | V1 passes isSupportedVersion |
+| `v1_not_reserved` | **high** | **high** | V1 does NOT pass isReservedVersion |
+| `reserved_disjoint_supported` | **high** | **high** | No version can be both — safety invariant |
+| `reserved_and_supported_false` | **high** | **high** | Bool form of disjointness |
+| `grease_0a_reserved` / `grease_2a_reserved` / `grease_fa_reserved` | mid | medium | Canonical greasing values are reserved |
+| `v1_passes_version_guard` | **high** | **high** | V1 does not trigger UnknownVersion error |
+| concrete spot-check theorems | low | medium | V1 / zero / greasing via decide |
+
+**Positive finding**: `reserved_disjoint_supported` directly guards against the
+class of bug where a newly-added supported version accidentally shares a
+bitmask pattern with the greasing mask — which would break QUIC version
+negotiation for any peer using that greasing value.
+**Gap**: multi-version negotiation (version list filtering) is not modelled.
+
+---
+
+### `FVSquad/CidMgmt.lean` §10 — T27: CID `retire_if_needed` — 7 new theorems (run 164; Cubic.lean total: 27)
+
+**Source**: `quiche/src/cid.rs` — `ConnectionIdentifiers::new_scid` retire-if-needed
+path. RFC 9000 §5.1.1.
+
+
 Verifies the **probe-up accumulator** semantics: `probe_up_rounds` saturates at
 `MAX_ROUNDS = 8`, `probe_up_bytes` grows exponentially (by `cwnd / 2^rounds`)
 but never below `DEFAULT_MSS`, and the inflight-hi advance fires exactly at
