@@ -4,11 +4,12 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-16 17:40 UTC
-- **Commit**: `022e0f46`
-- **Run**: run 166 — Task 7 (Critique update) + Task 6 (Correspondence update).
-  Full suite: **61 Lean files, ~1405 theorems, 0 sorry**;
-  22 Route-B test targets (2660+ PASS).
+- **Date**: 2026-05-17 10:12 UTC
+- **Commit**: `a0adb95c`
+- **Run**: run 168 — Task 5 (Proof Assistance: RFC9000Sec46 composed theorem) +
+  Task 7 (Critique update). Previous run 167: BBR2PacingRate.lean + Route-B
+  AckDelayCodec. Full suite: **63 Lean files, ~1431 theorems, 0 sorry**;
+  23 Route-B test targets (2691+ PASS).
 
 ---
 
@@ -2215,7 +2216,101 @@ branches of the CUBIC update would complete T26.
 
 ---
 
-### Overall Status (run 166)
+### Overall Status (run 168)
+
+- **63 Lean files, ~1431 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 23 targets, 2691+ cases PASS
+- Run 167: BBR2PacingRate.lean (T32, 14 thms, 0 sorry), Route-B for AckDelayCodec (31/31)
+- Run 168 (this run): RFC9000Sec46.lean — composed cross-file theorem bridging
+  StreamCreditReturn (T58) and StreamCountLimit (T63) for RFC 9000 §4.6 end-to-end.
+  CRITIQUE.md updated.
+- Coverage now includes: **RFC 9000 §4.6 end-to-end stream-credit chain** (new),
+  **BBR2 pacing rate bounds** (T32), all prior coverage.
+- **Next priorities**:
+  1. Route-B for T27 (CidMgmt retire_if_needed): count check vs cid.rs
+  2. Route-B for T65 (SsThresh): write-once check vs recovery/congestion
+  3. Route-B for T32 (BBR2PacingRate): monotone path vs Rust fixture
+  4. Cubic T26 W_est transition condition (W_cubic < W_est branch)
+  5. CORRESPONDENCE.md and REPORT.md update to cover runs 167–168
+
+---
+
+### `FVSquad/BBR2PacingRate.lean` — T32: BBR2 Pacing Rate Bounds — 14 theorems (run 167)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `BBR2::set_pacing_rate` and
+`calculate_pacing_rate` family. RFC 9002 §7.7.
+
+Models the pacing rate calculation:
+- Startup phase: `rate = startup_gain × estimated_bw`
+- Full BW phase: `rate = pacing_gain × estimated_bw`
+- Bottleneck drain: capped at measured delivery rate
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `startup_monotone` | **high** | **high** | Startup pacing rate is non-decreasing in bw |
+| `startup_ge_target` | **high** | **high** | Startup rate ≥ target — no starvation in startup |
+| `full_bw_sets_target` | **high** | **high** | After startup: rate = gain × bw |
+| `target_monotone_in_bw` | **high** | **high** | Higher bw → higher rate |
+| `target_monotone_in_gain` | **high** | **high** | Higher gain → higher rate |
+| `zero_bw_unchanged` | mid | medium | Zero-bandwidth state is a fixed point |
+| Case B cap bounds | mid | medium | Rate is capped to delivery rate on drain |
+
+**Positive finding**: `startup_monotone` formalises the key BBR2 liveness
+property — pacing rate can never decrease during startup, ensuring the
+connection cannot stall in startup phase.
+**Gap**: the drain phase and probe phases are not yet modelled; the cap
+interaction with `measured_delivery_rate` is approximated.
+
+---
+
+### `FVSquad/RFC9000Sec46.lean` — Composed §4.6: Stream-Credit Chain — 12 theorems (run 168)
+
+**Source**: Cross-file composition of T58 (`StreamCreditReturn.lean`) and
+T63 (`StreamCountLimit.lean`). RFC 9000 §4.6.
+
+This file bridges the two separate models into a single end-to-end §4.6
+proof chain:
+- **T58 model**: local two-phase credit staging (`bidiNext` / `bidiCurrent`)
+- **T63 model**: peer's stream-count limit (`peerMaxBidi`) updated via `max`
+
+The `SystemState` struct holds both sub-states. `rfc9000_step(sys, n)` models
+the full §4.6 cycle: collect N streams → commit → peer receives MAX_STREAMS.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `collectN_bidiNext` | mid | medium | N collects increase bidiNext by exactly N |
+| `step_bidiCurrent` | mid | medium | After commit, bidiCurrent = original bidiNext + N |
+| `collectN_preserves_invariant` | **high** | **high** | Credit invariant maintained through N collects |
+| `commit_preserves_invariant` | **high** | **high** | Commit preserves credit invariant |
+| `step_local_current_increases` | **high** | **high** | End-to-end: bidiCurrent increases by N |
+| `step_preserves_credit_invariant` | **high** | **high** | Full step preserves credit invariant |
+| `step_peer_opened_unchanged` | mid | medium | Step does not change peer's open count |
+| `step_peer_max_equals_committed` | **high** | **high** | Peer's limit = max(old, new committed value) |
+| `rfc9000_peer_max_monotone` | **high** | **high** | Peer's limit never decreases — RFC §4.6 safety |
+| `rfc9000_peer_gains_n_slots` | **high** | **high** | Under tight coherence: peer gains ≥ N slots |
+| `rfc9000_streams_left_gain` | **high** | **high** | Under tight coherence: streamsLeft increases ≥ N |
+| `rfc9000_zero_collects_nonneg` | mid | medium | Zero collects: streamsLeft non-decreasing |
+
+**Positive finding**: `rfc9000_peer_max_monotone` is the headline RFC 9000 §4.6
+safety theorem proved end-to-end across two Lean modules: the peer's
+`peerMaxBidi` can never decrease as a result of our collect+commit cycle. Any
+bug that skipped the `max` in `update_peer_max_streams_bidi` (e.g., using plain
+assignment instead of `max`) would cause this theorem to fail. Similarly, any
+bug in the collect staging (using subtraction instead of addition) would break
+`rfc9000_peer_gains_n_slots`.
+
+**Composition value**: This is the first cross-file composed theorem in the
+suite, demonstrating that separately-proved sub-module properties can be
+combined into protocol-level safety guarantees. The composed model explicitly
+captures the coherence condition (peer has applied last MAX_STREAMS) as a
+precondition, making the assumption transparent.
+
+**Gap**: the "tight coherence" precondition (`bidiNext ≥ peerMaxBidi`) in
+`rfc9000_peer_gains_n_slots` is stronger than just `coherent`; a full proof
+would additionally show that quiche's scheduling logic maintains this condition
+between collect and send.
+
+---
 
 - **61 Lean files, ~1405 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
 - Route-B: 22 targets, 2660+ cases PASS
