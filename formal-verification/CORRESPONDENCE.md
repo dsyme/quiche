@@ -4046,6 +4046,9 @@ are valid.
 - **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 160).
 - `#eval` spot checks: `encode 1000 3 = 125`, `decode 125 3 = 1000`,
   `encode 1001 3 = 125` (truncation), `encode 0 3 = 0`.
+- **Route-B executable tests (run 167)**: `formal-verification/tests/ack_delay_codec/`
+  — 31/31 cases PASS across exponents 0–20 and delays 0–10¹² µs. See
+  `formal-verification/tests/ack_delay_codec/README.md`.
 - No Route-B tests yet: the arithmetic is simple enough that the decidable
   `roundtrip_exact` and the `#eval` checks give high confidence; Route-B
   tests would compare against Rust's `ack_delay / 2^exp` on a fixture set.
