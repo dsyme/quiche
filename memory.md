@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 166 (workflow 25968539329, 2026-05-16)
+Run 167 (workflow 25981547348, 2026-05-17)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,25 +9,27 @@ Run 166 (workflow 25968539329, 2026-05-16)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 166)
-- Lean files: 61 (unchanged — docs-only run)
-- Total theorems: ~1405
+## Repository State (after run 167)
+- Lean files: 62 (BBR2PacingRate.lean added)
+- Total theorems: ~1419 (+14)
 - Total sorry: 0
-- Route-B test targets: 22
+- Route-B test targets: 23 (ack_delay_codec added)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 166
-- run166 (branch lean-squad-run166-25968539329-critique-correspondence-022e0f46):
-  Task 7 — CRITIQUE.md catchup (T58/T65/T66/T67/T68/T69/T27/T26 sections)
-  Task 6 — CORRESPONDENCE.md catchup (T66/T27/T26 new sections)
+## Open PRs (lean-squad label) — as of run 167
+- run167 (branch lean-squad-run167-25981547348-bbr2pacingrate-ackdelay-rt):
+  Task 5 — T32 BBR2PacingRate.lean (14 thms, 0 sorry)
+  Task 8 — T66 AckDelay Route-B tests (31/31 PASS)
+  CORRESPONDENCE.md — T66 Route-B evidence added
 
 ## Targets
 
 ### T32: BBR2 pacing rate bounds
-- Phase: 2 (Informal spec written — run 165)
-- File (spec): formal-verification/specs/bbr2_pacing_rate_informal.md
-- Next: write FVSquad/BBR2PacingRate.lean (~60-80 lines, all omega)
-- 3 open questions: OQ-T32-1 (bandwidth overflow), OQ-T32-2 (zero min_rtt), OQ-T32-3 (MSS scaling)
+- Phase: 5 (Done — run 167, 14 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2PacingRate.lean
+- Key theorems: startup_monotone, startup_ge_target, full_bw_sets_target,
+  target_monotone_in_bw, target_monotone_in_gain, zero_bw_unchanged, Case B cap bounds
+- Open questions: OQ-T32-1 (bandwidth overflow), OQ-T32-2 (zero min_rtt), OQ-T32-3 (MSS scaling)
 
 ### T26: CUBIC W_est Reno-friendly transition
 - Phase: 5 (Done — run 165, extension of Cubic.lean §6)
@@ -115,8 +117,9 @@ Run 166 (workflow 25968539329, 2026-05-16)
 | T63 (StreamCountLimit) | tests/stream_count_limit/ | 28 | 157 |
 | T60 (ProbeRTTStateMachine) | tests/probe_rtt_sm/ | 23 | 158 |
 | T32/BBR2Limits | tests/bbr2_limits/ | 1000+ | 159 |
+| T66 (AckDelayCodec) | tests/ack_delay_codec/ | 31 | 167 |
 
-Total: 2660+ cases, all PASS
+Total: 2691+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -143,8 +146,9 @@ Total: 2660+ cases, all PASS
 - `List.length_filter_le` available for bounds on filter length
 
 ## Next Run Priorities
-1. T32 (BBR2 pacing rate): write FVSquad/BBR2PacingRate.lean — informal spec done run165, ~60-80 lines, all omega
-2. Route-B for T66 (AckDelayCodec): fixture comparison encode/decode vs Rust
-3. Composed theorem: StreamCreditReturn + StreamCountLimit → RFC 9000 §4.6 end-to-end
-4. Route-B for T27 (CidMgmt retire_if_needed)
-5. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
+1. Route-B for T27 (CidMgmt retire_if_needed) — `cid.rs:L359`, retire_if_needed function
+2. Composed theorem: StreamCreditReturn + StreamCountLimit → RFC 9000 §4.6 end-to-end
+3. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
+4. New Lean file: T32 informal spec has OQ-T32-1 (overflow) worth a separate model
+5. Route-B for T32 BBR2PacingRate: fixture comparison monotone path vs Rust
+6. New proofs: BBR2 pacing rate informal spec OQs → could find bugs in BBR2
