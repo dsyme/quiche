@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 171 (workflow 26032341462, 2026-05-18)
+Run 172 (workflow 26052196972, 2026-05-18)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,31 +9,36 @@ Run 171 (workflow 26032341462, 2026-05-18)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 171)
-- Lean files: 66 (BBR2ProbeRTTPhase.lean added; merged PRs #143/#144 content)
-- Total theorems: ~1497 (+25 from T72)
+## Repository State (after run 172)
+- Lean files: 67 (BBR2CyclePhaseGain.lean added)
+- Total theorems: ~1520 (+23 from T73)
 - Total sorry: 0
 - Route-B test targets: 25 (unchanged)
 - Status issue: #4 (open)
-- Open PRs: #143, #144, #145
+- Open PRs: (new PR from run 172)
 
-## Open PRs (lean-squad label) — as of run 171
-- PR #143 (run169, branch lean-squad-run169-...): BBR2DrainPhase.lean (21 thms) + CidMgmt Route-B
-- PR #144 (run170, branch lean-squad-run170-...): BBR2Startup.lean (20 thms) + SsThresh Route-B
-- PR #145 (run171, branch lean-squad-run171-...): BBR2ProbeRTTPhase.lean (25 thms, T72)
+## Open PRs (lean-squad label) — as of run 172
+- PR run172 (branch lean-squad-run172-26052196972-cycle-phase-gain-t73):
+  Task 3 — T73 BBR2CyclePhaseGain.lean (23 thms, 0 sorry)
+  + informal spec bbr2_cycle_phase_gain_informal.md
 
 ## Targets
 
-### T72: BBR2 PROBE_RTT Phase Constants (NEW run 171)
+### T73: BBR2 CyclePhase Gain Assignment (NEW run 172)
+- Phase: 5 (Done — run 172, 23 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2CyclePhaseGain.lean
+- Source: quiche/src/recovery/gcongestion/bbr2/mode.rs
+- Key theorems: upPacingGain_superUnity, downPacingGain_subUnity,
+  defaultPacingGain_unity, pacingGain_ordering, up_is_only_elevated_pacing,
+  up_is_only_elevated_cwnd, up_uses_both_elevated_gains,
+  nonUp_cwnd_gain_uniform, upPacingGain_ge_unity_applied
+- Namespace: FVSquad.BBR2CyclePhaseGain
+- 5 CyclePhases: NotStarted, Up, Down, Cruise, Refill
+- Gains modelled as rational fractions (num/den)
+
+### T72: BBR2 PROBE_RTT Phase Constants (run 171)
 - Phase: 5 (Done — run 171, 25 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2ProbeRTTPhase.lean
-- Key theorems: probeRttPacingGain_unity, probeRttCwndGain_unity,
-  applyProbeRttPacing_identity, applyProbeRttCwnd_identity,
-  inflightTarget_lt_bdp, inflightTarget_le_half,
-  probeRttPacing_le_startupPacing, drainPacing_le_probeRttPacing,
-  probeRttPeriod_gt_duration, probeRttPeriod_ratio_ge_50
-- Source: quiche/src/recovery/gcongestion/bbr2.rs DEFAULT_PARAMS probe_rtt section
-- Namespace: FVSquad.BBR2ProbeRTTPhase
 
 ### T71: BBR2 Startup Phase Constants (run 170)
 - Phase: 5 (Done — run 170, 20 thms, 0 sorry)
@@ -52,10 +57,12 @@ Run 171 (workflow 26032341462, 2026-05-18)
 ### Earlier targets (T1-T69): All phase 5 (Done)
 
 ## CI Status
-- lean-ci.yml: exists, passing, healthy
+- lean-ci.yml: exists, passing, healthy (audited run 172)
 - lean-toolchain: v4.29.0
-- lake build: 66 files (run 171 local), 0 sorry
-- Cache: keyed on lake-manifest.json hash (correct)
+- Triggers: PR + push on formal-verification/lean/**
+- Cache: keyed on lake-manifest.json hash
+- lake build: 70 jobs (run 172 local), 0 sorry, 23 theorems added
+- CI looks good: upload-artifact on failure, sorry count check
 
 ## Route-B Tests
 | Target | Directory | Cases | Run |
@@ -93,17 +100,18 @@ Total: 2797+ cases, all PASS
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
 - Best pattern: `by_cases h : cond <;> simp [h] <;> omega`
 - `ring` tactic NOT available without Mathlib — use `omega` for linear identities
-- For structure predicates like `Gain.isUnity`, `Gain.le`: must `unfold` first before `decide`
+- For structure predicates like `Gain.isUnity`, `Gain.le`: must add `Decidable` instances or use `omega`
 - `Nat.mul_div_cancel bw hd` requires explicit `hd : den > 0`
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `nlinarith`, `push_neg`, `norm_num` NOT available without Mathlib
 - Use `namespace FVSquad.ModuleName` to avoid name collisions
-- Cross-module name collision: use namespaces (e.g., Gain struct needs namespace)
+- For floor-division bounds: use `simp only [defaultParams]` first to evaluate concrete values, then omega
+- When using custom Prop predicates with `decide`: MUST add `instance : Decidable (myPred x)` for each
 
 ## Next Run Priorities
-1. CORRESPONDENCE.md update to cover runs 169-171 (T70 DrainPhase, T71 StartupPhase, T72 ProbeRTTPhase)
-2. Route-B for BBR2ProbeRTTPhase (T72) — confirm inflight_target matches Rust on concrete inputs
-3. CRITIQUE.md update for runs 167-171
-4. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
-5. New target: BBR2 pacing-rate monotone relationship (T73)
+1. CORRESPONDENCE.md update to cover runs 169-172 (T70/T71/T72/T73)
+2. Route-B tests for T73 (BBR2CyclePhaseGain) — confirm gain dispatch matches Rust
+3. CRITIQUE.md update for runs 167-172
+4. New target: BBR2 cycle-phase state transitions (mode transitions from/to each phase)
+5. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
