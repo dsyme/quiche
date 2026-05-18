@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 169 (workflow 25997972536, 2026-05-17)
+Run 170 (workflow 26014249801, 2026-05-18)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,40 +9,48 @@ Run 169 (workflow 25997972536, 2026-05-17)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 169)
-- Lean files: 64 (BBR2DrainPhase.lean added)
-- Total theorems: ~1452 (+21 from T70)
+## Repository State (after run 170)
+- Lean files: 65 (BBR2Startup.lean added)
+- Total theorems: ~1472 (+20 from T71)
 - Total sorry: 0
-- Route-B test targets: 24 (cid_mgmt_retire added)
+- Route-B test targets: 25 (ssthresh added)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 169
-- run169 (branch lean-squad-run169-25997972536-drain-phase-cid-retire-9a3b2c1f):
-  Task 5 — BBR2DrainPhase.lean (21 thms, 0 sorry) — T70 drain phase constants
-  Task 8 — Route-B for T27 CidMgmt retire_if_needed (56/56 PASS)
+## Open PRs (lean-squad label) — as of run 170
+- run170 (branch lean-squad-run170-26014249801-startup-ssthresh-rt):
+  Task 5 — BBR2Startup.lean (20 thms, 0 sorry) — T71 startup constants
+  Task 8 — Route-B for T65 SsThresh (25/25 PASS)
 
 ## Targets
 
-### T70: BBR2 Drain Phase Constants (NEW run 169)
-- Phase: 5 (Done — run 169, 21 thms, 0 sorry)
+### T71: BBR2 Startup Phase Constants (NEW run 170)
+- Phase: 5 (Done — run 170, 20 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2Startup.lean
+- Key theorems: startupCwndGain_superUnity, startupPacingGain_superUnity,
+  fullBwThreshold_superUnity, applyStartupPacing_ge_applyStartupCwnd,
+  applyGain_fullBwThreshold_grows, drainCwndGain_eq_startupCwndGain,
+  drainPacingGain_lt_startupPacingGain, concrete numeric checks
+- Source: quiche/src/recovery/gcongestion/bbr2.rs DEFAULT_PARAMS startup section
+- Uses namespace FVSquad.BBR2Startup
+
+### T65: SsThresh Route-B validation (run 170)
+- Phase: 5 (Route-B done)
+- Lean file: formal-verification/lean/FVSquad/SsThresh.lean
+- Route-B: formal-verification/tests/ssthresh/ — 25/25 PASS (run 170)
+
+### T70: BBR2 Drain Phase Constants (run 169)
+- Phase: 5 (Done)
 - File: formal-verification/lean/FVSquad/BBR2DrainPhase.lean
-- Key theorems: drainPacingGain_subUnity, drainCwndGain_eq_startupCwndGain,
-  applyDrainPacing_le, applyDrainPacing_le_applyStartupPacing,
-  drainPacingGain_times_divisor_le_unity, concrete numeric checks
-- Source: quiche/src/recovery/gcongestion/bbr2.rs DEFAULT_PARAMS drain section
-- Uses namespace FVSquad.BBR2DrainPhase (avoids Gain name collision)
 
 ### T27: CidMgmt retire_if_needed Route-B validation (run 169)
 - Phase: 5 (Route-B done)
-- Lean file: formal-verification/lean/FVSquad/CidMgmt.lean §10
-- Route-B: formal-verification/tests/cid_mgmt_retire/ — 56/56 PASS (run 169)
 
-### Earlier targets (T1-T69, all): All phase 5 (Done)
+### Earlier targets (T1-T69): All phase 5 (Done)
 
 ## CI Status
 - lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
-- lake build: 64 files (run 169), 0 sorry
+- lake build: 65 files (run 170), 0 sorry
 - Cache: keyed on lake-manifest.json hash (correct)
 
 ## Route-B Tests
@@ -72,25 +80,28 @@ Run 169 (workflow 25997972536, 2026-05-17)
 | T32/BBR2Limits | tests/bbr2_limits/ | 1000+ | 159 |
 | T66 (AckDelayCodec) | tests/ack_delay_codec/ | 31 | 167 |
 | T27 (CidMgmt retire_if_needed) | tests/cid_mgmt_retire/ | 56 | 169 |
+| T65 (SsThresh) | tests/ssthresh/ | 25 | 170 |
 
-Total: 2747+ cases, all PASS
+Total: 2772+ cases, all PASS
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
 - Best pattern: `by_cases h : cond <;> simp [h] <;> omega`
-- `simp only [h1, ite_true]` may close goal completely
+- `ring` tactic NOT available without Mathlib — use `omega` for linear identities
 - `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `nlinarith`, `push_neg`, `norm_num` NOT available without Mathlib
 - Use `namespace FVSquad.ModuleName` to avoid name collisions across files
 - `le_refl` → use `Nat.le_refl` or `Nat.le.refl`
 - Cross-module name collision: use namespaces (e.g., Gain struct needs namespace)
-- `Nat.div_le_div_of_mul_le_mul` is NOT available; use calc + existing lemmas
+- For different-denominator division: convert to common denominator via
+  `Nat.mul_div_cancel_left`, then `Nat.div_le_div_right`
+- Pattern: `(a * 20) / 10 = a * 2` → `have : a*20 = 10*(a*2) := by omega; rw [this, Nat.mul_div_cancel_left _ (by decide)]`
 
 ## Next Run Priorities
-1. Route-B for T65 (SsThresh): write-once check vs recovery/congestion
-2. Route-B for T32 (BBR2PacingRate): monotone path vs Rust fixture
-3. New target: BBR2 Startup phase constants (analogous to T70 Drain)
-4. CORRESPONDENCE.md update to cover runs 167–169
-5. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
+1. CORRESPONDENCE.md update to cover runs 167–170 (T66 AckDelayCodec, T27 CidMgmt, T70 DrainPhase, T71 StartupPhase)
+2. Route-B for T32 BBR2PacingRate monotone path vs Rust fixture
+3. New target: BBR2 ProbeRTT phase constants (analogous to T70/T71)
+4. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
+5. CRITIQUE.md update for runs 167–170
