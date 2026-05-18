@@ -60,5 +60,6 @@ import FVSquad.AckDelayCodec
 import FVSquad.BBR2ProbeUpSlope
 import FVSquad.BBR2PacingRate
 import FVSquad.BBR2DrainPhase
+import FVSquad.BBR2Startup
 import FVSquad.QuicVersionPolicy
 import FVSquad.RFC9000Sec46
