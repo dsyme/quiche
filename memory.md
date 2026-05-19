@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 174 (workflow 26094853817, 2026-05-19)
+Run 175 (workflow 26116846871, 2026-05-19)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,15 +9,15 @@ Run 174 (workflow 26094853817, 2026-05-19)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 174)
+## Repository State (after run 175)
 - Lean files: 68
 - Total theorems: 1312
 - Total sorry: 0
-- Route-B test targets: 26
+- Route-B test targets: 27 (T74 PacketTypeEpoch added this run)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 174
-- None (run 173 PR was merged as PR #147)
+## Open PRs (lean-squad label) — as of run 175
+- PR created this run: T74 PacketTypeEpoch Route-B 42/42 PASS + paper update
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
@@ -33,7 +33,7 @@ Run 174 (workflow 26094853817, 2026-05-19)
 - File: formal-verification/lean/FVSquad/PacketTypeEpoch.lean
 - Source: quiche/src/packet.rs — Type::from_epoch, Type::to_epoch
 - Key theorems: from_epoch_to_epoch, from_epoch_injective, short_and_zeroRTT_same_epoch
-- Route-B: TODO (small, fully decidable — good candidate for next run)
+- Route-B: 42/42 PASS (run 175) — formal-verification/tests/packet_type_epoch/
 
 ### T73: BBR2 CyclePhase Gain Assignment (run 172, merged)
 - Phase: 5 (Done — run 172, 23 thms, 0 sorry)
@@ -60,7 +60,7 @@ Run 174 (workflow 26094853817, 2026-05-19)
 
 ### Earlier targets (T1-T69): All phase 5 (Done)
 
-## Route-B Tests (26 targets total, 2822+ cases, all PASS)
+## Route-B Tests (27 targets total, 2864+ cases, all PASS)
 | Target | Directory | Cases | Run |
 |--------|-----------|-------|-----|
 | T20 (PacketNumLen) | tests/pkt_num_len/ | 18 | 89 |
@@ -89,6 +89,7 @@ Run 174 (workflow 26094853817, 2026-05-19)
 | T27 (CidMgmt retire_if_needed) | tests/cid_mgmt_retire/ | 56 | 169 |
 | T65 (SsThresh) | tests/ssthresh/ | 25 | 170 |
 | T73 (BBR2CyclePhaseGain) | tests/bbr2_cycle_phase_gain/ | 25 | 173 |
+| T74 (PacketTypeEpoch) | tests/packet_type_epoch/ | 42 | 175 |
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
@@ -105,6 +106,6 @@ Run 174 (workflow 26094853817, 2026-05-19)
 ## Next Run Priorities
 1. New target: BBR2 cycle-phase state transitions (mode transitions in mode.rs)
 2. New target: T75 BBR2 drain exit condition (bytes_in_flight <= bdp0)
-3. Route-B tests for T74 (PacketTypeEpoch) — small, fully decidable
-4. CORRESPONDENCE.md update to cover T70-T74
-5. REPORT.md update to cover runs 169-174
+3. REPORT.md update to cover runs 169-175
+4. Paper PDF compilation (needs LaTeX environment)
+5. Run 175 PR merge + next target
