@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 173 (workflow 26076749132, 2026-05-19)
+Run 174 (workflow 26094853817, 2026-05-19)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,43 +9,43 @@ Run 173 (workflow 26076749132, 2026-05-19)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 173)
-- Lean files: 68 (PacketTypeEpoch.lean added)
-- Total theorems: ~1540 (+20 from T74)
+## Repository State (after run 174)
+- Lean files: 68
+- Total theorems: 1312
 - Total sorry: 0
-- Route-B test targets: 26 (bbr2_cycle_phase_gain added)
+- Route-B test targets: 26
 - Status issue: #4 (open)
-- Open PRs: (new PR from run 173)
 
-## Open PRs (lean-squad label) — as of run 173
-- PR run173 (branch lean-squad-run173-26076749132-packet-type-epoch-t74-bbr2-route-b):
-  Task 4 — T74 PacketTypeEpoch.lean (20 thms, 0 sorry)
-  Task 8 — T73 BBR2CyclePhaseGain Route-B 25/25 PASS
+## Open PRs (lean-squad label) — as of run 174
+- None (run 173 PR was merged as PR #147)
+
+## CI Status
+- lean-ci.yml: exists, healthy, passing
+- lean-toolchain: v4.29.0
+- Triggers: PR + push on formal-verification/lean/**
+- lake build: 0 sorry
+- Run 174 improvement: added sorry-warning gate (fails CI if any theorem uses sorry)
 
 ## Targets
 
-### T74: QUIC PacketType ↔ Epoch Round-Trip (NEW run 173)
-- Phase: 5 (Done — run 173, 20 thms, 0 sorry)
+### T74: QUIC PacketType ↔ Epoch Round-Trip (run 173)
+- Phase: 5 (Done — run 173, 14 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/PacketTypeEpoch.lean
 - Source: quiche/src/packet.rs — Type::from_epoch, Type::to_epoch
-- Informal spec: formal-verification/specs/packet_type_epoch_informal.md
-- Key theorems: from_epoch_to_epoch (round-trip), from_epoch_injective,
-  range_of_fromEpoch, short_and_zeroRTT_same_epoch, retry_and_vn_no_epoch,
-  hasEpoch_iff, to_epoch_exhaustive, fromEpoch_hasEpoch
-- All proofs: decide or simp — fully decidable
-- Namespace: FVSquad.PacketTypeEpoch
+- Key theorems: from_epoch_to_epoch, from_epoch_injective, short_and_zeroRTT_same_epoch
+- Route-B: TODO (small, fully decidable — good candidate for next run)
 
 ### T73: BBR2 CyclePhase Gain Assignment (run 172, merged)
 - Phase: 5 (Done — run 172, 23 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2CyclePhaseGain.lean
-- Route-B: tests/bbr2_cycle_phase_gain/ — 25/25 PASS (run 173)
+- Route-B: 25/25 PASS (run 173)
 
 ### T72: BBR2 PROBE_RTT Phase Constants (run 171)
 - Phase: 5 (Done — run 171, 25 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2ProbeRTTPhase.lean
 
 ### T71: BBR2 Startup Phase Constants (run 170)
-- Phase: 5 (Done — run 170, 20 thms, 0 sorry)
+- Phase: 5 (Done — run 170, 26 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2Startup.lean
 
 ### T70: BBR2 Drain Phase Constants (run 169)
@@ -59,12 +59,6 @@ Run 173 (workflow 26076749132, 2026-05-19)
 - Phase: 5 (Route-B done)
 
 ### Earlier targets (T1-T69): All phase 5 (Done)
-
-## CI Status
-- lean-ci.yml: exists, passing, healthy
-- lean-toolchain: v4.29.0
-- Triggers: PR + push on formal-verification/lean/**
-- lake build: 71 jobs (run 173 local), 0 sorry
 
 ## Route-B Tests (26 targets total, 2822+ cases, all PASS)
 | Target | Directory | Cases | Run |
@@ -109,8 +103,8 @@ Run 173 (workflow 26076749132, 2026-05-19)
 - For PacketType/Epoch: all theorems close by `decide` — fully decidable
 
 ## Next Run Priorities
-1. CORRESPONDENCE.md update to cover runs 169-173 (T70/T71/T72/T73/T74)
-2. CRITIQUE.md update for runs 167-173
-3. New target: BBR2 cycle-phase state transitions (mode transitions in mode.rs)
-4. New target: T75 BBR2 Drain exit condition (bytes_in_flight <= bdp0)
-5. Route-B tests for T74 (PacketTypeEpoch) — small, fully decidable
+1. New target: BBR2 cycle-phase state transitions (mode transitions in mode.rs)
+2. New target: T75 BBR2 drain exit condition (bytes_in_flight <= bdp0)
+3. Route-B tests for T74 (PacketTypeEpoch) — small, fully decidable
+4. CORRESPONDENCE.md update to cover T70-T74
+5. REPORT.md update to cover runs 169-174
