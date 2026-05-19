@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 172 (workflow 26052196972, 2026-05-18)
+Run 173 (workflow 26076749132, 2026-05-19)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,32 +9,36 @@ Run 172 (workflow 26052196972, 2026-05-18)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 172)
-- Lean files: 67 (BBR2CyclePhaseGain.lean added)
-- Total theorems: ~1520 (+23 from T73)
+## Repository State (after run 173)
+- Lean files: 68 (PacketTypeEpoch.lean added)
+- Total theorems: ~1540 (+20 from T74)
 - Total sorry: 0
-- Route-B test targets: 25 (unchanged)
+- Route-B test targets: 26 (bbr2_cycle_phase_gain added)
 - Status issue: #4 (open)
-- Open PRs: (new PR from run 172)
+- Open PRs: (new PR from run 173)
 
-## Open PRs (lean-squad label) — as of run 172
-- PR run172 (branch lean-squad-run172-26052196972-cycle-phase-gain-t73):
-  Task 3 — T73 BBR2CyclePhaseGain.lean (23 thms, 0 sorry)
-  + informal spec bbr2_cycle_phase_gain_informal.md
+## Open PRs (lean-squad label) — as of run 173
+- PR run173 (branch lean-squad-run173-26076749132-packet-type-epoch-t74-bbr2-route-b):
+  Task 4 — T74 PacketTypeEpoch.lean (20 thms, 0 sorry)
+  Task 8 — T73 BBR2CyclePhaseGain Route-B 25/25 PASS
 
 ## Targets
 
-### T73: BBR2 CyclePhase Gain Assignment (NEW run 172)
+### T74: QUIC PacketType ↔ Epoch Round-Trip (NEW run 173)
+- Phase: 5 (Done — run 173, 20 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/PacketTypeEpoch.lean
+- Source: quiche/src/packet.rs — Type::from_epoch, Type::to_epoch
+- Informal spec: formal-verification/specs/packet_type_epoch_informal.md
+- Key theorems: from_epoch_to_epoch (round-trip), from_epoch_injective,
+  range_of_fromEpoch, short_and_zeroRTT_same_epoch, retry_and_vn_no_epoch,
+  hasEpoch_iff, to_epoch_exhaustive, fromEpoch_hasEpoch
+- All proofs: decide or simp — fully decidable
+- Namespace: FVSquad.PacketTypeEpoch
+
+### T73: BBR2 CyclePhase Gain Assignment (run 172, merged)
 - Phase: 5 (Done — run 172, 23 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2CyclePhaseGain.lean
-- Source: quiche/src/recovery/gcongestion/bbr2/mode.rs
-- Key theorems: upPacingGain_superUnity, downPacingGain_subUnity,
-  defaultPacingGain_unity, pacingGain_ordering, up_is_only_elevated_pacing,
-  up_is_only_elevated_cwnd, up_uses_both_elevated_gains,
-  nonUp_cwnd_gain_uniform, upPacingGain_ge_unity_applied
-- Namespace: FVSquad.BBR2CyclePhaseGain
-- 5 CyclePhases: NotStarted, Up, Down, Cruise, Refill
-- Gains modelled as rational fractions (num/den)
+- Route-B: tests/bbr2_cycle_phase_gain/ — 25/25 PASS (run 173)
 
 ### T72: BBR2 PROBE_RTT Phase Constants (run 171)
 - Phase: 5 (Done — run 171, 25 thms, 0 sorry)
@@ -57,14 +61,12 @@ Run 172 (workflow 26052196972, 2026-05-18)
 ### Earlier targets (T1-T69): All phase 5 (Done)
 
 ## CI Status
-- lean-ci.yml: exists, passing, healthy (audited run 172)
+- lean-ci.yml: exists, passing, healthy
 - lean-toolchain: v4.29.0
 - Triggers: PR + push on formal-verification/lean/**
-- Cache: keyed on lake-manifest.json hash
-- lake build: 70 jobs (run 172 local), 0 sorry, 23 theorems added
-- CI looks good: upload-artifact on failure, sorry count check
+- lake build: 71 jobs (run 173 local), 0 sorry
 
-## Route-B Tests
+## Route-B Tests (26 targets total, 2822+ cases, all PASS)
 | Target | Directory | Cases | Run |
 |--------|-----------|-------|-----|
 | T20 (PacketNumLen) | tests/pkt_num_len/ | 18 | 89 |
@@ -92,26 +94,23 @@ Run 172 (workflow 26052196972, 2026-05-18)
 | T66 (AckDelayCodec) | tests/ack_delay_codec/ | 31 | 167 |
 | T27 (CidMgmt retire_if_needed) | tests/cid_mgmt_retire/ | 56 | 169 |
 | T65 (SsThresh) | tests/ssthresh/ | 25 | 170 |
-
-Total: 2797+ cases, all PASS
+| T73 (BBR2CyclePhaseGain) | tests/bbr2_cycle_phase_gain/ | 25 | 173 |
 
 ## Key Technical Notes
 - `split_ifs` NOT available without Mathlib
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
 - Best pattern: `by_cases h : cond <;> simp [h] <;> omega`
 - `ring` tactic NOT available without Mathlib — use `omega` for linear identities
-- For structure predicates like `Gain.isUnity`, `Gain.le`: must add `Decidable` instances or use `omega`
+- For structure predicates: must add `Decidable` instances or use `omega`
 - `Nat.mul_div_cancel bw hd` requires explicit `hd : den > 0`
-- `Min.min a b` ≠ `Nat.min a b` for rewriting
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `nlinarith`, `push_neg`, `norm_num` NOT available without Mathlib
 - Use `namespace FVSquad.ModuleName` to avoid name collisions
-- For floor-division bounds: use `simp only [defaultParams]` first to evaluate concrete values, then omega
-- When using custom Prop predicates with `decide`: MUST add `instance : Decidable (myPred x)` for each
+- For PacketType/Epoch: all theorems close by `decide` — fully decidable
 
 ## Next Run Priorities
-1. CORRESPONDENCE.md update to cover runs 169-172 (T70/T71/T72/T73)
-2. Route-B tests for T73 (BBR2CyclePhaseGain) — confirm gain dispatch matches Rust
-3. CRITIQUE.md update for runs 167-172
-4. New target: BBR2 cycle-phase state transitions (mode transitions from/to each phase)
-5. T26 W_est: add transition condition W_cubic < W_est to Cubic.lean §6
+1. CORRESPONDENCE.md update to cover runs 169-173 (T70/T71/T72/T73/T74)
+2. CRITIQUE.md update for runs 167-173
+3. New target: BBR2 cycle-phase state transitions (mode transitions in mode.rs)
+4. New target: T75 BBR2 Drain exit condition (bytes_in_flight <= bdp0)
+5. Route-B tests for T74 (PacketTypeEpoch) — small, fully decidable
