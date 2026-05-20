@@ -4,30 +4,31 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-20 05:00 UTC
-- **Commit**: `7de8d84e`
-- **Run**: run 176 — Task 7 (Critique update covers runs 169–175) + Task 5
-  (T75 BBR2DrainExit, 17 theorems).
-  Full suite: **69 Lean files, 1329 theorems, 0 sorry**;
+- **Date**: 2026-05-20 11:33 UTC
+- **Commit**: `f7090d2a`
+- **Run**: run 177 — Task 7 (Critique) + Task 5 (T76 BBR2ModeState, 19 theorems).
+  Full suite: **70 Lean files, 1348 theorems, 0 sorry**;
   27 Route-B test targets (2864+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **69 Lean files with
-1329 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**27 Route-B correspondence test targets (2864+ cases PASS)**. Runs 166–176
+The formal verification suite for `quiche` now covers **70 Lean files with
+1348 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+**27 Route-B correspondence test targets (2864+ cases PASS)**. Runs 166–177
 added T32 (`BBR2PacingRate`, 14 thms), RFC9000Sec46 composed §4.6 chain (12
 thms, run 168), T70 (`BBR2DrainPhase` constants, 21 thms), T71 (`BBR2Startup`
 constants, 26 thms), T72 (`BBR2ProbeRTTPhase` constants, 25 thms), T73
 (`BBR2CyclePhaseGain`, 23 thms), T74 (`PacketTypeEpoch` round-trip, 14 thms),
-and T75 (`BBR2DrainExit`, 17 thms, this run).
+T75 (`BBR2DrainExit`, 17 thms, run 176), and T76 (`BBR2ModeState` abstract
+state machine, 19 thms, this run).
 
 The suite now spans the full QUIC stack: byte-level framing, congestion control
 (NewReno with AIMD cycles, Cubic with W_est Reno-friendly extension, BBR2 with
 startup/probing model including **all four phase constant groups** — startup,
-drain, ProbeRTT, ProbeBW cycle gains — **drain exit condition**, pacing,
+drain, ProbeRTT, ProbeBW cycle gains — **drain exit condition**, **abstract
+four-mode state machine** (Startup → Drain → ProbeBW ↔ ProbeRTT), pacing,
 HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard,
 inflight_lo guard, probe-up slope), HTTP/3 codec, QPACK, stream/frame state
 machines, transport error codes, idle-timeout negotiation, PMTUD binary search,
@@ -2591,16 +2592,52 @@ a connection cannot get stuck in drain after the link improves. Any regression
 that computes `bdp0` as non-monotone in bandwidth would break this theorem.
 
 **Gap**: The actual mode-transition logic (`into_probe_bw`) is not modelled;
-only the guard condition is. A future run could model the full
-Startup → Drain → ProbeBW state machine.
+only the guard condition is. This gap is addressed by T76 below.
 
 ---
 
-### Overall Status (run 176)
+### `FVSquad/BBR2ModeState.lean` — T76: BBR2 Abstract Mode State Machine — 19 theorems (run 177)
 
-- **69 Lean files, 1329 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+**Source**: `quiche/src/recovery/gcongestion/bbr2/mode.rs` — `Mode` enum
+(lines 153–158), `startup.rs` `into_drain` (lines 160–186), `drain.rs`
+`on_congestion_event` exit guard (lines 62–86).
+
+Models the abstract four-mode BBR2 state machine and proves ordering,
+safety, and idempotency properties.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `step_startup_exits_when_ready` | **high** | **high** | Startup exits to Drain when `full_bw_reached` |
+| `step_drain_exits_when_ready` | **high** | **high** | Drain exits to ProbeBW when `should_exit_drain` |
+| `startup_only_transitions_to_drain` | **high** | **high** | Startup cannot jump to ProbeBW or ProbeRTT |
+| `drain_only_transitions_to_probebw` | **high** | **high** | Drain cannot jump backwards to Startup |
+| `startup_cannot_skip_drain` | **high** | **high** | No direct Startup → ProbeBW path |
+| `step_idempotent_startup_stable` | mid | medium | Stable state: not-ready inputs keep Startup in Startup |
+| `step_idempotent_drain_stable` | mid | medium | Stable state: not-ready inputs keep Drain in Drain |
+| `probertt_only_transitions_to_probebw` | mid | medium | ProbeRTT can only exit to ProbeBW (never to Startup/Drain) |
+| `initial_mode_is_startup` | low | low | Initial mode construction |
+| `startup_not_drain` / `drain_not_probebw` etc. | low | low | Mode distinctness |
+
+**Positive finding**: `startup_cannot_skip_drain` closes the gap noted in the
+T75 critique entry — a regression that accidentally connected Startup directly
+to ProbeBW would break this theorem. `startup_only_transitions_to_drain` and
+`drain_only_transitions_to_probebw` collectively enforce the required monotone
+ordering of the first three modes.
+
+**Assessment**: This is a high-value structural safety file. The BBR2 mode
+ordering is a protocol invariant: the connection must probe steady state (Drain)
+before entering the probing cycle (ProbeBW). Any code change that bypasses Drain
+— e.g., an accidental `into_probe_bw` call from Startup — would violate
+`startup_cannot_skip_drain`. The theorems are all proved by `decide`/`simp`
+in a single step; the value lies in the specification, not the proof complexity.
+
+---
+
+### Overall Status (run 177)
+
+- **70 Lean files, 1348 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
 - Route-B: 27 targets, 2864+ cases PASS
-- Run 167: BBR2PacingRate.lean (T32, 14 thms, 0 sorry), Route-B for AckDelayCodec (31/31)
+- Run 167: BBR2PacingRate.lean (T32, 14 thms), Route-B for AckDelayCodec (31/31)
 - Run 168: RFC9000Sec46.lean — composed §4.6 end-to-end chain (12 thms)
 - Run 169: BBR2DrainPhase.lean (T70, 21 thms), Route-B for CidMgmt (56/56)
 - Run 170: BBR2Startup.lean (T71, 26 thms), Route-B for SsThresh (25/25)
@@ -2608,9 +2645,9 @@ Startup → Drain → ProbeBW state machine.
 - Run 172: BBR2CyclePhaseGain.lean (T73, 23 thms), CI audit
 - Run 173: PacketTypeEpoch.lean (T74, 14 thms), Route-B T73 (25/25)
 - Run 175: Route-B T74 (42/42 PASS), CORRESPONDENCE.md update, paper update
-- Run 176 (this run): BBR2DrainExit.lean (T75, 17 thms, 0 sorry) + CRITIQUE.md update
+- Run 176: BBR2DrainExit.lean (T75, 17 thms, 0 sorry) + CRITIQUE.md update
+- Run 177 (this run): BBR2ModeState.lean (T76, 19 thms, 0 sorry) + CRITIQUE.md update
 - **Next priorities**:
-  1. Route-B for T75 (BBR2DrainExit): compare drain exit decision vs Rust fixture
-  2. BBR2 mode state machine: Startup → Drain → ProbeBW transitions
-  3. REPORT.md update to cover runs 167–176
-  4. Paper PDF recompile (needs LaTeX environment)
+  1. Route-B for T75 (BBR2DrainExit) and T76 (BBR2ModeState)
+  2. REPORT.md update to cover runs 167–177
+  3. Paper PDF recompile (needs LaTeX environment)
