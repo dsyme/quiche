@@ -57,14 +57,14 @@ We present an incremental formal verification effort targeting
 \texttt{quiche}, Cloudflare's production implementation of the QUIC
 transport protocol and HTTP/3 in Rust.
 Using \emph{Lean~4} without Mathlib, we have proved
-\textbf{769 named theorems across 38 files}, covering core QUIC algorithms
+\textbf{1{,}312 named theorems across 68 files}, covering core QUIC algorithms
 from byte-level framing through congestion control (including BBR2 bandwidth
 and gcongestion pacing), HTTP/3 frame codec, QPACK integer encoding, stream
 state machines, and path-validation state.
-All 769 theorems are fully sorry-free; 0~\texttt{sorry} obligations remain.
+All 1{,}312 theorems are fully sorry-free; 0~\texttt{sorry} obligations remain.
 Proofs are verified continuously by CI.
 Behavioural correspondence between the Lean functional models and the Rust
-source is validated by 11 Route-B test suites covering 361 cases, all passing.
+source is validated by 26 Route-B test suites covering 2{,}822+ cases, all passing.
 Our methodology applies a five-phase pipeline---target identification,
 informal specification, formal specification, implementation extraction,
 and proof---to each algorithmic component in turn.
@@ -78,7 +78,7 @@ We report four notable findings:
     that packet number encoding and decoding are inverses across all four
     QUIC encoding lengths; and
 (4)~a formal characterisation of the HTTP/3 settings RFC-compliance
-    invariants, with 11 Route-B test suites (361 cases, all PASS)
+    invariants, with 26 Route-B test suites (2{,}822+ cases, all PASS)
     providing direct behavioural correspondence evidence.
 The entire project runs without Mathlib, using only Lean~4's built-in
 tactics (\texttt{omega}, \texttt{simp}, \texttt{decide}), demonstrating
@@ -115,13 +115,14 @@ Our contributions are:
   \item A \emph{target selection and specification methodology} adapted
     to Rust codebases, extracting functional models from imperative code
     while documenting the abstraction boundary.
-  \item \textbf{769 Lean~4 theorems} (all sorry-free) across 38 algorithmic
+  \item \textbf{1{,}312 Lean~4 theorems} (all sorry-free) across 68 algorithmic
     components, covering QUIC's byte framing, congestion control (including
-    BBR2 bandwidth arithmetic, BBR2 Limits invariants, and the gcongestion
+    BBR2 bandwidth arithmetic, BBR2 Limits invariants, BBR2 phase constants
+    (Startup/Drain/ProbeRTT/CyclePhase), and the gcongestion
     pacer), flow control, packet-number arithmetic, stream management, stream
     state machines, HTTP/3 frame codec, H3 Settings validation,
-    QPACK integer encoding, and path-validation state.
-  \item \textbf{11 Route-B correspondence test suites} covering 361 cases
+    QPACK integer encoding, packet-type/epoch mapping, and path-validation state.
+  \item \textbf{26 Route-B correspondence test suites} covering 2{,}822+ cases
     across representative targets, all PASS---providing direct behavioural
     evidence that the Lean functional models agree with the Rust source.
   \item \textbf{Four concrete findings}: a formally proved $\mathtt{Ord}$
@@ -277,7 +278,7 @@ Rust counterpart at the line level, assigning one of four correspondence
 levels: \emph{exact}, \emph{abstraction} (pure subset modelled),
 \emph{approximation} (semantically different in a documented way), or
 \emph{mismatch} (incorrect).
-Of 38 files audited, \textbf{no mismatches} were found.
+Of 68 files audited, \textbf{no mismatches} were found.
 
 % ---------------------------------------------------------------------------
 \section{Results}
@@ -286,10 +287,10 @@ Of 38 files audited, \textbf{no mismatches} were found.
 
 \subsection{Proof Inventory}
 
-Table~\ref{tab:theorems} summarises the 38 Lean files.
-The project totals \textbf{769 named theorems}, \textbf{0 \texttt{sorry}},
-verified by Lean~4.30.0-rc2 via the Lake build system.
-Correspondence is validated by \textbf{11 Route-B test suites} (361 cases, all PASS).
+Table~\ref{tab:theorems} summarises the 68 Lean files.
+The project totals \textbf{1{,}312 named theorems}, \textbf{0 \texttt{sorry}},
+verified by Lean~4.29.0 via the Lake build system.
+Correspondence is validated by \textbf{26 Route-B test suites} (2{,}822+ cases, all PASS).
 
 \begin{table*}[t]
 \centering
@@ -342,10 +343,10 @@ Correspondence is validated by \textbf{11 Route-B test suites} (361 cases, all P
 \texttt{QPACKStaticTable.lean}  & \texttt{quiche/src/h3/qpack/static\_table.rs} & H3/QPACK& 12  & \texttt{static\_table\_bounds}       & \texttt{decide} \\
 \texttt{QPACKInteger.lean}      & \texttt{quiche/src/h3/qpack/encoder.rs}       & H3/QPACK& 10  & \texttt{decodeInt\_encodeInt}        & \texttt{omega}, \texttt{simp} \\
 \midrule
-\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{769} & \textbf{0 sorry} & \\
+\multicolumn{3}{l}{\textbf{Total}}                                               & \textbf{1{,}312} & \textbf{0 sorry} & \\
 \bottomrule
 \end{tabular}
-\caption{Summary of 38 Lean~4 files: Rust source, logical layer, named
+\caption{Summary of 68 Lean~4 files (representative selection shown): Rust source, logical layer, named
 theorem count, headline result, and predominant proof tactics.
 \textbf{Bold} marks results with cross-cutting implications.}
 \label{tab:theorems}
@@ -353,9 +354,9 @@ theorem count, headline result, and predominant proof tactics.
 
 \subsection{Proof Architecture}
 
-The 38 files form five logical layers (Framing, Algorithm, Congestion,
+The 68 files form five logical layers (Framing, Algorithm, Congestion,
 Stream, H3/QPACK), as shown in Figure~\ref{fig:arch}.
-The Algorithm layer has grown from 9 to 15 files, the Congestion layer from 5 to 7,
+The Algorithm layer has grown from 9 to 20+ files, the Congestion layer from 5 to 15+,
 and a new H3/QPACK layer captures 5 files covering HTTP/3 framing, settings
 validation, QPACK static table, and QPACK integer codec.
 
@@ -615,11 +616,11 @@ carefully structured inductive argument.
 No bug was found in the quiche source that invalidated a proved theorem.
 The RFC~9000~\S A.3 gap (\S\ref{sec:findings}) was a
 specification error, not an implementation bug.
-This is itself a positive finding: the 769 theorems provide formal
+This is itself a positive finding: the 1{,}312 theorems provide formal
 evidence that the modelled properties hold in the Lean functional model,
 with correspondences to the Rust source documented in
-\texttt{CORRESPONDENCE.md} and validated by 11 Route-B test suites
-covering 361 cases across 11 representative targets, all PASS.
+\texttt{CORRESPONDENCE.md} and validated by 26 Route-B test suites
+covering 2{,}822+ cases across 26 representative targets, all PASS.
 
 % ---------------------------------------------------------------------------
 \section{Discussion}
@@ -743,19 +744,20 @@ reassembly---in a proof assistant.
 \label{sec:conclusion}
 % ---------------------------------------------------------------------------
 
-We have presented an incremental formal verification of 38 algorithmic
+We have presented an incremental formal verification of 68 algorithmic
 components in \texttt{quiche}, Cloudflare's production QUIC implementation,
 using Lean~4 without Mathlib.
-The project has accumulated \textbf{769 machine-checked theorems}, all
+The project has accumulated \textbf{1{,}312 machine-checked theorems}, all
 fully sorry-free.
 The proofs cover byte framing, congestion control (including BBR2 bandwidth
-arithmetic, BBR2 Limits struct, gcongestion pacing-rate invariants, and
+arithmetic, BBR2 Limits struct, BBR2 phase constants (Startup/Drain/ProbeRTT/CyclePhase),
+gcongestion pacing-rate invariants, and
 bytes-in-flight invariants), flow control, packet-number arithmetic, stream
 management, QUIC stream state machines, packet-header encoding, ACK range
-bounds, path-validation state, and HTTP/3/QPACK (frame codec, settings
-RFC-compliance, QPACK static table, QPACK integer codec).
+bounds, path-validation state, packet-type/epoch mapping, and HTTP/3/QPACK
+(frame codec, settings RFC-compliance, QPACK static table, QPACK integer codec).
 Correspondence between Lean models and Rust source is validated by
-\textbf{11 Route-B test suites covering 361 cases, all PASS}.
+\textbf{26 Route-B test suites covering 2{,}822+ cases, all PASS}.
 
 Four findings stand out: a formally proved \texttt{Ord} contract
 violation in HTTP/3 stream scheduling (intentional by design); a corrected
