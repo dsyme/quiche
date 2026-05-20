@@ -4,8 +4,9 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-16 17:40 UTC
-- **Commit**: `022e0f46` (run 166: Task 6 — added T66 AckDelayCodec, extended T27 CidMgmt §retire_if_needed, extended T26 CUBIC W_est)
+- **Date**: 2026-05-19 18:26 UTC
+- **Commit**: `f0660735` (run 175: Task 8 — added T74 PacketTypeEpoch Route-B 42/42 PASS; added CORRESPONDENCE entries for T70–T74)
+- (run 166: Task 6 — added T66 AckDelayCodec, extended T27 CidMgmt §retire_if_needed, extended T26 CUBIC W_est)
 - (run 163: added T67 BBR2InflightLo, T68 BBR2ProbeUpSlope, T69 QuicVersionPolicy)
 - **Lean build**: `lake build` passed with Lean 4.29.0 — 61 files, **0 sorry** 🎉
   (run 163: added QuicVersionPolicy.lean T69, 13 theorems; CORRESPONDENCE.md T67/T68/T69 entries)
@@ -4163,3 +4164,148 @@ grows at least to both `W_est` and the old cwnd; and concrete examples
 - Three `native_decide` concrete theorems provide ground-truth arithmetic checks.
 - No Route-B tests yet for the W_est extension; existing Route-B infrastructure
   for Cubic would need extension to drive the `w_est` update path.
+
+---
+
+## `FVSquad/BBR2DrainPhase.lean` → `quiche/src/recovery/gcongestion/bbr2/drain.rs`
+
+**Target**: T70
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2.rs` (`DEFAULT_PARAMS`), `quiche/src/recovery/gcongestion/bbr2/drain.rs`
+**Phase**: 5 — Done (run 169, 0 sorry)
+
+### Purpose
+
+Models the BBR2 DRAIN phase parameter constants: `drain_cwnd_gain = 2.0` and `drain_pacing_gain ≈ 0.3466` (= 1/startup_cwnd_gain). Gains are represented as integer fractions. Verifies that `drain_pacing_gain < 1 < drain_cwnd_gain`, that the pacing gain satisfies the design intent (pacing below estimated bandwidth), and that applying the gain correctly scales a bandwidth value.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|---|---|---|---|---|
+| `drainCwndGainNum/Den` | `DEFAULT_PARAMS.drain_cwnd_gain = 2.0` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 20/10 = 2.0 |
+| `drainPacingGainNum/Den` | `DEFAULT_PARAMS.drain_pacing_gain ≈ 0.3466` | `bbr2.rs:~DEFAULT_PARAMS` | **approximation** | 1000/2885; exact f32 is 1.0/2.885 |
+| `applyGain` | inline multiply | `drain.rs` | **abstraction** | Integer floor multiplication |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 169).
+- No Route-B tests.
+
+---
+
+## `FVSquad/BBR2Startup.lean` → `quiche/src/recovery/gcongestion/bbr2/startup.rs`
+
+**Target**: T71
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2.rs` (`DEFAULT_PARAMS`), `quiche/src/recovery/gcongestion/bbr2/startup.rs`
+**Phase**: 5 — Done (run 170, 26 theorems, 0 sorry)
+
+### Purpose
+
+Models the BBR2 STARTUP phase parameter constants: `startup_cwnd_gain = 2.0`, `startup_pacing_gain = 2.773`, `full_bw_threshold = 1.25`, and bandwidth-growth roundtrips-to-exit = 3. Verifies ordering invariants (pacing_gain > 1, cwnd_gain > 1, bw_threshold > 1), design intent (aggressive probing), and concrete value checks.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|---|---|---|---|---|
+| `startupCwndGainNum/Den` | `DEFAULT_PARAMS.startup_cwnd_gain = 2.0` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 20/10 |
+| `startupPacingGainNum/Den` | `DEFAULT_PARAMS.startup_pacing_gain = 2.773` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 2773/1000 |
+| `fullBwThresholdNum/Den` | `DEFAULT_PARAMS.full_bw_threshold = 1.25` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 5/4 |
+| `startupExitRounds` | `DEFAULT_PARAMS.startup_full_bw_rounds = 3` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | Nat literal |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 170).
+- No Route-B tests.
+
+---
+
+## `FVSquad/BBR2ProbeRTTPhase.lean` → `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs`
+
+**Target**: T72
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2.rs` (`DEFAULT_PARAMS`), `quiche/src/recovery/gcongestion/bbr2/probe_rtt.rs`
+**Phase**: 5 — Done (run 171, 25 theorems, 0 sorry)
+
+### Purpose
+
+Models the BBR2 PROBE_RTT phase constants: pacing/cwnd gain = 1.0, inflight target = 50% BDP, min_duration = 200 ms, min RTT filter window. Verifies that gains are unity, inflight fraction is between 0 and 1, duration is positive, and that the inflight target is correctly derived from BDP.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|---|---|---|---|---|
+| `probeRttPacingGain` | `DEFAULT_PARAMS.probe_rtt_pacing_gain = 1.0` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 10/10 |
+| `probeRttCwndGain` | `DEFAULT_PARAMS.probe_rtt_cwnd_gain = 1.0` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 10/10 |
+| `probeRttInflightFracNum/Den` | `DEFAULT_PARAMS.probe_rtt_inflight_target_bdp_fraction = 0.5` | `bbr2.rs:~DEFAULT_PARAMS` | **exact** | 1/2 |
+| `probeRttMinDurationMs` | `PROBE_RTT_MIN_DURATION = 200ms` | `probe_rtt.rs` | **exact** | Nat literal |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 171).
+- No Route-B tests.
+
+---
+
+## `FVSquad/BBR2CyclePhaseGain.lean` → `quiche/src/recovery/gcongestion/bbr2/mode.rs`
+
+**Target**: T73
+**Rust source**: `quiche/src/recovery/gcongestion/bbr2/mode.rs`, `quiche/src/recovery/gcongestion/bbr2.rs` (`DEFAULT_PARAMS`)
+**Phase**: 5 — Done (run 172, 23 theorems, 0 sorry)
+
+### Purpose
+
+Models the BBR2 ProbeBW `CyclePhase` pacing/cwnd gain dispatch. Verifies: Up pacing = 5/4, Down pacing = 9/10, others = 1/1; Up cwnd = 9/4, others = 2/1; ordering invariants (Up > default > Down for pacing).
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|---|---|---|---|---|
+| `pacingGain` | `CyclePhase::pacing_gain` | `mode.rs` | **exact** | f32 gain ≡ num/den |
+| `cwndGain` | `CyclePhase::cwnd_gain` | `mode.rs` | **exact** | f32 gain ≡ num/den |
+| `defaultParams` | `DEFAULT_PARAMS` | `bbr2.rs` | **exact** | Value correspondence |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 172).
+- **Route-B**: `formal-verification/tests/bbr2_cycle_phase_gain/` — 25/25 PASS (run 173).
+
+---
+
+## `FVSquad/PacketTypeEpoch.lean` → `quiche/src/packet.rs`
+
+**Target**: T74
+**Rust source**: `quiche/src/packet.rs` — `Type::from_epoch` (~L142), `Type::to_epoch` (~L152)
+**Phase**: 5 — Done (run 173, 14 theorems, 0 sorry)
+
+### Purpose
+
+Models the QUIC packet-type / encryption-epoch mapping. `from_epoch` maps an `Epoch` to the canonical packet `Type`; `to_epoch` maps a `Type` back to an `Option<Epoch>` (returning `None` for `Retry` and `VersionNegotiation`). `Result<T>` is modelled as `Option T`. All 14 theorems close by `decide`.
+
+### Correspondence Table
+
+| Lean name | Rust name | File + lines | Level | Notes |
+|---|---|---|---|---|
+| `fromEpoch` | `Type::from_epoch` | `packet.rs:L142` | **exact** | Pure pattern-match; identical logic |
+| `toEpoch` | `Type::to_epoch` | `packet.rs:L152` | **exact** | `Result<Epoch>` modelled as `Option Epoch`; error → `None` |
+| `Epoch` (inductive) | `pub enum Epoch { Initial, Handshake, Application }` | `packet.rs:L66` | **exact** | 3 variants, same order |
+| `PktType` (inductive) | `pub enum Type { Initial, Retry, Handshake, ZeroRTT, VersionNegotiation, Short }` | `packet.rs:L121` | **exact** | 6 variants, same names |
+
+### Approximations and known gaps
+
+1. **`Result` → `Option`**: `to_epoch` returns `Ok(e)` or `Err(Error::InvalidPacket)`. The Lean model collapses this to `Some e` / `None`. Error identity is not preserved, but all provable properties only concern the epoch value, not the error type.
+2. **No mutable state**: both functions are pure Rust; no approximation needed.
+
+### Key theorems
+
+| Theorem | Property | Bug-catching potential |
+|---|---|---|
+| `from_epoch_to_epoch` | `toEpoch(fromEpoch(e)) = some e` | **High** — primary round-trip |
+| `from_epoch_injective` | distinct epochs → distinct types | **High** — no aliasing |
+| `short_and_zeroRTT_same_epoch` | `toEpoch(Short) = toEpoch(ZeroRTT)` | **High** — shared epoch semantics |
+| `retry_and_vn_no_epoch` | `toEpoch(t) = none ↔ t = Retry ∨ t = VN` | High — exhaustive classification |
+| `range_of_fromEpoch` | image is `{Initial, Handshake, Short}` | Medium — ZeroRTT not in image |
+| `to_epoch_exhaustive` | every type is epoch-bearing or not | Medium — completeness |
+
+### Validation evidence
+
+- **`lake build`**: passed with Lean 4.29.0 — 0 sorry (run 173).
+- **Route-B**: `formal-verification/tests/packet_type_epoch/` — **42/42 PASS** (run 175).
+  - 9 test groups covering: Rust↔Lean agreement, round-trip in both directions, shared-epoch semantics, no-epoch types, injectivity, exact values, exhaustive classification.
