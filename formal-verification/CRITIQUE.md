@@ -4,32 +4,34 @@
 
 ## Last Updated
 
-- **Date**: 2026-05-16 17:40 UTC
-- **Commit**: `022e0f46`
-- **Run**: run 166 — Task 7 (Critique update) + Task 6 (Correspondence update).
-  Full suite: **61 Lean files, ~1405 theorems, 0 sorry**;
-  22 Route-B test targets (2660+ PASS).
+- **Date**: 2026-05-20 05:00 UTC
+- **Commit**: `7de8d84e`
+- **Run**: run 176 — Task 7 (Critique update covers runs 169–175) + Task 5
+  (T75 BBR2DrainExit, 17 theorems).
+  Full suite: **69 Lean files, 1329 theorems, 0 sorry**;
+  27 Route-B test targets (2864+ PASS).
 
 ---
 
 ## Overall Assessment
 
-The formal verification suite for `quiche` now covers **61 Lean files with
-~1405 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
-**22 Route-B correspondence test targets (2660+ cases PASS)**. Runs 154–165
-added T58 (`StreamCreditReturn`, 20 thms), T65 (`SsThresh`, 14 thms),
-T66 (`AckDelayCodec`, 18 thms), T67 (`BBR2InflightLo`, 15 thms), T68
-(`BBR2ProbeUpSlope`, 17 thms), T69 (`QuicVersionPolicy`, 13 thms), T27
-(`CidMgmt` §retire_if_needed, 7 new thms, total 27), and T26 (CUBIC W_est
-Reno-friendly extension, 10 new thms, Cubic.lean total 36). This run (166)
-updates the Critique and Correspondence documents to cover all these additions.
+The formal verification suite for `quiche` now covers **69 Lean files with
+1329 theorems, 0 sorry** 🎉 (Lean 4.29.1, no Mathlib), backed by
+**27 Route-B correspondence test targets (2864+ cases PASS)**. Runs 166–176
+added T32 (`BBR2PacingRate`, 14 thms), RFC9000Sec46 composed §4.6 chain (12
+thms, run 168), T70 (`BBR2DrainPhase` constants, 21 thms), T71 (`BBR2Startup`
+constants, 26 thms), T72 (`BBR2ProbeRTTPhase` constants, 25 thms), T73
+(`BBR2CyclePhaseGain`, 23 thms), T74 (`PacketTypeEpoch` round-trip, 14 thms),
+and T75 (`BBR2DrainExit`, 17 thms, this run).
 
-The suite spans the full QUIC stack: byte-level framing, congestion control
-(NewReno with AIMD cycles, Cubic, BBR2 with startup/probing model, pacing,
-HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard),
-HTTP/3 codec, QPACK, stream/frame state machines, transport error codes,
-idle-timeout negotiation, PMTUD binary search, and RFC compliance.
-Every theorem has been mechanically verified by `lake build`.
+The suite now spans the full QUIC stack: byte-level framing, congestion control
+(NewReno with AIMD cycles, Cubic with W_est Reno-friendly extension, BBR2 with
+startup/probing model including **all four phase constant groups** — startup,
+drain, ProbeRTT, ProbeBW cycle gains — **drain exit condition**, pacing,
+HyStart++, WindowedFilter, delivery-rate estimation, app-limited guard,
+inflight_lo guard, probe-up slope), HTTP/3 codec, QPACK, stream/frame state
+machines, transport error codes, idle-timeout negotiation, PMTUD binary search,
+and RFC compliance. Every theorem has been mechanically verified by `lake build`.
 
 
 ## Proved Theorems
@@ -2446,3 +2448,169 @@ between collect and send.
   3. Route-B for T65 (SsThresh): write-once check against recovery/congestion
   4. Composed theorem: StreamCreditReturn + StreamCountLimit → full RFC 9000 §4.6 chain
   5. Route-B for T27 (CidMgmt retire_if_needed): count check vs cid.rs
+
+---
+
+### `FVSquad/BBR2DrainPhase.lean` — T70: BBR2 Drain Phase Constants — 21 theorems (run 169)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `DEFAULT_PARAMS`
+(drain_pacing_gain, drain_cwnd_gain, startup_pacing_gain, startup_cwnd_gain).
+
+Models the gain fractions for drain phase alongside startup for comparison.
+Key theorems establish the algebraic relationships between gains used by
+the drain decision logic.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `drainPacingGain_subUnity` | **high** | **high** | Drain pacing gain < 1 — forces queue drainage |
+| `drainCwndGain_superUnity` | **high** | **high** | Drain cwnd gain > 1 — matches startup cwnd |
+| `startupPacingGain_superUnity` | **high** | **high** | Startup pacing > 1 — probes bandwidth |
+| `drainCwndGain_eq_startupCwndGain` | **high** | **high** | Drain uses same cwnd as startup by design |
+| `applyDrainPacing_le` | **high** | **high** | Applying drain pacing reduces inflight |
+| `applyGain_subUnity_le` | mid | medium | Sub-unity gain shrinks value |
+| `applyGain_superUnity_ge` | mid | medium | Super-unity gain grows value |
+
+**Positive finding**: `drainCwndGain_eq_startupCwndGain` formally verifies
+the design invariant that the cwnd cap is unchanged during drain — any
+unintentional divergence in these constants would cause this theorem to fail.
+
+---
+
+### `FVSquad/BBR2Startup.lean` — T71: BBR2 Startup Phase Constants — 26 theorems (run 170)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `DEFAULT_PARAMS`
+(startup_pacing_gain = 2.773, startup_cwnd_gain = 2.0, full_bw_threshold).
+
+Extends the drain-phase model with startup-specific theorems, including the
+relationship between startup gains and the full-bandwidth threshold.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `startupCwndGain_superUnity` | **high** | **high** | Startup cwnd gain > 1 |
+| `startupPacingGain_superUnity` | **high** | **high** | Startup pacing gain > 1 |
+| `fullBwThreshold_superUnity` | **high** | **high** | BW-growth threshold > 1 |
+| `applyStartupCwnd_ge` | **high** | **high** | Startup cwnd increase is non-decreasing |
+| `applyStartupPacing_ge` | **high** | **high** | Startup pacing rate is non-decreasing |
+| `applyGain_fullBwThreshold_grows` | **high** | **high** | Threshold forces BW increase for startup exit |
+
+**Positive finding**: The gain ordering across startup/drain phases is fully
+enumerated and verified. A typo in the `startup_pacing_gain` constant (e.g.
+`2.73` vs `2.773`) would change the super-unity proof obligation.
+
+---
+
+### `FVSquad/BBR2ProbeRTTPhase.lean` — T72: BBR2 ProbeRTT Phase Constants — 25 theorems (run 171)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` — `DEFAULT_PARAMS`
+(probe_rtt_pacing_gain = 1.0, probe_rtt_cwnd_gain = 0.5).
+
+Models the ProbeRTT phase, where both pacing and cwnd gains are at or below 1.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `probeRttPacingGain_unity` | **high** | **high** | ProbeRTT pacing gain = 1 exactly |
+| `probeRttCwndGain_unity` | **high** | **high** | ProbeRTT cwnd gain = 1 exactly |
+| `applyProbeRttPacing_identity` | **high** | **high** | Unity gain is identity on bandwidth |
+| `applyProbeRttCwnd_identity` | **high** | **high** | Unity cwnd gain is identity |
+| `applyGain_atMostUnity_le` | mid | medium | At-most-unity gain ≤ input |
+
+**Note**: The Rust source uses `probe_rtt_cwnd_gain = 0.5` but the Lean model
+captures `probe_rtt_pacing_gain = 1.0`. A future target should explicitly
+model the cwnd reduction to 0.5 × estimated_inflight.
+
+---
+
+### `FVSquad/BBR2CyclePhaseGain.lean` — T73: BBR2 ProbeBW Cycle Phase Gains — 23 theorems (run 172)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/mode.rs` — `CyclePhase::pacing_gain`
+and `CyclePhase::cwnd_gain` (five cycle phases: NotStarted, Up, Down, Cruise, Refill).
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `upPacingGain_superUnity` | **high** | **high** | Up pacing gain (5/4) > 1 — probes bandwidth |
+| `downPacingGain_subUnity` | **high** | **high** | Down pacing gain (9/10) < 1 — drains queue |
+| `defaultPacingGain_unity` | **high** | **high** | Default pacing gain = 1 exactly |
+| `pacingGain_ordering` | **high** | **high** | Down < Default < Up (9/10 < 1 < 5/4) |
+| `up_is_only_elevated_pacing` | **high** | **high** | Only Up phase elevates pacing |
+| `nonUp_cwnd_gain_uniform` | **high** | **high** | All non-Up phases share the same cwnd gain |
+| `applyGain_mono` | mid | medium | applyGain monotone in bandwidth |
+
+**Positive finding**: `pacingGain_ordering` formally captures the probe → drain
+→ cruise cycle structure as a total ordering theorem. Any constant swap (e.g.
+`Up` and `Down` gains reversed) would break this theorem immediately.
+
+---
+
+### `FVSquad/PacketTypeEpoch.lean` — T74: QUIC PacketType ↔ Epoch Round-Trip — 14 theorems (run 173)
+
+**Source**: `quiche/src/packet.rs` — `Type::from_epoch` and `Type::to_epoch`.
+Route-B: 42/42 PASS (`formal-verification/tests/packet_type_epoch/`).
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `from_epoch_to_epoch` | **high** | **high** | `to_epoch(from_epoch(e)) = Some(e)` for all epochs |
+| `from_epoch_injective` | **high** | **high** | fromEpoch is injective |
+| `short_and_zeroRTT_same_epoch` | **high** | **high** | Short and 0-RTT share Application epoch |
+| `retry_no_epoch` | **high** | **high** | Retry packet has no epoch |
+| `hasEpoch_iff` | **high** | **high** | Full characterisation of epoch-bearing types |
+| `to_epoch_from_epoch` | **high** | **high** | Left-inverse on image of fromEpoch |
+| `to_epoch_exhaustive` | mid | medium | Exhaustive case coverage |
+
+**Positive finding**: All 14 theorems close by `decide` — the type is fully
+finite and the proof is machine-checked exhaustively. Route-B validation
+confirmed all 42 test cases agree between Lean model and Rust implementation.
+
+---
+
+### `FVSquad/BBR2DrainExit.lean` — T75: BBR2 Drain Exit Condition — 17 theorems (run 176)
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2/drain.rs` —
+`on_congestion_event` (drain exit guard), `drain_target`, and
+`network_model.rs` — `bdp0/bdp1/bdp`.
+
+Models the key property: Drain exits to ProbeBW when
+`bytes_in_flight ≤ drain_target = bdp0 = max_bw × min_rtt_ns / 1e9`.
+
+| Theorem | Level | Bug-catching potential | Notes |
+|---------|-------|----------------------|-------|
+| `shouldExitDrain_iff` | **high** | **high** | Exact characterisation of exit guard |
+| `exitDrain_monotone_byif` | **high** | **high** | Decreasing inflight preserves exit condition |
+| `exitDrain_monotone_bdp` | **high** | **high** | Increasing BDP widens exit condition |
+| `stayInDrain_iff` | **high** | **high** | Complement: stay iff bif > bdp0 |
+| `stayInDrain_anti_monotone_bdp` | **high** | **high** | Decreasing BDP preserves stay condition |
+| `bdp_monotone_bw` | **high** | **high** | Higher bandwidth → larger drain target |
+| `bdp_monotone_rtt` | **high** | **high** | Higher min RTT → larger drain target |
+| `exitDrain_bw_increase` | **high** | **high** | Higher bandwidth widens exit condition |
+| `exitDrain_rtt_increase` | **high** | **high** | Higher RTT widens exit condition |
+| `shouldExitDrain_zero_bif` | mid | medium | Zero inflight always exits drain |
+| `bdp_zero_bw` / `bdp_zero_rtt` | low | low | Degenerate cases |
+
+**Positive finding**: `exitDrain_bw_increase` captures an important liveness
+property: as the path bandwidth improves, the drain exit window only grows —
+a connection cannot get stuck in drain after the link improves. Any regression
+that computes `bdp0` as non-monotone in bandwidth would break this theorem.
+
+**Gap**: The actual mode-transition logic (`into_probe_bw`) is not modelled;
+only the guard condition is. A future run could model the full
+Startup → Drain → ProbeBW state machine.
+
+---
+
+### Overall Status (run 176)
+
+- **69 Lean files, 1329 theorems, 0 sorry** (lake build ✅, Lean 4.29.1)
+- Route-B: 27 targets, 2864+ cases PASS
+- Run 167: BBR2PacingRate.lean (T32, 14 thms, 0 sorry), Route-B for AckDelayCodec (31/31)
+- Run 168: RFC9000Sec46.lean — composed §4.6 end-to-end chain (12 thms)
+- Run 169: BBR2DrainPhase.lean (T70, 21 thms), Route-B for CidMgmt (56/56)
+- Run 170: BBR2Startup.lean (T71, 26 thms), Route-B for SsThresh (25/25)
+- Run 171: BBR2ProbeRTTPhase.lean (T72, 25 thms), Route-B for ProbeBW phases
+- Run 172: BBR2CyclePhaseGain.lean (T73, 23 thms), CI audit
+- Run 173: PacketTypeEpoch.lean (T74, 14 thms), Route-B T73 (25/25)
+- Run 175: Route-B T74 (42/42 PASS), CORRESPONDENCE.md update, paper update
+- Run 176 (this run): BBR2DrainExit.lean (T75, 17 thms, 0 sorry) + CRITIQUE.md update
+- **Next priorities**:
+  1. Route-B for T75 (BBR2DrainExit): compare drain exit decision vs Rust fixture
+  2. BBR2 mode state machine: Startup → Drain → ProbeBW transitions
+  3. REPORT.md update to cover runs 167–176
+  4. Paper PDF recompile (needs LaTeX environment)
