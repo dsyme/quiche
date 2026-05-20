@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 175 (workflow 26116846871, 2026-05-19)
+Run 176 (workflow 26142021893, 2026-05-20)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,47 +9,53 @@ Run 175 (workflow 26116846871, 2026-05-19)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 175)
-- Lean files: 68
-- Total theorems: 1312
+## Repository State (after run 176)
+- Lean files: 69
+- Total theorems: 1329
 - Total sorry: 0
-- Route-B test targets: 27 (T74 PacketTypeEpoch added this run)
+- Route-B test targets: 27
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 175
-- PR created this run: T74 PacketTypeEpoch Route-B 42/42 PASS + paper update
+## Open PRs (lean-squad label) — as of run 176
+- PR #149: T74 PacketTypeEpoch Route-B 42/42 + paper update (open)
+- PR #146: T73 BBR2CyclePhaseGain (open, content already in master — stale)
+- PR created this run: T75 BBR2DrainExit + CRITIQUE.md update
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
 - lean-toolchain: v4.29.0
 - Triggers: PR + push on formal-verification/lean/**
 - lake build: 0 sorry
-- Run 174 improvement: added sorry-warning gate (fails CI if any theorem uses sorry)
 
 ## Targets
 
+### T75: BBR2DrainExit (run 176)
+- Phase: 5 (Done — 17 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2DrainExit.lean
+- Source: quiche/src/recovery/gcongestion/bbr2/drain.rs + network_model.rs
+- Key theorems: shouldExitDrain_iff, exitDrain_monotone_byif, exitDrain_monotone_bdp, bdp_monotone_bw, bdp_monotone_rtt, exitDrain_bw_increase
+- Note: `bif` is a Lean 4 keyword (boolean if); use `byif` instead
+
 ### T74: QUIC PacketType ↔ Epoch Round-Trip (run 173)
-- Phase: 5 (Done — run 173, 14 thms, 0 sorry)
+- Phase: 5 (Done — 14 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/PacketTypeEpoch.lean
-- Source: quiche/src/packet.rs — Type::from_epoch, Type::to_epoch
-- Key theorems: from_epoch_to_epoch, from_epoch_injective, short_and_zeroRTT_same_epoch
 - Route-B: 42/42 PASS (run 175) — formal-verification/tests/packet_type_epoch/
 
-### T73: BBR2 CyclePhase Gain Assignment (run 172, merged)
-- Phase: 5 (Done — run 172, 23 thms, 0 sorry)
+### T73: BBR2 CyclePhase Gain Assignment (run 172, in PR #146)
+- Phase: 5 (Done — 23 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2CyclePhaseGain.lean
 - Route-B: 25/25 PASS (run 173)
 
 ### T72: BBR2 PROBE_RTT Phase Constants (run 171)
-- Phase: 5 (Done — run 171, 25 thms, 0 sorry)
+- Phase: 5 (Done — 25 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2ProbeRTTPhase.lean
 
 ### T71: BBR2 Startup Phase Constants (run 170)
-- Phase: 5 (Done — run 170, 26 thms, 0 sorry)
+- Phase: 5 (Done — 26 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2Startup.lean
 
 ### T70: BBR2 Drain Phase Constants (run 169)
-- Phase: 5 (Done)
+- Phase: 5 (Done — 21 thms)
 - File: formal-verification/lean/FVSquad/BBR2DrainPhase.lean
 
 ### T65: SsThresh Route-B validation (run 170)
@@ -92,20 +98,20 @@ Run 175 (workflow 26116846871, 2026-05-19)
 | T74 (PacketTypeEpoch) | tests/packet_type_epoch/ | 42 | 175 |
 
 ## Key Technical Notes
+- `bif` is a Lean 4 keyword (boolean if-then-else) — use `byif` or `n` instead
 - `split_ifs` NOT available without Mathlib
 - `omega` CANNOT handle if-then-else — use `by_cases` + `simp` first
 - Best pattern: `by_cases h : cond <;> simp [h] <;> omega`
 - `ring` tactic NOT available without Mathlib — use `omega` for linear identities
-- For structure predicates: must add `Decidable` instances or use `omega`
 - `Nat.mul_div_cancel bw hd` requires explicit `hd : den > 0`
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `nlinarith`, `push_neg`, `norm_num` NOT available without Mathlib
 - Use `namespace FVSquad.ModuleName` to avoid name collisions
-- For PacketType/Epoch: all theorems close by `decide` — fully decidable
+- Lean 4.29.0 Nat.ble_eq sometimes unused in simp — just use `simp [shouldExitDrain]`
 
 ## Next Run Priorities
-1. New target: BBR2 cycle-phase state transitions (mode transitions in mode.rs)
-2. New target: T75 BBR2 drain exit condition (bytes_in_flight <= bdp0)
-3. REPORT.md update to cover runs 169-175
+1. Route-B for T75 (BBR2DrainExit): drain exit decision vs Rust fixture
+2. BBR2 mode state machine: Startup → Drain → ProbeBW transitions (T76)
+3. REPORT.md update to cover runs 167–176
 4. Paper PDF compilation (needs LaTeX environment)
-5. Run 175 PR merge + next target
+5. Merge PR #149 and PR #146
