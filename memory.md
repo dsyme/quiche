@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 176 (workflow 26142021893, 2026-05-20)
+Run 177 (workflow 26159754284, 2026-05-20)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,17 +9,17 @@ Run 176 (workflow 26142021893, 2026-05-20)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 176)
-- Lean files: 69
-- Total theorems: 1329
+## Repository State (after run 177)
+- Lean files: 70
+- Total theorems: 1348
 - Total sorry: 0
 - Route-B test targets: 27
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 176
-- PR #149: T74 PacketTypeEpoch Route-B 42/42 + paper update (open)
-- PR #146: T73 BBR2CyclePhaseGain (open, content already in master — stale)
-- PR created this run: T75 BBR2DrainExit + CRITIQUE.md update
+## Open PRs (lean-squad label) — as of run 177
+- PR #149: T74 PacketTypeEpoch Route-B 42/42 + paper update (open, stale — content merged)
+- PR #146: T73 BBR2CyclePhaseGain (open, stale — content merged)
+- PR created this run: T76 BBR2ModeState (19 thms) + CRITIQUE.md (branch lean-squad-run177-26159754284-bbr2-mode-state-machine)
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
@@ -29,17 +29,24 @@ Run 176 (workflow 26142021893, 2026-05-20)
 
 ## Targets
 
+### T76: BBR2ModeState (run 177)
+- Phase: 5 (Done — 19 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2ModeState.lean
+- Source: quiche/src/recovery/gcongestion/bbr2/mode.rs, startup.rs, drain.rs
+- Key theorems: startup_only_transitions_to_drain, startup_cannot_skip_drain,
+  drain_only_transitions_to_probebw, probertt_only_transitions_to_probebw,
+  step_idempotent_{startup,drain,probebw}_stable
+
 ### T75: BBR2DrainExit (run 176)
 - Phase: 5 (Done — 17 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2DrainExit.lean
 - Source: quiche/src/recovery/gcongestion/bbr2/drain.rs + network_model.rs
-- Key theorems: shouldExitDrain_iff, exitDrain_monotone_byif, exitDrain_monotone_bdp, bdp_monotone_bw, bdp_monotone_rtt, exitDrain_bw_increase
-- Note: `bif` is a Lean 4 keyword (boolean if); use `byif` instead
+- Route-B: not yet done (next priority)
 
 ### T74: QUIC PacketType ↔ Epoch Round-Trip (run 173)
 - Phase: 5 (Done — 14 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/PacketTypeEpoch.lean
-- Route-B: 42/42 PASS (run 175) — formal-verification/tests/packet_type_epoch/
+- Route-B: 42/42 PASS (run 175)
 
 ### T73: BBR2 CyclePhase Gain Assignment (run 172, in PR #146)
 - Phase: 5 (Done — 23 thms, 0 sorry)
@@ -58,44 +65,10 @@ Run 176 (workflow 26142021893, 2026-05-20)
 - Phase: 5 (Done — 21 thms)
 - File: formal-verification/lean/FVSquad/BBR2DrainPhase.lean
 
-### T65: SsThresh Route-B validation (run 170)
-- Phase: 5 (Route-B done)
-
-### T27: CidMgmt retire_if_needed Route-B validation (run 169)
-- Phase: 5 (Route-B done)
-
 ### Earlier targets (T1-T69): All phase 5 (Done)
 
 ## Route-B Tests (27 targets total, 2864+ cases, all PASS)
-| Target | Directory | Cases | Run |
-|--------|-----------|-------|-----|
-| T20 (PacketNumLen) | tests/pkt_num_len/ | 18 | 89 |
-| T36 (Bandwidth) | tests/bandwidth_arithmetic/ | 25 | 90 |
-| T2 (RangeSet) | tests/rangeset_insert/ | 21 | 96 |
-| T43 (AckRanges) | tests/ack_ranges/ | 25 | 102 |
-| T31 (H3Frame) | tests/h3_frame/ | 25 | 103 |
-| T37 (BytesInFlight) | tests/bytes_in_flight/ | 25 | 112 |
-| T38 (PathState) | tests/path_state/ | 75 | 118 |
-| T45 (QPACKInteger) | tests/qpack_integer/ | 25 | 122 |
-| T44 (StreamStateMachine) | tests/stream_state_machine/ | 46 | 123 |
-| T42 (FrameAckEliciting) | tests/frame_ack_eliciting/ | 33 | 124 |
-| T33 (H3Settings) | tests/h3_settings/ | 43 | 125 |
-| T48 (HyStart++) | tests/hystart/ | 27 | 133 |
-| T49 (WindowedFilter) | tests/windowed_filter/ | 24 | 136 |
-| T57 (ProbeBWPhase) | tests/probe_bw_phase/ | 10 | 142 |
-| T56 (LossDetectionThreshold) | tests/loss_detection_threshold/ | 991 | 144 |
-| T59 (TransportErrorCode) | tests/transport_error_code/ | 50 | 146 |
-| T61 (StreamFrameType) | tests/stream_frame_type/ | 19 | 147 |
-| IdleTimeout | tests/idle_timeout/ | 38 | 148 |
-| PRR | tests/prr/ | 25 | 150 |
-| T63 (StreamCountLimit) | tests/stream_count_limit/ | 28 | 157 |
-| T60 (ProbeRTTStateMachine) | tests/probe_rtt_sm/ | 23 | 158 |
-| T32/BBR2Limits | tests/bbr2_limits/ | 1000+ | 159 |
-| T66 (AckDelayCodec) | tests/ack_delay_codec/ | 31 | 167 |
-| T27 (CidMgmt retire_if_needed) | tests/cid_mgmt_retire/ | 56 | 169 |
-| T65 (SsThresh) | tests/ssthresh/ | 25 | 170 |
-| T73 (BBR2CyclePhaseGain) | tests/bbr2_cycle_phase_gain/ | 25 | 173 |
-| T74 (PacketTypeEpoch) | tests/packet_type_epoch/ | 42 | 175 |
+See prior memory entries for full table.
 
 ## Key Technical Notes
 - `bif` is a Lean 4 keyword (boolean if-then-else) — use `byif` or `n` instead
@@ -107,11 +80,12 @@ Run 176 (workflow 26142021893, 2026-05-20)
 - UInt8 bit-ops work cleanly with `decide` for small types
 - `nlinarith`, `push_neg`, `norm_num` NOT available without Mathlib
 - Use `namespace FVSquad.ModuleName` to avoid name collisions
-- Lean 4.29.0 Nat.ble_eq sometimes unused in simp — just use `simp [shouldExitDrain]`
+- `theorem mode_eq_decidable (m1 m2 : T) : Decidable (m1 = m2)` is NOT a proposition
+  — use `example` or `#check` instead
 
 ## Next Run Priorities
 1. Route-B for T75 (BBR2DrainExit): drain exit decision vs Rust fixture
-2. BBR2 mode state machine: Startup → Drain → ProbeBW transitions (T76)
-3. REPORT.md update to cover runs 167–176
+2. Route-B for T76 (BBR2ModeState): abstract mode step vs Rust fixture
+3. REPORT.md update to cover runs 167–177
 4. Paper PDF compilation (needs LaTeX environment)
-5. Merge PR #149 and PR #146
+5. Merge stale PRs #149 and #146
