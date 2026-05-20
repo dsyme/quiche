@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 177 (workflow 26159754284, 2026-05-20)
+Run 178 (workflow 26183850071, 2026-05-20)
 
 ## FV Toolchain
 - Lean 4.29.0 (lake project pinned, lean-toolchain: v4.29.0)
@@ -9,17 +9,17 @@ Run 177 (workflow 26159754284, 2026-05-20)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 
-## Repository State (after run 177)
+## Repository State (after run 178)
 - Lean files: 70
 - Total theorems: 1348
 - Total sorry: 0
-- Route-B test targets: 27
+- Route-B test targets: 29 (added T75 + T76 this run)
 - Status issue: #4 (open)
 
-## Open PRs (lean-squad label) — as of run 177
-- PR #149: T74 PacketTypeEpoch Route-B 42/42 + paper update (open, stale — content merged)
+## Open PRs (lean-squad label) — as of run 178
 - PR #146: T73 BBR2CyclePhaseGain (open, stale — content merged)
-- PR created this run: T76 BBR2ModeState (19 thms) + CRITIQUE.md (branch lean-squad-run177-26159754284-bbr2-mode-state-machine)
+- PR #149: T74 PacketTypeEpoch Route-B 42/42 + paper update (open, stale)
+- PR created this run: T75+T76 Route-B + Research (branch lean-squad-run178-26183850071-route-b-t75-t76)
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
@@ -29,19 +29,38 @@ Run 177 (workflow 26159754284, 2026-05-20)
 
 ## Targets
 
+### T79: VarIntLength (run 178, new research)
+- Phase: 1 — Research
+- Source: octets/src/lib.rs (lines 810–834)
+- Key: varint_len ↔ varint_parse_len consistency; decidable; HIGH priority
+- Next: write FVSquad/VarIntLength.lean
+
+### T78: BBR2ProbeBWCycle (run 178, new research)
+- Phase: 1 — Research
+- Source: quiche/src/recovery/gcongestion/bbr2/probe_bw.rs (lines 201–380)
+- Key: Down→Cruise/Refill→Refill→Up→Down ordering; abstract state machine
+- Next: write FVSquad/BBR2ProbeBWCycle.lean
+
+### T77: BBR2InflightHiSlope (run 178, new research)
+- Phase: 1 — Research
+- Source: quiche/src/recovery/gcongestion/bbr2/probe_bw.rs (lines 582–590)
+- Key: probe_up_rounds cap at 30; probe_up_bytes ≥ DEFAULT_MSS; HIGH priority
+- Next: write FVSquad/BBR2InflightHiSlope.lean
+
 ### T76: BBR2ModeState (run 177)
 - Phase: 5 (Done — 19 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2ModeState.lean
-- Source: quiche/src/recovery/gcongestion/bbr2/mode.rs, startup.rs, drain.rs
-- Key theorems: startup_only_transitions_to_drain, startup_cannot_skip_drain,
-  drain_only_transitions_to_probebw, probertt_only_transitions_to_probebw,
-  step_idempotent_{startup,drain,probebw}_stable
+- Source: mode.rs, startup.rs, drain.rs, probe_rtt.rs
+- Route-B: formal-verification/tests/bbr2_mode_state/ — 91/91 PASS (run 178)
+- CORRESPONDENCE.md: updated (run 178)
 
 ### T75: BBR2DrainExit (run 176)
 - Phase: 5 (Done — 17 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2DrainExit.lean
-- Source: quiche/src/recovery/gcongestion/bbr2/drain.rs + network_model.rs
-- Route-B: not yet done (next priority)
+- Source: quiche/src/recovery/gcongestion/bbr2/drain.rs, network_model.rs
+- Route-B: formal-verification/tests/bbr2_drain_exit/ — 23/23 PASS (run 178)
+- CORRESPONDENCE.md: updated (run 178)
+- Note: Lean comment says bw_bps is "bits/s" but formula matches Rust with bytes/s
 
 ### T74: QUIC PacketType ↔ Epoch Round-Trip (run 173)
 - Phase: 5 (Done — 14 thms, 0 sorry)
@@ -67,8 +86,14 @@ Run 177 (workflow 26159754284, 2026-05-20)
 
 ### Earlier targets (T1-T69): All phase 5 (Done)
 
-## Route-B Tests (27 targets total, 2864+ cases, all PASS)
-See prior memory entries for full table.
+## Route-B Tests (29 targets total, 1684+ cases, all PASS)
+| Target | Dir | Cases | Run |
+|--------|-----|-------|-----|
+| T75 BBR2DrainExit | bbr2_drain_exit | 23 | 178 |
+| T76 BBR2ModeState | bbr2_mode_state | 91 | 178 |
+| T74 PacketTypeEpoch | packet_type_epoch | 42 | 175 |
+| T73 BBR2CyclePhaseGain | bbr2_cycle_phase_gain | 25 | 173 |
+(+ 25 earlier targets for 1503+ more cases)
 
 ## Key Technical Notes
 - `bif` is a Lean 4 keyword (boolean if-then-else) — use `byif` or `n` instead
@@ -84,8 +109,9 @@ See prior memory entries for full table.
   — use `example` or `#check` instead
 
 ## Next Run Priorities
-1. Route-B for T75 (BBR2DrainExit): drain exit decision vs Rust fixture
-2. Route-B for T76 (BBR2ModeState): abstract mode step vs Rust fixture
-3. REPORT.md update to cover runs 167–177
-4. Paper PDF compilation (needs LaTeX environment)
-5. Merge stale PRs #149 and #146
+1. T77: BBR2InflightHiSlope (new research, HIGH — small pure arithmetic)
+2. T79: VarIntLength consistency (new research, HIGH — decidable)
+3. T78: BBR2ProbeBWCycle abstract state machine (MEDIUM)
+4. REPORT.md update to cover runs 167–178
+5. Paper PDF compilation (needs LaTeX environment)
+6. Merge stale PRs #149 and #146
