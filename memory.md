@@ -1,28 +1,27 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 179 (workflow 26206385584, 2026-05-21)
+Run 180 (workflow 26224153039, 2026-05-21)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan stable)
 - Lake project: formal-verification/lean/
 - Mathlib: NOT used (stdlib only, intentional)
 - Key tactic notes:
-  - `Nat.min_eq_left h` needs `h : a ≤ b` → `min a b = a`
-  - `Nat.min_eq_right h` needs `h : b ≤ a` → `min a b = b`
-  - For goals about `(n+1).min k`, use `change min (n+1) k ≥ n` then `Nat.le_min.mpr`
-  - `Nat.pow_succ : n ^ m.succ = n ^ m * n` (use `rw [Nat.pow_succ]; omega`)
-  - No `ring`, `split_ifs`, `push_neg` without Mathlib
+  - No `split_ifs`, `push_neg`, `rcases` without Mathlib
+  - Use `by_cases h : cond <;> simp [h] <;> omega` for if-then-else goals
+  - Use `cases Or.inl/inr` for Or goals instead of rcases
+  - `Nat.lt_or_ge b a` gives `inl : b < a | inr : a ≤ b` (note direction!)
 
-## Repository State (after run 179)
-- Lean files: 71
-- Total theorems: 1367 (1348 + 19)
+## Repository State (after run 180)
+- Lean files: 72
+- Total theorems: 1391 (1367 + 24)
 - Total sorry: 0
-- Route-B test targets: 29
+- Route-B test targets: 30
 
-## Open PRs (lean-squad label) — as of run 179
+## Open PRs (lean-squad label) — as of run 180
 - PR #146: T73 BBR2CyclePhaseGain (stale conflict — content already in master)
-- PR created this run: T77 BBR2InflightHiSlope (branch lean-squad-run179-26206385584-bbr2-inflight-hi-slope-t77)
+- PR created this run: T79 VarIntLength (branch lean-squad-run180-26224153039-varint-len-t79)
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
@@ -31,12 +30,12 @@ Run 179 (workflow 26206385584, 2026-05-21)
 
 ## Targets
 
-### T79: VarIntLength monotonicity (run 179, research)
-- Phase: 1 — Research
+### T79: VarIntLength monotonicity (run 180, DONE)
+- Phase: 5 (Done — 24 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/VarIntLength.lean
 - Source: octets/src/lib.rs (varint_len L810-822)
-- Key: varint_len is monotone non-decreasing; values only in {1,2,4,8}
-- Note: VarIntTag.lean already has consistency proofs; add monotonicity
-- Next: write FVSquad/VarIntLength.lean (~15 thms, all decide/omega)
+- Key theorems: varint_len_monotone, varint_len_in_set, varint_len_inv_monotone
+- Route-B: formal-verification/tests/varint_len/ — 25/25 PASS
 
 ### T78: BBR2ProbeBWCycle (run 179, research)
 - Phase: 1 — Research
@@ -48,8 +47,6 @@ Run 179 (workflow 26206385584, 2026-05-21)
 - Phase: 5 (Done — 19 thms, 0 sorry)
 - File: formal-verification/lean/FVSquad/BBR2InflightHiSlope.lean
 - Source: probe_bw.rs L582-590 (raise_inflight_high_slope)
-- Key theorems: newRounds_le_cap, probeUpBytes_ge_mss, growthThisRound_pos
-- CORRESPONDENCE.md: not yet updated
 
 ### T76: BBR2ModeState (run 177)
 - Phase: 5 (Done — 19 thms, 0 sorry)
@@ -63,11 +60,10 @@ Run 179 (workflow 26206385584, 2026-05-21)
 
 ### Earlier targets (T1-T74): All phase 5 (Done)
 
-## Route-B Tests (29 targets total, 1684+ cases, all PASS)
+## Route-B Tests (30 targets total, 1709+ cases, all PASS)
 
 ## Next Run Priorities
-1. T79: VarIntLength monotonicity (LOW difficulty, all omega/decide)
-2. T78: BBR2ProbeBWCycle abstract state machine (MEDIUM)
-3. REPORT.md update to cover runs 167–179
-4. CORRESPONDENCE.md update for T77, T75, T76
-5. Close PR #146 (stale, content already in master)
+1. T78: BBR2ProbeBWCycle abstract state machine (MEDIUM)
+2. REPORT.md update to cover runs 167–180
+3. CORRESPONDENCE.md update for T77, T79
+4. Close PR #146 (stale, content already in master)
