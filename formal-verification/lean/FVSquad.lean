@@ -68,3 +68,4 @@ import FVSquad.BBR2CyclePhaseGain
 import FVSquad.PacketTypeEpoch
 import FVSquad.BBR2DrainExit
 import FVSquad.BBR2ModeState
+import FVSquad.BBR2InflightHiSlope

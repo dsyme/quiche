@@ -1328,3 +1328,38 @@ Estimated 15 theorems, ~100 Lean lines.
 
 **Priority**: HIGH — the underflow risk is security-relevant (could allow
 bypassing the peer's stream limit).
+
+---
+
+## Update — Run 179 (2026-05-21)
+
+### T77: BBR2 raise_inflight_high_slope — **COMPLETED** (Phase 5)
+
+T77 has been fully verified. `FVSquad/BBR2InflightHiSlope.lean` contains 19
+theorems (0 sorry) verified by `lake build` with Lean 4.29.1. The two key
+safety invariants from the Rust source comment are now formally proved:
+- `probe_up_rounds` is always capped at 30 after update
+- `probe_up_bytes` always ≥ `DEFAULT_MSS` (1300 bytes)
+
+### T78: BBR2 ProbeBW Cycle Phase Ordering — Research
+
+The ProbeBW cycle transitions in `probe_bw.rs` form a structured state
+machine: `Down → Cruise/Refill, Refill → Up, Up → Down`. The transition
+functions `enter_probe_down`, `enter_probe_cruise`, `enter_probe_refill`,
+`enter_probe_up` are pure state changes. Key invariants: (1) only valid
+phase transitions occur, (2) `probe_up_rounds` is preserved across Refill,
+(3) the sequence restarts correctly.
+
+**Approach**: Define a 5-state inductive type matching `CyclePhase`; model
+transitions as a relation; prove reachability only through valid paths.
+Estimated 15–20 theorems, MEDIUM difficulty.
+
+### T79: VarInt Length Monotonicity — Research
+
+`varint_len(v)` is monotonically non-decreasing: larger `v` needs ≥ bytes.
+The precise claim: `v1 ≤ v2 → varint_len(v1) ≤ varint_len(v2)`.
+Secondary: `varint_len` takes only values in {1, 2, 4, 8}.
+These properties are not yet in VarInt.lean or VarIntTag.lean.
+
+**Approach**: Import `FVSquad.Varint`; prove using `by_cases` on the four
+ranges; all proofs by `omega`. Estimated ~15 theorems, LOW difficulty.
