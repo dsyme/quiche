@@ -1,7 +1,7 @@
 # Lean Squad Memory — dsyme/quiche
 
 ## Last updated
-Run 183 (workflow 26285112292, 2026-05-22)
+Run 184 (workflow 26304725999, 2026-05-22)
 
 ## FV Toolchain
 - Lean 4.29.1 (elan stable)
@@ -9,25 +9,28 @@ Run 183 (workflow 26285112292, 2026-05-22)
 - Mathlib: NOT used (stdlib only, intentional)
 - Key tactic notes:
   - No `split_ifs`, `push_neg`, `rcases` without Mathlib
-  - Use `by_cases h : cond <;> simp [h] <;> omega` for if-then-else goals
-  - Use `cases Or.inl/inr` for Or goals instead of rcases
-  - `Nat.lt_or_ge b a` gives `inl : b < a | inr : a ≤ b` (note direction!)
-  - Each file needs its own namespace to avoid CyclePhase name clashes
+  - Use `by_cases h : cond; exact ...` for if-then-else goals
+  - `Nat.max_le.mpr`, `Nat.le_min.mpr` for max/min inequalities (no unfolding)
+  - `by_cases hv : lo ≤ hi` for clamp case splits, then use `Nat.min_eq_right`
+  - `clamp_identity` uses `Nat.max_eq_left hl` + `Nat.min_eq_left hh`
+  - clamp2_le_hi1 is FALSE in general — use clamp2_mono instead
+  - pathA_clamp_le_acked is false — use pathA_growth_bounded (monotone form)
 
-## Repository State (after run 183)
-- Lean files: 74
-- Total theorems: 1567
+## Repository State (after run 184)
+- Lean files: 75
+- Total theorems: ~1579 (lake build passed, 0 sorry)
 - Total sorry: 0
 - Route-B test targets: 23
 
-## Open PRs (lean-squad label) — as of run 183
-- PR #153: T77 BBR2InflightHiSlope — STALE (content already in master)
-- PR #154: T79 VarIntLength + Route-B tests — STALE (content already in master)
-- PR #155: T78 BBR2ProbeBWCycle + T80 informal spec — STALE (content already in master)
-- PR #146: T73 BBR2CyclePhaseGain — STALE (content already in master)
-- PR run183 (branch lean-squad-run183-26285112292-research-t81-paper-update):
-  Task 1 — T81 research (BBR2 CWND update bounds)
-  Task 11 — Paper update (74 files, 1567 thms, 23 Route-B suites)
+## Open PRs (lean-squad label) — as of run 184
+- PR #157: T81 research + paper update — STALE (content merged into run184 branch)
+- PR #155: T78 BBR2ProbeBWCycle — STALE (conflict, content already in master)
+- PR #154: T79 VarIntLength — STALE (conflict, content already in master)
+- PR #153: T77 BBR2InflightHiSlope — STALE (conflict, content already in master)
+- PR #146: T73 BBR2CyclePhaseGain — STALE (conflict, content already in master)
+- PR run184 (branch lean-squad-run184-26304725999-bbr2-cwnd-update-t81):
+  Task 5 — T81 BBR2CwndUpdate.lean (18 thms, 0 sorry)
+  Task 9 — CI audit (lean-ci.yml healthy, passing)
 
 ## CI Status
 - lean-ci.yml: exists, healthy, passing
@@ -36,35 +39,22 @@ Run 183 (workflow 26285112292, 2026-05-22)
 
 ## Targets
 
-### T81: BBR2 update_congestion_window growth bounds (run 183, RESEARCHED)
-- Phase: 1 — Research
-- Source: quiche/src/recovery/gcongestion/bbr2.rs L603-621
-- File: TBD — FVSquad/BBR2CwndUpdate.lean (next run)
-- Key: cwnd ≤ prior + bytes_acked, startup: exact, post-clamp ∈ [lo, hi]
-- ~15-18 theorems, all omega, imports BBR2Limits
+### T81: BBR2 update_congestion_window growth bounds (run 184, DONE)
+- Phase: 5 — Done (18 thms, 0 sorry)
+- File: formal-verification/lean/FVSquad/BBR2CwndUpdate.lean
+- Key: cwndA ≤ prior+bytes_acked; clamp is monotone; two-stage clamp bounded
 - Bug-catching potential: HIGH
 
 ### T80: BBR2BandwidthGrowth (run 182, DONE)
 - Phase: 5 (Done — 20 thms, 0 sorry)
-- File: formal-verification/lean/FVSquad/BBR2BandwidthGrowth.lean
 
 ### T79: VarIntLength (run 180, DONE)
-- Phase: 5 (Done — 24 thms, 0 sorry)
-- File: formal-verification/lean/FVSquad/VarIntLength.lean
 
 ### T78: BBR2ProbeBWCycle (run 181, DONE)
-- Phase: 5 (Done — 32 thms, 0 sorry)
-- File: formal-verification/lean/FVSquad/BBR2ProbeBWCycle.lean
-- Key: cycle_strongly_connected (every phase reaches every other in ≤4 steps)
 
 ### T77: BBR2InflightHiSlope (run 179, DONE)
-- Phase: 5 (Done — 19 thms, 0 sorry)
-- File: formal-verification/lean/FVSquad/BBR2InflightHiSlope.lean
 
-### T76: BBR2ModeState (run 177, DONE)
-- Phase: 5 (Done — 19 thms, 0 sorry)
-
-### Earlier targets (T1-T75): All phase 5 (Done)
+### Earlier targets (T1-T76): All phase 5 (Done)
 
 ## Route-B Tests (23 directories)
 ack_delay_codec, ack_ranges, bbr2_cycle_phase_gain, bbr2_limits,
@@ -75,14 +65,14 @@ ssthresh, stream_frame_type, stream_state_machine, transport_error_code,
 varint_len, windowed_filter
 
 ## Next Run Priorities
-1. T81: write FVSquad/BBR2CwndUpdate.lean (~15-18 thms, all omega, imports BBR2Limits)
-2. Close stale PRs #146, #153, #154, #155 (all merged into master already)
-3. Route-B tests for T78 (BBR2ProbeBWCycle) and T80 (BBR2BandwidthGrowth)
-4. T25: StreamId↔stream_do_send guard correctness
-5. T26: CUBIC Reno-friendly transition (W_est model)
+1. Close stale PRs #146, #153, #154, #155, #157 (all merged into master)
+2. T82: new research target — BBR2 probe_rtt entry conditions or H3 qpack encode
+3. Route-B tests for T81 (BBR2CwndUpdate) — Rust vs Lean comparison
+4. Update CORRESPONDENCE.md for T81
+5. Extend CRITIQUE.md with T81 assessment
 
 ## Status Issue
-Issue #4 (open) — updated run 183
+Issue #4 (open) — updated run 184
 
 ## Key Findings
 - OQ-1 (run49): StreamPriorityKey antisymmetry violation (intentional by design)
