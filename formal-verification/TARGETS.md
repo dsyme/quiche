@@ -45,6 +45,7 @@
 | 37 | `BytesInFlight` counter state-machine invariant | `quiche/src/recovery/bytes_in_flight.rs` | 1 | 🔬 Researched | `bytes > 0 ↔ interval_start.is_some()`; MEDIUM; run 88/89 research |
 | 47 | PMTUD binary-search probe_size invariant | `quiche/src/pmtud.rs` | 5 | ✅ Done (run 129) | `FVSquad/Pmtud.lean` (run 129): 12 theorems, 0 sorry; probe_size ∈ [MIN_PLPMTU, max_mtu], binary-search convergence, narrowing, midpoint bounds |
 | 48 | HyStart++ RTT threshold clamp + CSS growth divisor | `quiche/src/recovery/congestion/hystart.rs` | 2 | 📝 Informal Spec (run 129) | `specs/hystart_informal.md`; clamp to [4ms, 16ms], css_cwnd_inc monotonicity, css_round_count bounds; ~10 thms, omega |
+| 81 | BBR2 `update_congestion_window` growth bounds | `quiche/src/recovery/gcongestion/bbr2.rs` | 1 | 🔬 Researched (run 183) | cwnd ≤ prior + bytes_acked; startup: cwnd = prior + bytes_acked; post-clamp ∈ [lo, hi]; imports BBR2Limits; ~15–18 thms, omega |
 
 ## Phase Definitions
 
@@ -59,33 +60,15 @@
 
 ## Next Actions
 
-1. **Route-B tests (T20)** — ✅ Done in run 89.
-   `formal-verification/tests/pkt_num_len/` (18/18 PASS):
-   Rust bit-counting vs Lean threshold model verified on all QUIC-valid inputs.
-2. **Target 36: Bandwidth arithmetic** *(HIGH, easy)* — All `omega`, ~40 Lean lines.
-   Key theorems: `bandwidth_zero_le`, `bandwidth_bytes_roundtrip`, `bandwidth_bits_roundtrip`,
-   `bandwidth_add_bits`, `bandwidth_ord_iff`. No Mathlib needed.
-3. **Target 31: H3 frame codec round-trip** *(HIGH)* — Informal spec done (run 82).
-   Next: write `FVSquad/H3Frame.lean` with GoAway/MaxPushId/CancelPush round-trips.
-   OQ-T31-1 to OQ-T31-4 document open questions.
-4. **Target 33: H3 Settings frame invariants** *(HIGH)* — Informal spec done (run 86).
-   Next: write `FVSquad/H3Settings.lean` with key invariants and RFC constraints.
-   OQ-T33-1 to OQ-T33-4 document open questions.
-5. **Target 34: QPACK static table lookup** *(LOW effort)* — Pure lookup table;
-   provable via `decide`; ~30 Lean lines; closes first QPACK gap.
-6. **Target 35: `parse_settings_frame` RFC compliance** *(MEDIUM)* — Prove H2-key
-   rejection using case analysis; builds on T33 informal spec.
-7. **Target 37: `BytesInFlight` counter invariant** *(MEDIUM)* — State-machine proof;
-   `bytes > 0 ↔ interval_start.is_some()`; MEDIUM complexity.
-8. **Target 29: Packet-header full roundtrip** *(MEDIUM)* — `PacketHeader.lean` at
-   Phase 4 (14 theorems, 1 sorry). Closing `longHeader_roundtrip` requires a
-   byte-list buffer model of `encode_pkt_num` + `decode_pkt_num`.
-9. **Target 25: StreamId↔stream_do_send guard correctness** — Prove the
+1. **Target 81: BBR2 `update_congestion_window` growth bounds** *(HIGH, run 183 research)* — Researched in run 183; write `FVSquad/BBR2CwndUpdate.lean` (~15–18 thms, all `omega`); imports `FVSquad.BBR2Limits`.
+2. **Target 25: StreamId↔stream_do_send guard correctness** — Prove the
    `is_bidi && is_local` guard selects exactly the RFC 9000 §2.1 send-allowed IDs.
-10. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
-    `Cubic.lean` with `W_est` model and `cwnd_after_ack_ge_west` theorem.
-11. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
-    is maintained by the receive buffer write path.
+3. **Target 26: CUBIC Reno-friendly transition** *(MEDIUM)* — Extend
+   `Cubic.lean` with `W_est` model and `cwnd_after_ack_ge_west` theorem.
+4. **Target 22: RecvBuf flow-control bound** — Prove `highMark ≤ max_data`
+   is maintained by the receive buffer write path.
+5. **Route-B tests for T78 (BBR2ProbeBWCycle)** — write Rust test in `tests/bbr2_probe_bw_cycle/`.
+6. **Route-B tests for T80 (BBR2BandwidthGrowth)** — write Rust test in `tests/bbr2_bandwidth_growth/`.
 
 ## Archived / Completed Targets
 
@@ -583,3 +566,37 @@ theorems not yet in VarIntTag.lean.
 
 **Next action**: Decide if sufficient new content exists vs. what's already
 in VarInt.lean + VarIntTag.lean. If so, write `FVSquad/VarIntLength.lean`.
+
+---
+
+### Target 81: BBR2 `update_congestion_window` Growth Bounds
+
+**Phase**: 1 — Research (run 183)
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` (L603–621)
+**Description**: Formal model of the BBR2 CWND update logic. The function
+has three branches: (1) full-bandwidth branch — `cwnd = min(target +
+ack_height, prior + bytes_acked)`; (2) startup/growth branch — `cwnd =
+prior + bytes_acked`; (3) no-op branch. After all branches, two `Limits`
+clamping calls bound cwnd to `[cwnd_limits.lo, cwnd_limits.hi]`.
+
+**Key properties**:
+- `cwnd_growth_bounded_bytes_acked`: new cwnd ≤ prior_cwnd + bytes_acked
+- `cwnd_growth_exact_startup`: when growing (below target), cwnd increases by exactly bytes_acked
+- `cwnd_in_range_after_clamp`: result ∈ [lo, hi] (imports BBR2Limits.lean)
+- `cwnd_nondecreasing_startup`: cwnd strictly increases when bytes_acked > 0
+
+**Specification size**: ~60 Lean lines
+**Proof tractability**: LOW–MEDIUM. All `omega` after branch case-split.
+**Estimated theorems**: ~15–18 theorems, 0 sorry.
+**Lean file**: `FVSquad/BBR2CwndUpdate.lean`
+**Dependencies**: imports `FVSquad.BBR2Limits`
+
+**Approximations**:
+- `target_cwnd` (from `get_target_congestion_window`) is an abstract `Nat` parameter
+- Two `apply_limits` clamping steps modelled as a single net clamp
+- `max_ack_height` is an abstract `Nat` additive term
+
+**Bug-catching potential**: HIGH — an off-by-one in `min()` or wrong comparison
+in the growth guard would cause BBR2 to mis-size the window.
+
+**Next action**: Write `FVSquad/BBR2CwndUpdate.lean`.
