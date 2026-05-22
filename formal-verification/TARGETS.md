@@ -511,3 +511,75 @@ the safety invariant.
 - 24 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
 - CORRESPONDENCE.md: not yet updated
 
+
+---
+
+### Target 77: BBR2 raise_inflight_high_slope Arithmetic Invariants
+
+**Phase**: 5 — Done (run 179)
+**Source**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs` (L582–590)
+**Lean file**: `formal-verification/lean/FVSquad/BBR2InflightHiSlope.lean`
+**Status**: 19 theorems, 0 sorry, `lake build` passed (Lean 4.29.1)
+
+**What was verified**:
+- `newRounds_le_cap`: after update, `probe_up_rounds ≤ 30` (cap invariant)
+- `probeUpBytes_ge_mss`: after update, `probe_up_bytes ≥ DEFAULT_MSS (1300)` (floor invariant)
+- `growthThisRound_pos`: growth = 2^rounds > 0 (no division by zero)
+- `growth_doubles_each_round`: exponential growth structure
+- `growth_bounded_by_cap`: growth ≤ 2^30 ≈ 1G when rounds ≤ 30
+- 6 concrete example checks
+
+**Bug-catching potential**: HIGH — directly verifies the two safety properties
+documented in the Rust source comment ("growth_this_round is capped at 1G"
+and "lower bound of probe_up_bytes is (practically) 1 mss").
+
+---
+
+### Target 78: BBR2 ProbeBW Cycle Phase Ordering
+
+**Phase**: 1 — Research (run 179)
+**Source**: `quiche/src/recovery/gcongestion/bbr2/probe_bw.rs` (state transitions)
+**Description**: Abstract model of the ProbeBW cycle state machine:
+Down → Cruise/Refill → Refill → Up → Down. Verify that valid transitions
+maintain the phase ordering invariant and that invalid phase transitions
+are unreachable.
+
+**Specification size**: ~60 Lean lines
+**Proof tractability**: MEDIUM — finite state machine, decidable for concrete
+states but the transition relation has guards requiring time/round constraints.
+
+**Approximations needed**:
+- Time (`Instant`) and round counts are abstracted away; model only which
+  phase transitions are structurally valid.
+- Guard conditions (bandwidth lo, inflight hi, etc.) are abstracted as
+  boolean flags.
+
+**Approach**: Define `CyclePhase` inductive type; define `validTransition`;
+prove that the phase sequence (Down→{Cruise,Refill}, Refill→Up, Up→Down)
+forms the only reachable paths.
+
+**Next action**: Write `FVSquad/BBR2ProbeBWCycle.lean`.
+
+---
+
+### Target 79: VarInt Length Codec Consistency
+
+**Phase**: 1 — Research (run 179)
+**Source**: `octets/src/lib.rs` (L810–834, `varint_len` + `varint_parse_len`)
+**Description**: Verify that `varint_len` and `varint_parse_len` are mutually
+consistent: for any value `v` in the valid range, the first byte produced by
+encoding `v` with `varint_len(v)` bytes has a top-2-bit tag that decodes to
+exactly `varint_len(v)`.
+
+**Note**: VarIntTag.lean (T30) already covers this via `varint_tag_consistency`.
+This target would add: (1) the monotonicity of `varint_len` (larger values need
+longer encodings), (2) proofs about the specific boundary values.
+
+**Specification size**: ~25 Lean lines
+**Proof tractability**: LOW (all decidable) — use `decide` for concrete values.
+
+**Approach**: Import `FVSquad.Varint`; add monotonicity and strict ordering
+theorems not yet in VarIntTag.lean.
+
+**Next action**: Decide if sufficient new content exists vs. what's already
+in VarInt.lean + VarIntTag.lean. If so, write `FVSquad/VarIntLength.lean`.
