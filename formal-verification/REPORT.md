@@ -2,47 +2,48 @@
 
 > 🔬 *Lean Squad — automated formal verification for `dsyme/quiche`.*
 
-**Status**: ✅ ACTIVE — **1,358 named theorems**, **0 `sorry`**, 59 Lean files
-(Lean 4.29.0, no Mathlib).
+**Status**: ✅ ACTIVE — **1,443 named theorems**, **0 `sorry`**, 74 Lean files
+(Lean 4.29.1, no Mathlib).
 
 ## Last Updated
 
-- **Date**: 2026-05-15 04:50 UTC
-- **Commit**: `8be2b9bb`
+- **Date**: 2026-05-22 04:48 UTC
+- **Commit**: `b08ac6d0`
 
 ---
 
 ## Executive Summary
 
-The `quiche` formal verification project has proved **1,358 named theorems**
-across **59 Lean 4 files** covering all of the QUIC library's core algorithmic
+The `quiche` formal verification project has proved **1,443 named theorems**
+across **74 Lean 4 files** covering all of the QUIC library's core algorithmic
 components — from byte-level framing (`Varint`, `Octets`, `OctetsMut`,
 `OctetsRoundtrip`) through congestion control (`NewReno`, `NewRenoAIMD`,
 `CUBIC`, `PRR`, `Bandwidth`, `Pacer`, `BBR2Limits`, `BBR2NetworkFilters`,
-`BBR2StartupExit`, `BBR2InflightLo`, `DeliveryRate`, `AppLimitedGuard`,
-`HyStart`, `WindowedFilter`) to stream management (`RecvBuf`, `SendBuf`,
-`CidMgmt`, `StreamStateMachine`, `StreamCreditReturn`, `StreamCountLimit`) and
-wire encoding (`StreamId`, `PacketNumLen`, `AckRanges`, `FrameAckEliciting`,
-`AckDelayCodec`), plus HTTP/3 layer coverage (`H3Frame`, `H3Settings`,
-`H3ParseSettings`, `QPACKStaticTable`, `QPACKInteger`), loss detection
-(`LossDetectionThreshold`, `ProbeBWPhase`), path management (`PathState`,
-`IdleTimeout`, `Pmtud`), and BBR2 state machine phases (`ProbeRTTStateMachine`,
-`ProbeRTTPhase`, `SsThresh`).
+`BBR2StartupExit`, `BBR2BandwidthGrowth`, `BBR2InflightLo`, `DeliveryRate`,
+`AppLimitedGuard`, `HyStart`, `WindowedFilter`) to stream management (`RecvBuf`,
+`SendBuf`, `CidMgmt`, `StreamStateMachine`, `StreamCreditReturn`,
+`StreamCountLimit`) and wire encoding (`StreamId`, `PacketNumLen`, `AckRanges`,
+`FrameAckEliciting`, `AckDelayCodec`, `VarIntLength`), plus HTTP/3 layer
+coverage (`H3Frame`, `H3Settings`, `H3ParseSettings`, `QPACKStaticTable`,
+`QPACKInteger`), loss detection (`LossDetectionThreshold`, `ProbeBWPhase`),
+path management (`PathState`, `IdleTimeout`, `Pmtud`), and BBR2 state machine
+phases (`ProbeRTTStateMachine`, `ProbeRTTPhase`, `SsThresh`,
+`BBR2InflightHiSlope`, `BBR2ProbeBWCycle`).
 Highlights include: formal proof of a *real RFC 9000 §A.3 conformance property*
 (`decode_pktnum_correct`); formal confirmation of an **`Ord` contract
 violation** in HTTP/3 stream scheduling (`StreamPriorityKey`); full QPACK/HPACK
 integer codec round-trip by strong induction (`QPACKInteger`); RFC 9000 §2.1
 stream-ID classification laws (`StreamId`); the full long-header buffer
 round-trip (`PacketHeader`); and the BBR2 `inflight_lo` sentinel-guard invariant
-(`BBR2InflightLo`). **All 1,358 theorems are fully proved with 0 sorry.**
-Twenty-two targets have Route-B executable correspondence tests (2,660+ cases),
+(`BBR2InflightLo`). **All 1,443 theorems are fully proved with 0 sorry.**
+Twenty-three targets have Route-B executable correspondence tests (1,759+ cases),
 all passing.
 
 ---
 
 ## Proof Architecture
 
-The 59 files form four logical layers (file counts and theorem totals as of run 161):
+The 74 files form four logical layers (file counts and theorem totals as of run 182):
 
 ```mermaid
 graph TD
@@ -323,13 +324,18 @@ graph LR
 | `TransportErrorCode.lean` | 15 | ✅ | `error_code_unique` |
 | `StreamFrameType.lean` | 12 | ✅ | `stream_type_bits_disjoint` |
 | `BBR2InflightLo.lean` | 15 | ✅ | `cap_after_clear_noop` |
-| **Total** | **1,358** | **0 sorry** | **59 files** |
+| `BBR2InflightHiSlope.lean` | 19 | ✅ | `probeUpBytes_ge_mss` |
+| `BBR2ProbeBWCycle.lean` | 32 | ✅ | `cycle_strongly_connected` |
+| `VarIntLength.lean` | 24 | ✅ | `varint_len_monotone` |
+| `BBR2BandwidthGrowth.lean` | 20 | ✅ | `baseline_ge_after_growth` |
+| **Total** | **1,443** | **0 sorry** | **74 files** |
 
 ### Route-B Correspondence Tests
 
 | Target | Directory | Cases | Result |
 |--------|-----------|-------|--------|
 | T20 (PacketNumLen) | `tests/pkt_num_len/` | 18 | ✅ 18/18 PASS |
+| T79 (VarIntLength) | `tests/varint_len/` | 25 | ✅ 25/25 PASS |
 | T36 (Bandwidth) | `tests/bandwidth_arithmetic/` | 25 | ✅ 25/25 PASS |
 | T2 (RangeSet) | `tests/rangeset_insert/` | 21 | ✅ 21/21 PASS |
 | T43 (AckRanges) | `tests/ack_ranges/` | 25 | ✅ 25/25 PASS |
@@ -353,7 +359,7 @@ graph LR
 | T60 (ProbeRTTStateMachine) | `tests/probe_rtt_sm/` | 23 | ✅ 23/23 PASS |
 | T32/BBR2Limits | `tests/bbr2_limits/` | 1000+ | ✅ 1000+/1000+ PASS |
 
-**Total Route-B cases**: 2,660+/2,660+ PASS across 22 targets.
+**Total Route-B cases**: 1,759+/1,759+ PASS across 23 targets.
 
 > Note: T56 includes a complete exhaustive sweep of all (current, spurious) pairs in
 > [0..30]×[0..30], formally confirming that `max(c, min(s, MAX)) = max(c, clampToMax(s))`
@@ -511,18 +517,22 @@ timeline
         TransportErrorCode T59 (15 thms), StreamFrameType T61 (12 thms), IdleTimeout Route-B 38/38, PRR Route-B 25/25, SsThresh T65 (17 thms), StreamCreditReturn T58 (20 thms), StreamCountLimit T63 (16 thms), ProbeRTTStateMachine T60 (35 thms), ProbeRTTPhase (26 thms), Pmtud (20 thms), AckDelayCodec T66 (18 thms), BBR2Limits Route-B 1000+ : 0 sorry milestone re-established; total 1343 theorems, 58 files
     section Run 161
         BBR2InflightLo T67 (15 thms — sentinel-guard invariants for inflight_lo), REPORT update : 15 new theorems; total 1358 theorems, 59 files, 0 sorry
+    section Runs 162–181
+        BBR2ProbeUpSlope T69 (14 thms), QuicVersionPolicy T70 (16 thms), RFC9000Sec46 T71 (14 thms), BBR2Startup T72 (20 thms), BBR2ProbeRTTPhase T73 (20 thms), BBR2CyclePhaseGain T73 (21 thms), PacketTypeEpoch T74 (18 thms), BBR2DrainExit T75 (17 thms), BBR2ModeState T76 (19 thms), BBR2InflightHiSlope T77 (19 thms), BBR2ProbeBWCycle T78 (32 thms), VarIntLength T79 (24 thms), Route-B varint_len 25/25 : total 1423 theorems, 73 files, 0 sorry
+    section Run 182
+        BBR2BandwidthGrowth T80 (20 thms — full has_bandwidth_growth model with is_valid guard), REPORT update : 20 new theorems; total 1443 theorems, 74 files, 0 sorry
 ```
 
 ---
 
 ## Toolchain
 
-- **Prover**: Lean 4 (version 4.29.0+)
+- **Prover**: Lean 4 (version 4.29.1)
 - **Libraries**: stdlib only — no Mathlib dependency
 - **CI**: `.github/workflows/lean-ci.yml` — runs `lake build` on every PR
   that touches `formal-verification/lean/**`
 - **Build system**: Lake (lakefile.toml with zero external packages)
-- **Route-B tests**: 22 targets, 2,660+ cases, all passing
+- **Route-B tests**: 23 targets, 1,759+ cases, all passing
 
 ---
 
