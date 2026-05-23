@@ -1363,3 +1363,71 @@ These properties are not yet in VarInt.lean or VarIntTag.lean.
 
 **Approach**: Import `FVSquad.Varint`; prove using `by_cases` on the four
 ranges; all proofs by `omega`. Estimated ~15 theorems, LOW difficulty.
+
+---
+
+## Update — Run 183 (2026-05-22)
+
+### T81: BBR2 `update_congestion_window` Growth Bounds — Research
+
+**Source**: `quiche/src/recovery/gcongestion/bbr2.rs` (L603–621)
+**Description**: `update_congestion_window` is the CWND update function for
+BBR2. It combines the BDP target, the `full_bandwidth_reached` flag, the
+`max_ack_height` estimate, and the per-event `bytes_acked` delta to compute
+the new CWND, then clamps it via two `Limits` applications.
+
+The function has two growth branches:
+
+1. **Full-bandwidth branch** (`full_bandwidth_reached = true`):
+   `cwnd = min(target + ack_height, prior + bytes_acked)`
+   → New cwnd is *at most* `prior + bytes_acked` (bounded by what arrived)
+   → New cwnd is *at most* `target + ack_height` (bounded by BDP estimate)
+   → New cwnd is *at least* whichever of the two is smaller
+
+2. **Startup/growth branch** (`full_bandwidth_reached = false`, below target):
+   `cwnd = prior + bytes_acked`
+   → New cwnd increases by *exactly* `bytes_acked` (no more, no less)
+   → This is the RFC 9000 slow-start/CWND increase semantics
+
+3. **No-op branch** (above target and below 2×initial): cwnd unchanged
+
+4. **Clamping** (both branches): cwnd is then clamped via `apply_limits`
+   (mode-specific limits and global `cwnd_limits`), so the result always
+   lies in `[cwnd_limits.lo, cwnd_limits.hi]`.
+
+**Key properties to prove**:
+- `cwnd_growth_bounded_bytes_acked`: new cwnd ≤ prior_cwnd + bytes_acked
+  (holds in both branches; direct from the `min` in the full-BW branch)
+- `cwnd_growth_exact_startup`: if `prior < target` and `!full_bw_reached`,
+  new cwnd = prior + bytes_acked (no over-shoot, no under-shoot)
+- `cwnd_in_range_after_clamp`: result ∈ [lo, hi] for any valid `Limits`
+  (follows from `applyLimits_in_range` already proved in BBR2Limits.lean)
+- `cwnd_nondecreasing_startup`: if `prior < target`, new cwnd > prior
+  (provided bytes_acked > 0 — cwnd strictly increases when growing)
+- Concrete `#eval` examples verifying all three branches
+
+**Approximations needed**:
+- `get_target_congestion_window` calls `bdp(bandwidth, gain)` which involves
+  `f32` multiplication; the Lean model abstracts `target_cwnd` as an
+  arbitrary `Nat` parameter (a caller precondition), so `f32` is not needed.
+- Two `apply_limits` calls are composed; composition is modelled as a single
+  net clamping step with the intersection of the two `[lo, hi]` intervals
+  (proved equivalent as long as the two intervals overlap, which BBR2 guarantees).
+- `max_ack_height` is modelled as an arbitrary `Nat` additive term.
+- Time, mode state, and packet-level fields are abstracted away.
+
+**Specification size**: ~60 Lean lines
+**Proof tractability**: LOW–MEDIUM. All properties provable by `omega` after
+case splitting on the two growth branches.  The `apply_limits` composition
+lemma imports `FVSquad.BBR2Limits` directly.
+
+**Estimated theorems**: ~15–18 theorems, 0 sorry.
+**Lean file**: `FVSquad/BBR2CwndUpdate.lean`
+
+**Bug-catching potential**: HIGH.  An off-by-one in the `min()` in the
+full-bandwidth branch, or a wrong comparison (`≤` vs `<`) in the growth
+guard, would cause BBR2 to either under-utilise the network or exceed the
+BDP estimate.  The `cwnd_growth_bounded_bytes_acked` theorem would catch
+both classes of bug.
+
+**Cross-file dependencies**: imports `FVSquad.BBR2Limits`.
