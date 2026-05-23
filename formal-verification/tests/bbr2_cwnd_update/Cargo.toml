@@ -1,0 +1,10 @@
+[package]
+name = "bbr2_cwnd_update_test"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[[bin]]
+name = "bbr2_cwnd_update_test"
+path = "bbr2_cwnd_update_test.rs"
